@@ -1,0 +1,16 @@
+version: "3.8"
+name: iwpo-server
+services:
+  server:
+    container_name: iwpo-server
+    image: iwpo-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "${PORT_HTTP}:${PORT_HTTP}"
+      - "${PORT_SOCKETS}:${PORT_SOCKETS}"
+      - "${PORT_SOCKETS_UDP}:${PORT_SOCKETS_UDP}/udp"
+    volumes:
+      - ./data:/home/node/app/data

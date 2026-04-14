@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>11</LangVersion>
+    <AssemblyName>converterGMS2</AssemblyName>
+    <RootNamespace>ConverterGMS</RootNamespace>
+    <NoWarn>1591</NoWarn>
+    <CetCompat>false</CetCompat>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishTrimmed>true</PublishTrimmed>
+    <TrimMode>partial</TrimMode>
+    <JsonSerializerIsReflectionEnabledByDefault>true</JsonSerializerIsReflectionEnabledByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="System.Drawing.Common" Version="9.0.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Keep reflection-based JSON serialization alive (used by UndertaleModLib GameSpecificResolver) -->
+    <TrimmerRootAssembly Include="System.Text.Json" />
+    <RuntimeHostConfigurationOption Include="System.Text.Json.JsonSerializer.IsReflectionEnabledByDefault"
+                                    Value="true" Trim="false" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\UndertaleModTool\Underanalyzer\Underanalyzer\Underanalyzer.csproj" />
+    <ProjectReference Include="..\UndertaleModTool\UndertaleModLib\UndertaleModLib.csproj" />
+  </ItemGroup>
+  <!-- Exclude ImageMagick native binaries we don't need -->
+  <Target Name="RemoveMagickNative" AfterTargets="ResolveReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'Magick.Native-Q8-x64' Or $([System.String]::Copy('%(Filename)').StartsWith('Magick.'))" />
+    </ItemGroup>
+  </Target>
+  <Target Name="RemoveMagickContent" AfterTargets="ComputeFilesToPublish">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="$([System.String]::Copy('%(Filename)').Contains('Magick'))" />
+    </ItemGroup>
+  </Target>
+</Project>

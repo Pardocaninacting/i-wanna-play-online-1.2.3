@@ -1,0 +1,21 @@
+/// ONLINE
+@message = "";
+@wrappedMsg = "";
+@follower = noone;
+@timer = 180;
+@scale = 0;
+@scaleVel = 0;
+@showText = false;
+@textAlpha = 0;
+@bobTime = 0;
+@squash = 0;
+@bubbleMaxW = 200;
+@hasDestroyed = false;
+@fadeAlpha = 1;
+@drawAlpha = 1;
+@springX = 0;
+@springY = 0;
+@springVX = 0;
+@springVY = 0;
+@springInited = false;
+@prevSpringVX = 0;

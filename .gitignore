@@ -1,0 +1,19 @@
+# Whitelist approach: ignore everything, then allow only the project directories
+*
+
+# Top-level files to include
+!.gitignore
+!LICENSE
+!README.md
+
+# Project directories
+!modder/
+!modder/**
+!converter-gms/
+!converter-gms/**
+!server/
+!server/**
+
+# UndertaleModTool (git submodule)
+!.gitmodules
+!UndertaleModTool

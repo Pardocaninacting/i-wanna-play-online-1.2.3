@@ -1,0 +1,26 @@
+node_modules/
+tests/
+tmp/
+build/
+rh.ini
+__ONLINE_server.txt
+DEVNOTES.md
+
+yarn-error.log
+
+**/*.js
+**/*.zip
+**/*.dll
+**/*.exe
+
+# Prebuilt binaries (build from source instead)
+lib/converterGMS2/
+lib/http_dll_2_3.dll
+lib/http_dll_2_3.dll.old_cpp
+lib/http_dll_2_3_x64.dll
+launcher.exe
+node-portable.exe
+
+# Native project build artifacts
+native/**/bin/
+native/**/obj/

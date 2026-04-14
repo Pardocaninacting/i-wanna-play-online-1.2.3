@@ -1,0 +1,1180 @@
+using System.Buffers.Binary;
+using System.Collections.Generic;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Text;
+
+internal static class NativeState
+{
+    internal static int NextBufferId;
+    internal static int NextSocketId;
+    internal static int NextUdpSocketId;
+    internal static readonly Dictionary<int, NativeBuffer> Buffers = new();
+    internal static readonly Dictionary<int, TcpSocketState> Sockets = new();
+    internal static readonly Dictionary<int, UdpSocketState> UdpSockets = new();
+}
+
+internal static class NativeStrings
+{
+    private static IntPtr buffer = IntPtr.Zero;
+    private static int capacity;
+    private static readonly UTF8Encoding Utf8Strict = new(false, true);
+    // On x86 (GM8) we need ANSI↔UTF-8 conversion at the GM↔DLL boundary.
+    // GM8 passes/expects strings in the system ANSI codepage (e.g. GBK on Chinese Windows).
+    // On x64 (GMS2) strings are UTF-8 end-to-end.
+    // GMS 1.4 x86 also uses UTF-8 — call set_utf8_mode(1) to override.
+    private static bool UseAnsi = IntPtr.Size == 4;
+
+    internal static void SetUtf8Mode(bool enable)
+    {
+        UseAnsi = !enable;
+    }
+    private static readonly Encoding AnsiEncoding = GetAnsiEncoding();
+    private static Encoding GetAnsiEncoding()
+    {
+        if (IntPtr.Size != 4) return Encoding.UTF8;
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        return Encoding.GetEncoding((int)GetACP());
+    }
+    [DllImport("kernel32.dll")]
+    private static extern uint GetACP();
+
+    internal static string Read(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero)
+            return string.Empty;
+
+        var length = 0;
+        while (Marshal.ReadByte(ptr, length) != 0)
+            length++;
+
+        if (length == 0)
+            return string.Empty;
+
+        var bytes = new byte[length];
+        Marshal.Copy(ptr, bytes, 0, length);
+        if (UseAnsi)
+            return AnsiEncoding.GetString(bytes);
+        try
+        {
+            return Utf8Strict.GetString(bytes);
+        }
+        catch
+        {
+            return AnsiEncoding.GetString(bytes);
+        }
+    }
+
+    internal static IntPtr Write(string? value)
+    {
+        value ??= string.Empty;
+        var bytes = UseAnsi ? AnsiEncoding.GetBytes(value) : Encoding.UTF8.GetBytes(value);
+        var required = bytes.Length + 1;
+        if (required > capacity)
+        {
+            if (buffer != IntPtr.Zero)
+                Marshal.FreeHGlobal(buffer);
+            capacity = Math.Max(required, 256);
+            buffer = Marshal.AllocHGlobal(capacity);
+        }
+
+        Marshal.Copy(bytes, 0, buffer, bytes.Length);
+        Marshal.WriteByte(buffer, bytes.Length, 0);
+        return buffer;
+    }
+}
+
+internal static class NativeCast
+{
+    internal static bool ToBool(double value) => value >= 0.5;
+    internal static byte ToByte(double value) => value <= byte.MinValue ? byte.MinValue : value >= byte.MaxValue ? byte.MaxValue : (byte)value;
+    internal static ushort ToUInt16(double value) => value <= ushort.MinValue ? ushort.MinValue : value >= ushort.MaxValue ? ushort.MaxValue : (ushort)value;
+    internal static uint ToUInt32(double value) => value <= uint.MinValue ? uint.MinValue : value >= uint.MaxValue ? uint.MaxValue : (uint)value;
+    internal static ulong ToUInt64(double value) => value <= 0 ? 0UL : value >= ulong.MaxValue ? ulong.MaxValue : (ulong)value;
+    internal static short ToInt16(double value) => value <= short.MinValue ? short.MinValue : value >= short.MaxValue ? short.MaxValue : (short)value;
+    internal static int ToInt32(double value) => value <= int.MinValue ? int.MinValue : value >= int.MaxValue ? int.MaxValue : (int)value;
+    internal static long ToInt64(double value) => value <= long.MinValue ? long.MinValue : value >= long.MaxValue ? long.MaxValue : (long)value;
+    internal static float ToFloat(double value)
+    {
+        if (double.IsNaN(value))
+            return 0;
+        if (value <= -float.MaxValue)
+            return -float.MaxValue;
+        if (value >= float.MaxValue)
+            return float.MaxValue;
+        return (float)value;
+    }
+}
+
+internal sealed class NativeBuffer
+{
+    private byte[] data = Array.Empty<byte>();
+
+    internal int Length { get; private set; }
+    internal int Position { get; private set; }
+    internal bool Error { get; private set; }
+    internal int Remaining => Length - Position;
+    internal ArraySegment<byte> RemainingSegment => new(data, Position, Remaining);
+
+    internal void Clear()
+    {
+        data = Array.Empty<byte>();
+        Length = 0;
+        Position = 0;
+        Error = false;
+    }
+
+    internal void ClearError() => Error = false;
+
+    internal void SetPosition(int newPosition)
+    {
+        Position = Math.Clamp(newPosition, 0, Length);
+    }
+
+    private void EnsureCapacity(int newLength)
+    {
+        if (newLength <= data.Length)
+            return;
+        var required = Math.Max(newLength, 16);
+        var nextCapacity = required + required / 2;
+        if (nextCapacity < required)
+            nextCapacity = required;
+        Array.Resize(ref data, nextCapacity);
+    }
+
+    internal void SetLength(int newLength)
+    {
+        if (newLength < 0)
+            newLength = 0;
+        EnsureCapacity(newLength);
+        if (newLength > Length)
+            Array.Clear(data, Length, newLength - Length);
+        Length = newLength;
+        if (Position > Length)
+            Position = Length;
+    }
+
+    internal ReadOnlySpan<byte> Slice(int offset, int count) => data.AsSpan(offset, count);
+
+    internal void WriteBytes(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length == 0)
+            return;
+        var start = Length;
+        SetLength(Length + bytes.Length);
+        bytes.CopyTo(data.AsSpan(start, bytes.Length));
+    }
+
+    internal void LoadBytes(ReadOnlySpan<byte> bytes)
+    {
+        Clear();
+        WriteBytes(bytes);
+        Position = 0;
+        Error = false;
+    }
+
+    internal bool ReadFromFile(string path)
+    {
+        try
+        {
+            LoadBytes(File.ReadAllBytes(path));
+            return true;
+        }
+        catch
+        {
+            Clear();
+            return false;
+        }
+    }
+
+    internal bool WriteToFile(string path)
+    {
+        try
+        {
+            File.WriteAllBytes(path, data.AsSpan(0, Length).ToArray());
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    internal void CompactIfNeeded()
+    {
+        if (Position == 0)
+            return;
+        if (Position >= Length)
+        {
+            Clear();
+            return;
+        }
+        if (Position > Length / 4)
+        {
+            Array.Copy(data, Position, data, 0, Length - Position);
+            Length -= Position;
+            Position = 0;
+        }
+    }
+
+    internal void EraseConsumed(int count)
+    {
+        SetPosition(Position + count);
+        CompactIfNeeded();
+    }
+
+    private bool EnsureReadable(int count)
+    {
+        if (Error)
+            return false;
+        if (Position + count > Length)
+        {
+            Error = true;
+            return false;
+        }
+        return true;
+    }
+
+    internal byte ReadUInt8()
+    {
+        if (!EnsureReadable(1))
+            return 0;
+        return data[Position++];
+    }
+
+    internal ushort ReadUInt16()
+    {
+        if (!EnsureReadable(2))
+            return 0;
+        var value = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(Position, 2));
+        Position += 2;
+        return value;
+    }
+
+    internal short ReadInt16()
+    {
+        if (!EnsureReadable(2))
+            return 0;
+        var value = BinaryPrimitives.ReadInt16LittleEndian(data.AsSpan(Position, 2));
+        Position += 2;
+        return value;
+    }
+
+    internal int ReadInt32()
+    {
+        if (!EnsureReadable(4))
+            return 0;
+        var value = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(Position, 4));
+        Position += 4;
+        return value;
+    }
+
+    internal ulong ReadUInt64()
+    {
+        if (!EnsureReadable(8))
+            return 0;
+        var value = BinaryPrimitives.ReadUInt64LittleEndian(data.AsSpan(Position, 8));
+        Position += 8;
+        return value;
+    }
+
+    internal float ReadFloat32()
+    {
+        return BitConverter.Int32BitsToSingle(ReadInt32());
+    }
+
+    internal double ReadFloat64()
+    {
+        if (!EnsureReadable(8))
+            return 0;
+        var value = BinaryPrimitives.ReadDoubleLittleEndian(data.AsSpan(Position, 8));
+        Position += 8;
+        return value;
+    }
+
+    internal uint ReadUIntV()
+    {
+        if (Error)
+            return 0;
+        if (!EnsureReadable(1))
+            return 0;
+        uint value = data[Position];
+        if ((value & 1) != 0)
+        {
+            Position += 1;
+            return value >> 1;
+        }
+        if ((value & 2) != 0)
+        {
+            if (!EnsureReadable(2))
+                return 0;
+            value = BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(Position, 2));
+            Position += 2;
+            return (value >> 2) + 0x80U;
+        }
+        if ((value & 4) != 0)
+        {
+            if (!EnsureReadable(3))
+                return 0;
+            value |= (uint)BinaryPrimitives.ReadUInt16LittleEndian(data.AsSpan(Position + 1, 2)) << 8;
+            Position += 3;
+            return (value >> 3) + 0x4080U;
+        }
+        if (!EnsureReadable(4))
+            return 0;
+        value = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(Position, 4));
+        Position += 4;
+        return (value >> 3) + 0x204080U;
+    }
+
+    internal string ReadString()
+    {
+        if (Error)
+            return string.Empty;
+        for (var index = Position; index < Length; index++)
+        {
+            if (data[index] == 0)
+            {
+                var bytes = data.AsSpan(Position, index - Position).ToArray();
+                Position = index + 1;
+                return Encoding.UTF8.GetString(bytes);
+            }
+        }
+        Error = true;
+        return string.Empty;
+    }
+
+    internal void WriteUInt8(byte value)
+    {
+        SetLength(Length + 1);
+        data[Length - 1] = value;
+    }
+
+    internal void WriteUInt16(ushort value)
+    {
+        var start = Length;
+        SetLength(Length + 2);
+        BinaryPrimitives.WriteUInt16LittleEndian(data.AsSpan(start, 2), value);
+    }
+
+    internal void WriteInt16(short value)
+    {
+        var start = Length;
+        SetLength(Length + 2);
+        BinaryPrimitives.WriteInt16LittleEndian(data.AsSpan(start, 2), value);
+    }
+
+    internal void WriteInt32(int value)
+    {
+        var start = Length;
+        SetLength(Length + 4);
+        BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(start, 4), value);
+    }
+
+    internal void WriteUInt64(ulong value)
+    {
+        var start = Length;
+        SetLength(Length + 8);
+        BinaryPrimitives.WriteUInt64LittleEndian(data.AsSpan(start, 8), value);
+    }
+
+    internal void WriteFloat32(float value) => WriteInt32(BitConverter.SingleToInt32Bits(value));
+    internal void WriteFloat64(double value)
+    {
+        var start = Length;
+        SetLength(Length + 8);
+        BinaryPrimitives.WriteDoubleLittleEndian(data.AsSpan(start, 8), value);
+    }
+
+    internal void WriteUIntV(uint value)
+    {
+        if (value < 0x80U)
+        {
+            WriteUInt8((byte)((value << 1) | 1));
+            return;
+        }
+        if (value < 0x4080U)
+        {
+            WriteUInt16((ushort)(((value - 0x80U) << 2) | 2));
+            return;
+        }
+        if (value < 0x204080U)
+        {
+            var encoded = ((value - 0x4080U) << 3) | 4;
+            var start = Length;
+            SetLength(Length + 3);
+            data[start] = (byte)(encoded & 0xFF);
+            data[start + 1] = (byte)((encoded >> 8) & 0xFF);
+            data[start + 2] = (byte)((encoded >> 16) & 0xFF);
+            return;
+        }
+        var full = (value - 0x204080U) << 3;
+        var offset = Length;
+        SetLength(Length + 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(offset, 4), full);
+    }
+
+    internal void WriteString(string value)
+    {
+        var bytes = Encoding.UTF8.GetBytes(value ?? string.Empty);
+        WriteBytes(bytes);
+        WriteUInt8(0);
+    }
+}
+
+internal sealed class TcpSocketState : IDisposable
+{
+    private const int StateNotConnected = 0;
+    private const int StateConnecting = 1;
+    private const int StateConnected = 2;
+    private const int StateClosed = 4;
+    private const int StateError = 5;
+
+    private Socket? socket;
+    private List<IPEndPoint>? endpoints;
+    private int endpointIndex;
+    private bool shouldShutdown;
+    private readonly NativeBuffer readBuffer = new();
+    private readonly NativeBuffer writeBuffer = new();
+
+    internal int State { get; private set; } = StateNotConnected;
+
+    public void Dispose() => Reset();
+
+    internal void Reset()
+    {
+        try
+        {
+            socket?.Dispose();
+        }
+        catch
+        {
+        }
+        socket = null;
+        endpoints = null;
+        endpointIndex = -1;
+        shouldShutdown = false;
+        readBuffer.Clear();
+        writeBuffer.Clear();
+        State = StateNotConnected;
+    }
+
+    internal void Connect(string address, ushort port)
+    {
+        if (State != StateNotConnected)
+            Reset();
+
+        try
+        {
+            var resolved = Dns.GetHostAddresses(address);
+            endpoints = new List<IPEndPoint>();
+            foreach (var ip in resolved)
+            {
+                if (ip.AddressFamily == AddressFamily.InterNetwork || ip.AddressFamily == AddressFamily.InterNetworkV6)
+                    endpoints.Add(new IPEndPoint(ip, port));
+            }
+        }
+        catch
+        {
+            State = StateError;
+            return;
+        }
+
+        if (endpoints == null || endpoints.Count == 0)
+        {
+            State = StateError;
+            return;
+        }
+
+        endpointIndex = -1;
+        TryNextEndpoint();
+    }
+
+    private static bool IsWouldBlock(SocketError error)
+    {
+        return error == SocketError.WouldBlock || error == SocketError.IOPending || error == SocketError.InProgress || error == SocketError.AlreadyInProgress;
+    }
+
+    private void TryNextEndpoint()
+    {
+        socket?.Dispose();
+        socket = null;
+
+        var remainingEndpoints = endpoints;
+        if (remainingEndpoints == null)
+        {
+            State = StateError;
+            return;
+        }
+
+        while (++endpointIndex < remainingEndpoints.Count)
+        {
+            var endpoint = remainingEndpoints[endpointIndex];
+            var candidate = new Socket(endpoint.AddressFamily, SocketType.Stream, ProtocolType.Tcp)
+            {
+                Blocking = false,
+                NoDelay = true,
+            };
+            try
+            {
+                candidate.Connect(endpoint);
+                socket = candidate;
+                State = StateConnected;
+                endpoints = null;
+                return;
+            }
+            catch (SocketException ex) when (IsWouldBlock(ex.SocketErrorCode) || ex.SocketErrorCode == SocketError.IsConnected)
+            {
+                socket = candidate;
+                State = StateConnecting;
+                return;
+            }
+            catch
+            {
+                candidate.Dispose();
+            }
+        }
+
+        endpoints = null;
+        State = StateError;
+    }
+
+    private void CloseToError()
+    {
+        try
+        {
+            socket?.Dispose();
+        }
+        catch
+        {
+        }
+        socket = null;
+        State = StateError;
+    }
+
+    internal void UpdateRead()
+    {
+        if (State == StateConnecting)
+        {
+            if (socket == null)
+            {
+                State = StateError;
+                return;
+            }
+            try
+            {
+                var writable = socket.Poll(0, SelectMode.SelectWrite);
+                var errored = socket.Poll(0, SelectMode.SelectError);
+                if (!writable && !errored)
+                    return;
+                var rawError = socket.GetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Error);
+                var code = rawError is int errorCode ? (SocketError)errorCode : SocketError.SocketError;
+                if (errored || code != SocketError.Success)
+                {
+                    TryNextEndpoint();
+                    return;
+                }
+                State = StateConnected;
+                endpoints = null;
+            }
+            catch
+            {
+                CloseToError();
+                return;
+            }
+        }
+
+        if (State != StateConnected || socket == null)
+            return;
+
+        var buffer = new byte[10240];
+        while (true)
+        {
+            try
+            {
+                var received = socket.Receive(buffer, SocketFlags.None);
+                if (received == 0)
+                {
+                    State = StateClosed;
+                    return;
+                }
+                readBuffer.WriteBytes(buffer.AsSpan(0, received));
+                if (received < buffer.Length)
+                    return;
+            }
+            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
+            {
+                return;
+            }
+            catch
+            {
+                CloseToError();
+                return;
+            }
+        }
+    }
+
+    internal void UpdateWrite()
+    {
+        if ((State != StateConnected && State != StateClosed) || socket == null || writeBuffer.Remaining == 0)
+            return;
+
+        try
+        {
+            var sent = socket.Send(writeBuffer.RemainingSegment, SocketFlags.None);
+            writeBuffer.SetPosition(writeBuffer.Position + sent);
+            writeBuffer.CompactIfNeeded();
+            if (shouldShutdown && writeBuffer.Remaining == 0)
+                socket.Shutdown(SocketShutdown.Send);
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
+        {
+        }
+        catch
+        {
+            CloseToError();
+        }
+    }
+
+    internal void MarkShutdown() => shouldShutdown = true;
+
+    internal bool ReadMessage(NativeBuffer destination)
+    {
+        readBuffer.ClearError();
+        var start = readBuffer.Position;
+        var length = readBuffer.ReadUIntV();
+        var contentStart = readBuffer.Position;
+        readBuffer.SetPosition(start);
+        if (readBuffer.Error || length > readBuffer.Length - contentStart)
+            return false;
+
+        destination.LoadBytes(readBuffer.Slice(contentStart, (int)length));
+        readBuffer.EraseConsumed(contentStart - start + (int)length);
+        return true;
+    }
+
+    internal void WriteMessage(NativeBuffer source)
+    {
+        if (shouldShutdown || State == StateError)
+            return;
+        writeBuffer.WriteUIntV((uint)source.Length);
+        writeBuffer.WriteBytes(source.Slice(0, source.Length));
+    }
+}
+
+internal sealed class UdpSocketState : IDisposable
+{
+    private const int StateNotStarted = 0;
+    private const int StateStarted = 1;
+    private const int StateError = 2;
+
+    private Socket? socket;
+    private EndPoint? destination;
+    private EndPoint? lastRemote;
+
+    internal int State { get; private set; } = StateNotStarted;
+    internal int MaxMessageSize { get; private set; }
+
+    public void Dispose() => Reset();
+
+    internal void Reset()
+    {
+        try
+        {
+            socket?.Dispose();
+        }
+        catch
+        {
+        }
+        socket = null;
+        destination = null;
+        lastRemote = null;
+        MaxMessageSize = 0;
+        State = StateNotStarted;
+    }
+
+    internal void Start(bool ipv6, ushort port)
+    {
+        if (State != StateNotStarted)
+            Reset();
+
+        try
+        {
+            socket = new Socket(ipv6 ? AddressFamily.InterNetworkV6 : AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp)
+            {
+                Blocking = false,
+            };
+            if (port != 0)
+            {
+                socket.Bind(new IPEndPoint(ipv6 ? IPAddress.IPv6Any : IPAddress.Any, port));
+            }
+            MaxMessageSize = 65507;
+            State = StateStarted;
+        }
+        catch
+        {
+            try
+            {
+                socket?.Dispose();
+            }
+            catch
+            {
+            }
+            socket = null;
+            State = StateError;
+        }
+    }
+
+    internal void SetDestination(string address, ushort port)
+    {
+        if (socket == null)
+        {
+            State = StateError;
+            return;
+        }
+
+        try
+        {
+            foreach (var ip in Dns.GetHostAddresses(address))
+            {
+                if (ip.AddressFamily != AddressFamily.InterNetwork && ip.AddressFamily != AddressFamily.InterNetworkV6)
+                    continue;
+                destination = new IPEndPoint(ip, port);
+                return;
+            }
+        }
+        catch
+        {
+        }
+
+        try
+        {
+            socket.Dispose();
+        }
+        catch
+        {
+        }
+        socket = null;
+        State = StateError;
+    }
+
+    internal bool Receive(NativeBuffer destinationBuffer)
+    {
+        if (State != StateStarted || socket == null)
+            return false;
+
+        var bytes = new byte[Math.Max(MaxMessageSize, 1024)];
+        EndPoint remote = socket.AddressFamily == AddressFamily.InterNetworkV6
+            ? new IPEndPoint(IPAddress.IPv6Any, 0)
+            : new IPEndPoint(IPAddress.Any, 0);
+
+        try
+        {
+            var received = socket.ReceiveFrom(bytes, 0, bytes.Length, SocketFlags.None, ref remote);
+            destinationBuffer.LoadBytes(bytes.AsSpan(0, received));
+            lastRemote = remote;
+            return true;
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
+        {
+            destinationBuffer.Clear();
+            return false;
+        }
+        catch
+        {
+            try
+            {
+                socket.Dispose();
+            }
+            catch
+            {
+            }
+            socket = null;
+            State = StateError;
+            destinationBuffer.Clear();
+            return false;
+        }
+    }
+
+    internal void Send(NativeBuffer source)
+    {
+        if (State != StateStarted || socket == null || destination == null)
+            return;
+
+        try
+        {
+            socket.SendTo(source.Slice(0, source.Length).ToArray(), SocketFlags.None, destination);
+        }
+        catch (SocketException ex) when (ex.SocketErrorCode == SocketError.WouldBlock)
+        {
+        }
+        catch
+        {
+            try
+            {
+                socket.Dispose();
+            }
+            catch
+            {
+            }
+            socket = null;
+            State = StateError;
+        }
+    }
+}
+
+public static class Exports
+{
+    private static NativeBuffer? GetBuffer(double id)
+    {
+        var key = NativeCast.ToInt32(id);
+        NativeState.Buffers.TryGetValue(key, out var buffer);
+        return buffer;
+    }
+
+    private static TcpSocketState? GetSocket(double id)
+    {
+        var key = NativeCast.ToInt32(id);
+        NativeState.Sockets.TryGetValue(key, out var socket);
+        return socket;
+    }
+
+    private static UdpSocketState? GetUdpSocket(double id)
+    {
+        var key = NativeCast.ToInt32(id);
+        NativeState.UdpSockets.TryGetValue(key, out var socket);
+        return socket;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_create", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferCreate()
+    {
+        var id = ++NativeState.NextBufferId;
+        NativeState.Buffers[id] = new NativeBuffer();
+        return id;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_destroy", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferDestroy(double id)
+    {
+        var key = NativeCast.ToInt32(id);
+        if (!NativeState.Buffers.Remove(key))
+            return 0;
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_clear", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferClear(double id)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.Clear();
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_from_file", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadFromFile(double id, IntPtr filename)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        return buffer.ReadFromFile(NativeStrings.Read(filename)) ? 1 : 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_to_file", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteToFile(double id, IntPtr filename)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        return buffer.WriteToFile(NativeStrings.Read(filename)) ? 1 : 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_uint8", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadUInt8(double id) => GetBuffer(id)?.ReadUInt8() ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_uint16", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadUInt16(double id) => GetBuffer(id)?.ReadUInt16() ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_int16", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadInt16(double id) => GetBuffer(id)?.ReadInt16() ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_int32", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadInt32(double id) => GetBuffer(id)?.ReadInt32() ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_uint64", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadUInt64(double id) => GetBuffer(id)?.ReadUInt64() ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_float32", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadFloat32(double id) => GetBuffer(id)?.ReadFloat32() ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_float64", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadFloat64(double id) => GetBuffer(id)?.ReadFloat64() ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_string", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static IntPtr BufferReadString(double id)
+    {
+        var buffer = GetBuffer(id);
+        return NativeStrings.Write(buffer?.ReadString() ?? string.Empty);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_uint8", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteUInt8(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteUInt8(NativeCast.ToByte(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_uint16", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteUInt16(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteUInt16(NativeCast.ToUInt16(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_int16", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteInt16(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteInt16(NativeCast.ToInt16(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_int32", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteInt32(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteInt32(NativeCast.ToInt32(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_uint64", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteUInt64(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteUInt64(NativeCast.ToUInt64(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_float32", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteFloat32(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteFloat32(NativeCast.ToFloat(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_float64", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteFloat64(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteFloat64(value);
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_string", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteString(double id, IntPtr value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteString(NativeStrings.Read(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "set_utf8_mode", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SetUtf8Mode(double enabled)
+    {
+        NativeStrings.SetUtf8Mode(enabled >= 0.5);
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "strip_non_bmp", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static IntPtr StripNonBmp(IntPtr value)
+    {
+        var str = NativeStrings.Read(value);
+        var sb = new System.Text.StringBuilder(str.Length);
+        foreach (var ch in str)
+        {
+            if (!char.IsSurrogate(ch))
+                sb.Append(ch);
+        }
+        return NativeStrings.Write(sb.ToString());
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_create", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketCreate()
+    {
+        var id = ++NativeState.NextSocketId;
+        NativeState.Sockets[id] = new TcpSocketState();
+        return id;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_destroy", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketDestroy(double id)
+    {
+        var key = NativeCast.ToInt32(id);
+        if (!NativeState.Sockets.Remove(key, out var socket))
+            return 0;
+        socket.Dispose();
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_get_state", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketGetState(double id) => GetSocket(id)?.State ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_reset", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketReset(double id)
+    {
+        var socket = GetSocket(id);
+        if (socket == null)
+            return 0;
+        socket.Reset();
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_connect", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketConnect(double id, IntPtr address, double port)
+    {
+        var socket = GetSocket(id);
+        if (socket == null)
+            return 0;
+        socket.Connect(NativeStrings.Read(address), NativeCast.ToUInt16(port));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_update_read", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketUpdateRead(double id)
+    {
+        var socket = GetSocket(id);
+        if (socket == null)
+            return 0;
+        socket.UpdateRead();
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_update_write", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketUpdateWrite(double id)
+    {
+        var socket = GetSocket(id);
+        if (socket == null)
+            return 0;
+        socket.UpdateWrite();
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_shut_down", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketShutDown(double id)
+    {
+        var socket = GetSocket(id);
+        if (socket == null)
+            return 0;
+        socket.MarkShutdown();
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_read_message", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketReadMessage(double id, double bufferId)
+    {
+        var socket = GetSocket(id);
+        var buffer = GetBuffer(bufferId);
+        if (socket == null || buffer == null)
+            return 0;
+        return socket.ReadMessage(buffer) ? 1 : 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "socket_write_message", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double SocketWriteMessage(double id, double bufferId)
+    {
+        var socket = GetSocket(id);
+        var buffer = GetBuffer(bufferId);
+        if (socket == null || buffer == null)
+            return 0;
+        socket.WriteMessage(buffer);
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "udpsocket_create", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double UdpSocketCreate()
+    {
+        var id = ++NativeState.NextUdpSocketId;
+        NativeState.UdpSockets[id] = new UdpSocketState();
+        return id;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "udpsocket_destroy", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double UdpSocketDestroy(double id)
+    {
+        var key = NativeCast.ToInt32(id);
+        if (!NativeState.UdpSockets.Remove(key, out var socket))
+            return 0;
+        socket.Dispose();
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "udpsocket_exists", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double UdpSocketExists(double id) => GetUdpSocket(id) == null ? 0 : 1;
+
+    [UnmanagedCallersOnly(EntryPoint = "udpsocket_get_state", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double UdpSocketGetState(double id) => GetUdpSocket(id)?.State ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "udpsocket_start", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double UdpSocketStart(double id, double ipv6, double port)
+    {
+        var socket = GetUdpSocket(id);
+        if (socket == null)
+            return 0;
+        socket.Start(NativeCast.ToBool(ipv6), NativeCast.ToUInt16(port));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "udpsocket_set_destination", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double UdpSocketSetDestination(double id, IntPtr address, double port)
+    {
+        var socket = GetUdpSocket(id);
+        if (socket == null)
+            return 0;
+        socket.SetDestination(NativeStrings.Read(address), NativeCast.ToUInt16(port));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "udpsocket_receive", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double UdpSocketReceive(double id, double bufferId)
+    {
+        var socket = GetUdpSocket(id);
+        var buffer = GetBuffer(bufferId);
+        if (socket == null || buffer == null)
+            return 0;
+        return socket.Receive(buffer) ? 1 : 0;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "udpsocket_send", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double UdpSocketSend(double id, double bufferId)
+    {
+        var socket = GetUdpSocket(id);
+        var buffer = GetBuffer(bufferId);
+        if (socket == null || buffer == null)
+            return 0;
+        socket.Send(buffer);
+        return 1;
+    }
+}

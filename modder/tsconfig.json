@@ -1,0 +1,9 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"module": "commonjs",
+		"removeComments": true,
+		"strict": false,
+		"esModuleInterop": true
+	}
+}
