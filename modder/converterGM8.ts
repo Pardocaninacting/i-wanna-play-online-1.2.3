@@ -101,7 +101,6 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	exe.readOffset += optionalLength+2;
 	let upx0VirtualLength: number = null;
 	let upx1Data: [number, number] = null;
-	// let rsrcLocation: number = null;
 	const sections: Array<PESection> = [];
 	for(let i: number = 0; i < sectionCount; ++i){
 		let sectionName: Buffer = exe.readBuffer(8);
@@ -114,8 +113,6 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			upx0VirtualLength = virtualSize;
 		if(sectionName.compare(bytes([0x55, 0x50, 0x58, 0x31, 0x00, 0x00, 0x00, 0x00])) == 0)
 			upx1Data = [virtualSize, diskAddress];
-		// if(sectionName.compare(Buffer.from([0x2E, 0x72, 0x73, 0x72, 0x63, 0x00, 0x00, 0x00])) == 0)
-		// 	rsrcLocation = diskAddress;
 		sections.push({
 			virtualSize: virtualSize,
 			virtualAddress: virtualAddress,
@@ -123,15 +120,6 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			diskAddress: diskAddress,
 		});
 	}
-	// let iconData: Array<WindowsIcon> = [];
-	// let icoFileRaw: Array<number> = [];
-	// if(rsrcLocation !== null){
-	// 	const readOffsetBackup = exe.readOffset;
-	// 	exe.readOffset = rsrcLocation;
-	// 	[iconData, icoFileRaw] = Icon.find(exe, sections);
-	// 	exe.readOffset = readOffsetBackup;
-	// 	await Icon.save(iconData, path.join(__dirname, "tests", "issou"));
-	// }
 	let upxData: [number, number] = null;
 	if(upx0VirtualLength !== null && upx1Data !== null)
 		upxData = [upx0VirtualLength+upx1Data[0], upx1Data[1]];
@@ -343,10 +331,8 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	}
 	if(!hasWindowsDialogs)
 		await addExtension(exe, extensions, "gm_windows_dialog8");
-	// http_dll8 extension is no longer used – the NativeAOT x86 DLL (external_define)
-	// is always used instead, because it performs ANSI↔UTF-8 conversion at the
-	// GM8↔DLL boundary which is required for Chinese text to survive the server's
-	// UTF-8 re-encoding on TCP messages (chat, saves, etc.).
+	if (gameConfig.version !== GameVersion.GameMaker80)
+		await addExtension(exe, extensions, "gaseous_marble8");
 	if (!hasGm8FoxWriting && gameConfig.version === GameVersion.GameMaker80)
 		await addExtension(exe, extensions, "ChineseChatSupport8");
 
@@ -388,8 +374,8 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	sounds = null;
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Sprites header");
-	let sprites: Array<Sprite> = getAssets(exe, Sprite.deserialize) as Array<Sprite>;
-	sprites = null;
+	getAssetRefs(exe); // skip sprites section (no modification needed)
+
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Backgrounds header");
 	let backgrounds: Array<Background> = getAssets(exe, Background.deserialize) as Array<Background>;
@@ -434,6 +420,9 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	GMLCode.addVariables("GM8");
 	if (gameConfig.version === GameVersion.GameMaker80) {
 		GMLCode.addVariables("GM80");
+	}
+	if (gameConfig.version !== GameVersion.GameMaker80) {
+		GMLCode.addVariables("CJKTEXT");
 	}
 	GMLCode.addVariables("TEMPFILE");
 	if (hasGm82net || hasGm82buf){
@@ -502,6 +491,8 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "udpsocket_send", dllName: "udpsocket_send", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_receive", dllName: "udpsocket_receive", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_get_state", dllName: "udpsocket_get_state", ret: "ty_real", args: ["ty_real"] },
+			{ name: "ansi_to_utf8", dllName: "ansi_to_utf8", ret: "ty_string", args: ["ty_string"] },
+			{ name: "set_utf8_mode", dllName: "set_utf8_mode", ret: "ty_real", args: ["ty_real"] },
 		] : [
 			// DLL export names used directly (for normal GM8 games)
 			{ name: "buffer_create", dllName: "buffer_create", ret: "ty_real", args: [] },
@@ -542,6 +533,8 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "udpsocket_send", dllName: "udpsocket_send", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_receive", dllName: "udpsocket_receive", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_get_state", dllName: "udpsocket_get_state", ret: "ty_real", args: ["ty_real"] },
+			{ name: "ansi_to_utf8", dllName: "ansi_to_utf8", ret: "ty_string", args: ["ty_string"] },
+			{ name: "set_utf8_mode", dllName: "set_utf8_mode", ret: "ty_real", args: ["ty_real"] },
 		];
 		// Generate init script
 		const initLines: Array<string> = [`var dll; dll = "${HTTP_DLL_NAME}";`];
@@ -562,6 +555,27 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			wrapper.source = Buffer.from(`return external_call(global.__od_${fn.dllName}${callArgs});`, "ascii");
 			scripts.push(wrapper);
 		}
+	} else if (gameConfig.version !== GameVersion.GameMaker80) {
+		// GM8.2 with gm82buf: load http_dll only for ansi_to_utf8 + set_utf8_mode
+		GMLCode.addVariables("HTTPDLL_INIT");
+		const HTTP_DLL_NAME: string = "http_dll_2_3.dll";
+		const miniInitLines: Array<string> = [
+			`var dll; dll = "${HTTP_DLL_NAME}";`,
+			`global.__od_ansi_to_utf8 = external_define(dll,'ansi_to_utf8',dll_cdecl,ty_string,1,ty_string);`,
+			`global.__od_set_utf8_mode = external_define(dll,'set_utf8_mode',dll_cdecl,ty_real,1,ty_real);`,
+		];
+		const miniInitScript: Script = new Script();
+		miniInitScript.name = Buffer.from("__ONLINE_httpdll_init", "ascii");
+		miniInitScript.source = Buffer.from(miniInitLines.join("\r\n"), "ascii");
+		scripts.push(miniInitScript);
+		const ansiWrapper: Script = new Script();
+		ansiWrapper.name = Buffer.from("ansi_to_utf8", "ascii");
+		ansiWrapper.source = Buffer.from("return external_call(global.__od_ansi_to_utf8, argument0);", "ascii");
+		scripts.push(ansiWrapper);
+		const utfModeWrapper: Script = new Script();
+		utfModeWrapper.name = Buffer.from("set_utf8_mode", "ascii");
+		utfModeWrapper.source = Buffer.from("return external_call(global.__od_set_utf8_mode, argument0);", "ascii");
+		scripts.push(utfModeWrapper);
 	}
 	const newIncludedfile = function(file: string): IncludedFile {
 		let includedfile = new IncludedFile();
@@ -599,7 +613,9 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const roomGuard: string = existingMenuRooms.length > 0
 		? "if(" + existingMenuRooms.map(r => `room != ${r}`).join(" && ") + "){"
 		: "if(true){";
-	if (hasGm82snd) {
+	// Included files: always read through the section. Inject sound files for gm82snd,
+	// and inject GaseousMarble font files for CJK text rendering.
+	{
 		exe.readInt32LE(); //last_instance_id
 		exe.readInt32LE(); //last_tile_id
 		if(exe.readUInt32LE() != 800)
@@ -610,8 +626,20 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			return IncludedFile.deserialize(data, gameConfig);
 		}) as Array<IncludedFile>;
 		includedfilesOffsets[1] = exe.readOffset;
-		includedfiles.push(newIncludedfile("__ONLINE_sndChatbox.wav"));
-		includedfiles.push(newIncludedfile("__ONLINE_sndSaved.wav"));
+		if (hasGm82snd) {
+			includedfiles.push(newIncludedfile("__ONLINE_sndChatbox.wav"));
+			includedfiles.push(newIncludedfile("__ONLINE_sndSaved.wav"));
+		}
+		// GaseousMarble font files — only for GM8.1+ (GM8.0 uses FoxWriting)
+		if (gameConfig.version !== GameVersion.GameMaker80) {
+			const fontPng: IncludedFile = newIncludedfile("__ONLINE_font.png");
+			fontPng.exportSettings = 2; // Export to game directory (working_directory)
+			includedfiles.push(fontPng);
+			const fontGly: IncludedFile = newIncludedfile("__ONLINE_font.gly");
+			fontGly.exportSettings = 2; // Export to game directory (working_directory)
+			includedfiles.push(fontGly);
+		}
+
 		replaceChunk(exe, includedfilesOffsets, putAssetRefs(exe, includedfiles));
 	}
 	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), Buffer.from(gameName), Buffer.from(Utils.getVersion(), 'ascii')));
@@ -672,33 +700,132 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		else
 			saveExe.source = insertGMLScript(saveExe.source, loadGameContent);
 	}
-	// GBK-safe string truncation helper for Chinese text in GM8.
-	// GM8 string_copy operates on bytes; this iterates forward tracking 2-byte GBK boundaries.
-	if (gameConfig.version === GameVersion.GameMaker80) {
+	// Encoding-safe string truncation helper for Chinese text.
+	// GM8 string_copy operates on bytes; this iterates forward tracking multi-byte boundaries.
+	// GM8.0 uses GBK encoding (2-byte CJK); GM8.1 uses UTF-8 (1-4 byte per char).
+	{
 		const gbkTruncScript: Script = new Script();
 		gbkTruncScript.name = Buffer.from("__ONLINE_gbk_trunc", "ascii");
-		gbkTruncScript.source = Buffer.from([
-			"// __ONLINE_gbk_trunc(str, maxBytes, suffix)",
-			"var p, safe;",
-			"if(string_length(argument0) <= argument1) return argument0;",
-			"p = 1; safe = 0;",
-			"while(p <= string_length(argument0)){",
-			"  if(ord(string_copy(argument0, p, 1)) >= $81){",
-			"    if(p + 1 <= argument1){ safe = p + 1; p += 2; }",
-			"    else break;",
-			"  }else{",
-			"    if(p <= argument1){ safe = p; p += 1; }",
-			"    else break;",
-			"  }",
-			"}",
-			"return string_copy(argument0, 1, safe) + argument2;",
-		].join("\r\n"), "ascii");
+		if (gameConfig.version === GameVersion.GameMaker81) {
+			// UTF-8 truncation for GM8.1
+			gbkTruncScript.source = Buffer.from([
+				"// __ONLINE_gbk_trunc(str, maxBytes, suffix) — UTF-8 mode",
+				"var p, safe, b, charLen;",
+				"if(string_length(argument0) <= argument1) return argument0;",
+				"p = 1; safe = 0;",
+				"while(p <= string_length(argument0)){",
+				"  b = ord(string_copy(argument0, p, 1));",
+				"  if(b < $80) charLen = 1;",
+				"  else if(b < $C0) { p += 1; continue; }",
+				"  else if(b < $E0) charLen = 2;",
+				"  else if(b < $F0) charLen = 3;",
+				"  else charLen = 4;",
+				"  if(p + charLen - 1 <= argument1){ safe = p + charLen - 1; p += charLen; }",
+				"  else break;",
+				"}",
+				"return string_copy(argument0, 1, safe) + argument2;",
+			].join("\r\n"), "ascii");
+		} else {
+			// GBK truncation for GM8.0
+			gbkTruncScript.source = Buffer.from([
+				"// __ONLINE_gbk_trunc(str, maxBytes, suffix)",
+				"var p, safe;",
+				"if(string_length(argument0) <= argument1) return argument0;",
+				"p = 1; safe = 0;",
+				"while(p <= string_length(argument0)){",
+				"  if(ord(string_copy(argument0, p, 1)) >= $81){",
+				"    if(p + 1 <= argument1){ safe = p + 1; p += 2; }",
+				"    else break;",
+				"  }else{",
+				"    if(p <= argument1){ safe = p; p += 1; }",
+				"    else break;",
+				"  }",
+				"}",
+				"return string_copy(argument0, 1, safe) + argument2;",
+			].join("\r\n"), "ascii");
+		}
 		scripts.push(gbkTruncScript);
-		// GBK CJK detection: returns 1 if any byte >= $81 (GBK lead byte), else 0
+	}
+	// CJK text rendering via GaseousMarble extension (GM8.1+ only; GM8.0 uses FoxWriting fallback).
+	// After set_utf8_mode(1), all GM variable strings are UTF-8:
+	//   - buffer_read_string returns UTF-8 (http_dll in UTF-8 mode / gm82buf native)
+	//   - wd_input_box results converted at storage level via ansi_to_utf8
+	// So GaseousMarble receives UTF-8 directly — no conversion needed in draw functions.
+	if (gameConfig.version !== GameVersion.GameMaker80) {
+		const cjkInitScript: Script = new Script();
+		cjkInitScript.name = Buffer.from("__ONLINE_cjk_init", "ascii");
+		cjkInitScript.source = Buffer.from([
+			"// __ONLINE_cjk_init() — load CJK font via GaseousMarble extension",
+			"var _ret;",
+			"_ret = gm_font(\"cjk\", \"__ONLINE_font.png\");",
+			"if(_ret < 0) { show_message(\"gm_font error: \" + string(_ret)); }",
+			"gm_set_font(\"cjk\");",
+			"global.__ONLINE_cjkHalign = 0;",
+			"global.__ONLINE_cjkValign = 0;",
+		].join("\r\n"), "ascii");
+		scripts.push(cjkInitScript);
+
+		// __ONLINE_cjk_draw_text(x, y, str, maxW)
+		// GM8 alignment: fa_left=0, fa_center=1, fa_right=2; fa_top=0, fa_middle=1, fa_bottom=2
+		// GaseousMarble: left=-1, center=0, right=1; top=-1, middle=0, bottom=1
+		// GaseousMarble applies font.top() before valign adjustment, shifting center/bottom
+		// aligned text upward by |font.top()| pixels. Compensate by reading _top from .gly.
+		const glyBuf: Buffer = fs.readFileSync(path.join(__dirname, "lib", "__ONLINE_font.gly"));
+		// .gly format: 'GLY\x01\x01\x00' (6 bytes) + u16 height + i16 top + u32 glyphCount
+		const fontTop: number = glyBuf.readInt16LE(8); // _top (negative ascent offset)
+		const valignFix: number = -fontTop + 4; // pixels to shift down for center/bottom
+		const cjkDrawScript: Script = new Script();
+		cjkDrawScript.name = Buffer.from("__ONLINE_cjk_draw_text", "ascii");
+		cjkDrawScript.source = Buffer.from([
+			"// __ONLINE_cjk_draw_text(x, y, str, maxW)",
+			"gm_set_font(\"cjk\");",
+			"gm_set_color(draw_get_color());",
+			"gm_set_alpha(draw_get_alpha());",
+			"gm_set_halign(global.__ONLINE_cjkHalign - 1);",
+			"gm_set_valign(global.__ONLINE_cjkValign - 1);",
+			"gm_set_max_line_length(argument3);",
+			`if(global.__ONLINE_cjkValign > 0) gm_draw(argument0, argument1 + ${valignFix}, argument2);`,
+			`else gm_draw(argument0, argument1, argument2);`,
+			"return 0;",
+		].join("\r\n"), "ascii");
+		scripts.push(cjkDrawScript);
+
+		const cjkWidthScript: Script = new Script();
+		cjkWidthScript.name = Buffer.from("__ONLINE_cjk_string_width", "ascii");
+		cjkWidthScript.source = Buffer.from([
+			"// __ONLINE_cjk_string_width(str)",
+			"gm_set_font(\"cjk\");",
+			"gm_set_max_line_length(0);",
+			"return gm_width(argument0);",
+		].join("\r\n"), "ascii");
+		scripts.push(cjkWidthScript);
+
+		const cjkHeightExtScript: Script = new Script();
+		cjkHeightExtScript.name = Buffer.from("__ONLINE_cjk_string_height_ext", "ascii");
+		cjkHeightExtScript.source = Buffer.from([
+			"// __ONLINE_cjk_string_height_ext(str, sep, maxW)",
+			"gm_set_font(\"cjk\");",
+			"gm_set_max_line_length(argument2);",
+			"return gm_height(argument0);",
+		].join("\r\n"), "ascii");
+		scripts.push(cjkHeightExtScript);
+
+		const cjkWidthExtScript: Script = new Script();
+		cjkWidthExtScript.name = Buffer.from("__ONLINE_cjk_string_width_ext", "ascii");
+		cjkWidthExtScript.source = Buffer.from([
+			"// __ONLINE_cjk_string_width_ext(str, sep, maxW)",
+			"gm_set_font(\"cjk\");",
+			"gm_set_max_line_length(argument2);",
+			"return gm_width(argument0);",
+		].join("\r\n"), "ascii");
+		scripts.push(cjkWidthExtScript);
+	}
+	// FoxWriting helper scripts for GM8.0 CJK text rendering
+	if (gameConfig.version === GameVersion.GameMaker80) {
 		const hasCjkScript: Script = new Script();
 		hasCjkScript.name = Buffer.from("__ONLINE_has_cjk", "ascii");
 		hasCjkScript.source = Buffer.from([
-			"// __ONLINE_has_cjk(str) → 1 if contains GBK high bytes, 0 otherwise",
+			"// __ONLINE_has_cjk(str) — returns 1 if string contains GBK high bytes",
 			"var i;",
 			"for(i = 1; i <= string_length(argument0); i += 1){",
 			"  if(ord(string_copy(argument0, i, 1)) >= $81) return 1;",
@@ -706,11 +833,11 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			"return 0;",
 		].join("\r\n"), "ascii");
 		scripts.push(hasCjkScript);
-		// NoisyFox font selector: Berlin for ASCII, YaHei for CJK
+
 		const fwUseFontScript: Script = new Script();
 		fwUseFontScript.name = Buffer.from("__ONLINE_fw_use_font", "ascii");
 		fwUseFontScript.source = Buffer.from([
-			"// __ONLINE_fw_use_font(str) — sets NoisyFox font based on content",
+			"// __ONLINE_fw_use_font(str) — select CJK or Berlin font based on content",
 			"if(__ONLINE_has_cjk(argument0)){",
 			"  fw_draw_set_font(global.__ONLINE_fwCjk);",
 			"}else{",
@@ -731,8 +858,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	await fs.writeFile(path.join(outputDir, `${gameName}_online.exe`), getExeBuffer());
 	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_rating=85\nteam=0\nlerp=1`;
 	await fs.writeFile(path.join(outputDir, configFilename), configContent, "utf8");
-	if (!hasGm82buf){
-		await EnsureX86HttpDllBuilt();
-		await fs.copyFile(path.join(__dirname, "lib", HTTP_DLL_FILENAME), path.join(outputDir, HTTP_DLL_FILENAME));
-	}
+	await EnsureX86HttpDllBuilt();
+	await fs.copyFile(path.join(__dirname, "lib", HTTP_DLL_FILENAME), path.join(outputDir, HTTP_DLL_FILENAME));
+
 }

@@ -24,15 +24,12 @@ Special thanks:
 How to use:
   In order to use this software, all you need to do is drag and drop the executable (.exe) of any game onto iwpo.exe.
   Make sure to let iwpo in its own directory.
-  The default server is localhost. To use a custom server, edit iwpo-settings.ini or pass server=IP on the command line.
+  The server is configured in iwpo-settings.ini. To use a custom server, edit that file or pass server=IP on the command line.
   If no error message is thrown, then three cases can happen:
    - If the game is made with GameMaker 8 (or 8.1), the online game will be created as a new executable in the same directory.
    - If the game is made with GameMaker Studio and is self contained, the online game will be created in a new folder with all the resources unpacked.
    - If the game is made with GameMaker Studio and is already unpacked, a file data_backup.win will be created. The game will now be online, and in order to get back to the original version replace the file data.win by data_backup.win.
-  The converter also writes a file named __ONLINE_server.txt next to the converted game. You can edit this file if you need to point the game to another server.
-
-Website:
-  The converter defaults to localhost. Configure the server in iwpo-settings.ini.
+  In early versions, the converter also writes a file named __ONLINE_server.txt next to the converted game. You can edit this file if you need to point the game to another server.
 
 FAQ:
   Q: Me and my friend can't play [some game] together, the server seems to think we are playing two different games
@@ -86,7 +83,7 @@ CHANGE LOGS:
  - Fixed text encoding issues (thanks to Samiboule)
 
 1.1.6:
- - Use the new server
+ - Use the new server (isocodes.org => 212.64.24.80)
 
 1.1.5:
  - Fixed the heap out of memory crash for heavy GM8 games

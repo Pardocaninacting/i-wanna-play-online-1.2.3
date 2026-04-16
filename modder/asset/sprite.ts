@@ -50,7 +50,7 @@ export class Sprite extends Asset {
 				const pixelDataLength: number = data.readUInt32LE();
 				/*const frameData: Array<number> = [...*/data.readBuffer(pixelDataLength)/*]*/;
 				sprite.frames[i] = {
-					width: frameCount,
+					width: frameWidth,
 					height: frameHeight,
 					data: []/*frameData*/,
 				}
@@ -79,7 +79,7 @@ export class Sprite extends Asset {
 			sprite.perFrameColliders = data.readUInt32LE() != 0;
 			if(sprite.perFrameColliders){
 				sprite.colliders = new Array(frameCount);
-				for(let i: number; i < frameCount; ++i)
+				for(let i: number = 0; i < frameCount; ++i)
 					/*sprite.colliders[i] = */readCollision(data);
 			}else{
 				sprite.colliders = [readCollision(data)];

@@ -173,10 +173,15 @@ while(socket_read_message(@socket, @buffer)){
 				#if GM80
 				@bubbleMsg = __ONLINE_gbk_trunc(@bubbleMsg, 77, "...");
 				#endif
+				#if CJKTEXT
+				@bubbleMsg = __ONLINE_gbk_trunc(@bubbleMsg, 77, "...");
+				#endif
 				#if not GM80
+				#if not CJKTEXT
 				if(string_length(@bubbleMsg) > 80){
 					@bubbleMsg = string_copy(@bubbleMsg, 1, 77) + "...";
 				}
+				#endif
 				#endif
 				#if GMS2
 					@oCb = instance_create_depth(0, 0, @chatboxDepth, @chatbox);
@@ -584,7 +589,17 @@ if(@exists){
 			@message = get_string("Say something:", "");
 		#endif
 		#if not STUDIO
+			#if GM80
 			@message = wd_input_box("Chat", "Say something:", "");
+			#endif
+			#if CJKTEXT
+			@message = ansi_to_utf8(wd_input_box("Chat", "Say something:", ""));
+			#endif
+			#if not GM80
+			#if not CJKTEXT
+			@message = wd_input_box("Chat", "Say something:", "");
+			#endif
+			#endif
 		#endif
 		@message = string_replace_all(@message, "#", "\\#");
 		#if STUDIO
@@ -598,10 +613,17 @@ if(@exists){
 				@message = __ONLINE_gbk_trunc(@message, @message_max_length, "");
 			}
 			#endif
+			#if CJKTEXT
+			if(@message_length > @message_max_length){
+				@message = __ONLINE_gbk_trunc(@message, @message_max_length, "");
+			}
+			#endif
 			#if not GM80
+			#if not CJKTEXT
 			if(@message_length > @message_max_length){
 				@message = string_copy(@message, 0, @message_max_length);
 			}
+			#endif
 			#endif
 			buffer_clear(@buffer);
 			#if not GMNET
@@ -616,10 +638,15 @@ if(@exists){
 			#if GM80
 			@selfChatBubble = __ONLINE_gbk_trunc(@selfChatBubble, 77, "...");
 			#endif
+			#if CJKTEXT
+			@selfChatBubble = __ONLINE_gbk_trunc(@selfChatBubble, 77, "...");
+			#endif
 			#if not GM80
+			#if not CJKTEXT
 			if(string_length(@selfChatBubble) > 80){
 				@selfChatBubble = string_copy(@selfChatBubble, 1, 77) + "...";
 			}
+			#endif
 			#endif
 			#if GMS2
 				@oCb = instance_create_depth(0, 0, @chatboxDepth, @chatbox);

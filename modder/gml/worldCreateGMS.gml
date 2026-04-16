@@ -451,10 +451,6 @@ if file_exists(@savesPath) {
 @sndSavedId = asset_get_index("__ONLINE_sndSaved");
 #endif
 
-#if GM80
-globalvar @fwBerlin, @fwCjk;
-@fwBerlin = fw_add_font('Berlin Sans FB Demi', 9, false, false, false);
-@fwCjk = fw_add_font('Microsoft Yahei', 9, false, false, false);
-fw_set_font_offset(@fwCjk, -1, -4);
-fw_draw_set_font(@fwBerlin);
+#if CJKTEXT
+__ONLINE_cjk_init();
 #endif

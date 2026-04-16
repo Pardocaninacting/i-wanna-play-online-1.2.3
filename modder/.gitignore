@@ -7,6 +7,7 @@ __ONLINE_server.txt
 DEVNOTES.md
 
 yarn-error.log
+package-lock.json
 
 **/*.js
 **/*.zip

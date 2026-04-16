@@ -23,7 +23,7 @@ Then, simply run
 ```
 yarn build
 ```
-The output will be in `build/iwpo 1.2.3.zip`.
+The output will be in `build/iwpo 1.2.3_beta_2.zip`.
 
 ## Edit the GML files
 The GML files contain the code that will be injected into the game.
@@ -47,7 +47,7 @@ If you want to edit these files to contribute, first there are 3 things you shou
 - **Save history**: local binary save log up to 500 entries with favorites, text filtering, pagination, relative timestamps and one-click position rollback; V2 format with deferred writes and time-density thinning
 - **Spectator mode**: hold-to-enter observer camera that follows online players across rooms; smooth-follow and screen-snap camera modes; auto-exit when the room is empty
 - **Chat log panel**: scrollable chat history overlay with word-wrapping and scroll indicator
-- **Chat bubbles**: animated speech bubbles above players with spring physics, squash/stretch and fade
+- **Chat bubbles**: animated speech bubbles chain above players with spring physics, squash/stretch and fade
 - **Rating system**: 1–5 star rating with optional "cleared" flag per game; server-side JSON persistence with per-IP cooldown; interactive web viewer at `/ratings`
 - **Keybind system**: 8 rebindable hotkeys via in-game settings panel, persisted to INI
 - **Off-screen player arrows**: team-colored edge arrows with distance fade and name labels pointing to players in the same room

@@ -22,14 +22,51 @@ if(instance_exists(@f)){
 	@springY += @springVY;
 	x = @springX;
 	y = @springY;
+	if(!@chainInited){
+		@c0x = @targetX;
+		@c0y = @targetY;
+		@c1x = @targetX;
+		@c1y = @targetY;
+		@c2x = @targetX;
+		@c2y = @targetY;
+		@chainInited = true;
+	}
+	@c0vx = @c0vx * 0.55 + (@targetX - @c0x) * 0.22;
+	@c0vy = @c0vy * 0.55 + ((@targetY - 6) - @c0y) * 0.22;
+	@c0x += @c0vx;
+	@c0y += @c0vy;
+	@c1vx = @c1vx * 0.70 + (@c0x - @c1x) * 0.12;
+	@c1vy = @c1vy * 0.70 + ((@c0y - 12) - @c1y) * 0.12;
+	@c1x += @c1vx;
+	@c1y += @c1vy;
+	@c2vx = @c2vx * 0.78 + (@c1x - @c2x) * 0.08;
+	@c2vy = @c2vy * 0.78 + ((@c1y - 14) - @c2y) * 0.08;
+	@c2x += @c2vx;
+	@c2y += @c2vy;
 }else{
+	@c0vx *= 0.85;
+	@c0vy *= 0.85;
+	@c0x += @c0vx;
+	@c0y += @c0vy;
+	@c1vx *= 0.85;
+	@c1vy *= 0.85;
+	@c1x += @c1vx;
+	@c1y += @c1vy;
+	@c2vx *= 0.85;
+	@c2vy *= 0.85;
+	@c2x += @c2vx;
+	@c2y += @c2vy;
 	@timer = min(@timer, 1);
 }
 if(@wrappedMsg == "" && @message != ""){
 	#if GM80
 	@wrappedMsg = @message;
 	#endif
+	#if CJKTEXT
+	@wrappedMsg = @message;
+	#endif
 	#if not GM80
+	#if not CJKTEXT
 	#if STUDIO
 		if(global.@ftOnline >= 0){
 			draw_set_font(global.@ftOnline);
@@ -58,6 +95,7 @@ if(@wrappedMsg == "" && @message != ""){
 		draw_set_font(0);
 	}
 	#endif
+	#endif
 }
 @scaleVel = @scaleVel * 0.6 + (1 - @scale) * 0.15;
 @scale += @scaleVel;
@@ -65,6 +103,8 @@ if(abs(@scale - 1) < 0.005 && abs(@scaleVel) < 0.005){
 	@scale = 1;
 	@scaleVel = 0;
 }
+@tailPop += 0.12;
+if(@tailPop > 1) @tailPop = 1;
 if(@scale > 0.95 && !@showText) @showText = true;
 if(@showText && @textAlpha < 1){
 	@textAlpha += 0.08;

@@ -31,8 +31,13 @@ if(@chatLogOpen){
 	#if GM80
 		@clLH = fw_string_height_ext("A", -1, 9999);
 	#endif
+	#if CJKTEXT
+		@clLH = __ONLINE_cjk_string_height_ext("A", -1, 9999);
+	#endif
 	#if not GM80
+	#if not CJKTEXT
 		@clLH = string_height("A");
+	#endif
 	#endif
 	@clStep = @clLH + 2;
 	@clTotalLines = 0;
@@ -41,8 +46,13 @@ if(@chatLogOpen){
 		#if GM80
 		@clDispName = __ONLINE_gbk_trunc(@clDispName, 12, "..");
 		#endif
+		#if CJKTEXT
+		@clDispName = __ONLINE_gbk_trunc(@clDispName, 12, "..");
+		#endif
 		#if not GM80
+		#if not CJKTEXT
 		if(string_length(@clDispName) > 12) @clDispName = string_copy(@clDispName, 1, 12) + "..";
+		#endif
 		#endif
 		@clSrc = @clDispName + ": " + @chatHistMsg[@clI];
 		@clCurLine = "";
@@ -58,8 +68,17 @@ if(@chatLogOpen){
 				}
 				@clChW = fw_string_width(@clCh);
 			#endif
+			#if CJKTEXT
+					if(ord(@clCh) >= $81 && @clC < string_length(@clSrc)){
+					@clCh = string_copy(@clSrc, @clC, 2);
+					@clC += 1;
+				}
+				@clChW = __ONLINE_cjk_string_width(@clCh);
+			#endif
 			#if not GM80
+			#if not CJKTEXT
 				@clChW = string_width(@clCh);
+			#endif
 			#endif
 			if(@clCh == " "){
 				if(@clLineW + @clWordW > @clWrapW && @clLineW > 0){
@@ -127,14 +146,23 @@ if(@chatLogOpen){
 	fw_draw_set_halign(fa_left);
 	fw_draw_set_valign(fa_top);
 	#endif
+	#if CJKTEXT
+	global.__ONLINE_cjkHalign = 0;
+	global.__ONLINE_cjkValign = 0;
+	#endif
 	for(@clL = 0; @clL < @clTotalLines; @clL += 1){
 		if(@clDrawY >= @clContentY && @clDrawY + @clLH <= @clContentY + @clContentH){
 			#if GM80
 				__ONLINE_fw_use_font(@clAllLines[@clL]);
 				fw_draw_text_ext(@clPanelX + 8, @clDrawY, @clAllLines[@clL], @clWrapW);
 			#endif
+			#if CJKTEXT
+				__ONLINE_cjk_draw_text(@clPanelX + 8, @clDrawY, @clAllLines[@clL], @clWrapW);
+			#endif
 			#if not GM80
+			#if not CJKTEXT
 				draw_text(@clPanelX + 8, @clDrawY, @clAllLines[@clL]);
+			#endif
 			#endif
 		}
 		@clDrawY += @clStep;
@@ -204,13 +232,25 @@ if(@showPlayerList){
 	draw_set_color(@teamColors[@team]);
 	fw_draw_text_ext(@plX, @plY, @plSelf, 9999);
 	#endif
+	#if CJKTEXT
+	global.__ONLINE_cjkHalign = 2;
+	global.__ONLINE_cjkValign = 0;
+	__ONLINE_cjk_draw_text(@plX+1, @plY, @plSelf, 9999);
+	__ONLINE_cjk_draw_text(@plX, @plY+1, @plSelf, 9999);
+	__ONLINE_cjk_draw_text(@plX-1, @plY, @plSelf, 9999);
+	__ONLINE_cjk_draw_text(@plX, @plY-1, @plSelf, 9999);
+	draw_set_color(@teamColors[@team]);
+	__ONLINE_cjk_draw_text(@plX, @plY, @plSelf, 9999);
+	#endif
 	#if not GM80
+	#if not CJKTEXT
 	draw_text(@plX+1, @plY, @plSelf);
 	draw_text(@plX, @plY+1, @plSelf);
 	draw_text(@plX-1, @plY, @plSelf);
 	draw_text(@plX, @plY-1, @plSelf);
 	draw_set_color(@teamColors[@team]);
 	draw_text(@plX, @plY, @plSelf);
+	#endif
 	#endif
 	@plY += 16;
 	for(@plI = 0; @plI < instance_number(@onlinePlayer); @plI += 1){
@@ -226,13 +266,23 @@ if(@showPlayerList){
 			draw_set_color(@teamColors[@plObj.@team]);
 			fw_draw_text_ext(@plX, @plY, @plObj.@name, 9999);
 			#endif
+			#if CJKTEXT
+			__ONLINE_cjk_draw_text(@plX+1, @plY, @plObj.@name, 9999);
+			__ONLINE_cjk_draw_text(@plX, @plY+1, @plObj.@name, 9999);
+			__ONLINE_cjk_draw_text(@plX-1, @plY, @plObj.@name, 9999);
+			__ONLINE_cjk_draw_text(@plX, @plY-1, @plObj.@name, 9999);
+			draw_set_color(@teamColors[@plObj.@team]);
+			__ONLINE_cjk_draw_text(@plX, @plY, @plObj.@name, 9999);
+			#endif
 			#if not GM80
+			#if not CJKTEXT
 			draw_text(@plX+1, @plY, @plObj.@name);
 			draw_text(@plX, @plY+1, @plObj.@name);
 			draw_text(@plX-1, @plY, @plObj.@name);
 			draw_text(@plX, @plY-1, @plObj.@name);
 			draw_set_color(@teamColors[@plObj.@team]);
 			draw_text(@plX, @plY, @plObj.@name);
+			#endif
 			#endif
 			@plY += 16;
 		}
@@ -247,6 +297,10 @@ if(@showPlayerList){
 	#if GM80
 	fw_draw_set_halign(fa_left);
 	fw_draw_set_valign(fa_top);
+	#endif
+	#if CJKTEXT
+	global.__ONLINE_cjkHalign = 0;
+	global.__ONLINE_cjkValign = 0;
 	#endif
 }
 // SETTINGS PANEL
@@ -561,8 +615,13 @@ if(@settingsOpen){
 			#if GM80
 			@shDispName = __ONLINE_gbk_trunc(@shDispName, 10, "..");
 			#endif
+			#if CJKTEXT
+			@shDispName = __ONLINE_gbk_trunc(@shDispName, 10, "..");
+			#endif
 			#if not GM80
+			#if not CJKTEXT
 			if(string_length(@shDispName) > 10) @shDispName = string_copy(@shDispName, 1, 10) + "..";
+			#endif
 			#endif
 			draw_set_color(c_lime);
 			#if GM80
@@ -571,8 +630,15 @@ if(@settingsOpen){
 			__ONLINE_fw_use_font(@shDispName);
 			fw_draw_text_ext(@spX + 30, @entY, @shDispName, 9999);
 			#endif
+			#if CJKTEXT
+			global.__ONLINE_cjkHalign = 0;
+			global.__ONLINE_cjkValign = 0;
+			__ONLINE_cjk_draw_text(@spX + 30, @entY, @shDispName, 9999);
+			#endif
 			#if not GM80
+			#if not CJKTEXT
 			draw_text(@spX + 30, @entY, @shDispName);
+			#endif
 			#endif
 			@shDispRoom = @saveHistRoomName[@shI];
 			if(string_length(@shDispRoom) > 12) @shDispRoom = string_copy(@shDispRoom, 1, 12) + "..";
@@ -1173,8 +1239,13 @@ if(@showArrows || @spectating){
 		#if GM80
 		@arDispName = __ONLINE_gbk_trunc(@arDispName, 8, "..");
 		#endif
+		#if CJKTEXT
+		@arDispName = __ONLINE_gbk_trunc(@arDispName, 8, "..");
+		#endif
 		#if not GM80
+		#if not CJKTEXT
 		if(string_length(@arDispName) > 8) @arDispName = string_copy(@arDispName, 1, 8) + "..";
+		#endif
 		#endif
 		draw_set_color(c_black);
 		#if GM80
@@ -1188,13 +1259,25 @@ if(@showArrows || @spectating){
 		draw_set_color(@_tc);
 		fw_draw_text_ext(@arLblX, @arLblY, @arDispName, 9999);
 		#endif
+		#if CJKTEXT
+		global.__ONLINE_cjkHalign = 1;
+		global.__ONLINE_cjkValign = 1;
+		__ONLINE_cjk_draw_text(@arLblX+1, @arLblY, @arDispName, 9999);
+		__ONLINE_cjk_draw_text(@arLblX-1, @arLblY, @arDispName, 9999);
+		__ONLINE_cjk_draw_text(@arLblX, @arLblY+1, @arDispName, 9999);
+		__ONLINE_cjk_draw_text(@arLblX, @arLblY-1, @arDispName, 9999);
+		draw_set_color(@_tc);
+		__ONLINE_cjk_draw_text(@arLblX, @arLblY, @arDispName, 9999);
+		#endif
 		#if not GM80
+		#if not CJKTEXT
 		draw_text(@arLblX+1, @arLblY, @arDispName);
 		draw_text(@arLblX-1, @arLblY, @arDispName);
 		draw_text(@arLblX, @arLblY+1, @arDispName);
 		draw_text(@arLblX, @arLblY-1, @arDispName);
 		draw_set_color(@_tc);
 		draw_text(@arLblX, @arLblY, @arDispName);
+		#endif
 		#endif
 		}
 		}
@@ -1204,6 +1287,10 @@ if(@showArrows || @spectating){
 	#if GM80
 	fw_draw_set_halign(fa_left);
 	fw_draw_set_valign(fa_top);
+	#endif
+	#if CJKTEXT
+	global.__ONLINE_cjkHalign = 0;
+	global.__ONLINE_cjkValign = 0;
 	#endif
 	draw_set_alpha(@_alpha);
 	draw_set_color(@_color);

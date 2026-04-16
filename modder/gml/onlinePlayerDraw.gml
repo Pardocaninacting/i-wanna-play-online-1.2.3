@@ -38,11 +38,21 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 			fw_draw_text_ext(@xx-@border, @yy, @name, 9999);
 			fw_draw_text_ext(@xx, @yy-@border, @name, 9999);
 			#endif
+			#if CJKTEXT
+			global.__ONLINE_cjkHalign = 1;
+			global.__ONLINE_cjkValign = 1;
+			__ONLINE_cjk_draw_text(@xx+@border, @yy, @name, 9999);
+			__ONLINE_cjk_draw_text(@xx, @yy+@border, @name, 9999);
+			__ONLINE_cjk_draw_text(@xx-@border, @yy, @name, 9999);
+			__ONLINE_cjk_draw_text(@xx, @yy-@border, @name, 9999);
+			#endif
 			#if not GM80
+			#if not CJKTEXT
 			draw_text(@xx+@border, @yy, @name);
 			draw_text(@xx, @yy+@border, @name);
 			draw_text(@xx-@border, @yy, @name);
 			draw_text(@xx, @yy-@border, @name);
+			#endif
 			#endif
 			@_tc = c_white;
 			with(@oWorld){
@@ -52,8 +62,13 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 			#if GM80
 			fw_draw_text_ext(@xx, @yy, @name, 9999);
 			#endif
+			#if CJKTEXT
+			__ONLINE_cjk_draw_text(@xx, @yy, @name, 9999);
+			#endif
 			#if not GM80
+			#if not CJKTEXT
 			draw_text(@xx, @yy, @name);
+			#endif
 			#endif
 			draw_set_alpha(@_alpha);
 			draw_set_color(@_color);
@@ -65,6 +80,10 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 			#if GM80
 				fw_draw_set_valign(fa_top);
 				fw_draw_set_halign(fa_left);
+			#endif
+			#if CJKTEXT
+				global.__ONLINE_cjkValign = 0;
+				global.__ONLINE_cjkHalign = 0;
 			#endif
 		}
 	}

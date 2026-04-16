@@ -47,13 +47,25 @@ fw_draw_text_ext(@xx, @yy-1, @text, 9999);
 draw_set_color(@useTeamColor);
 fw_draw_text_ext(@xx, @yy, @text, 9999);
 #endif
+#if CJKTEXT
+global.__ONLINE_cjkHalign = 0;
+global.__ONLINE_cjkValign = 0;
+__ONLINE_cjk_draw_text(@xx+1, @yy, @text, 9999);
+__ONLINE_cjk_draw_text(@xx, @yy+1, @text, 9999);
+__ONLINE_cjk_draw_text(@xx-1, @yy, @text, 9999);
+__ONLINE_cjk_draw_text(@xx, @yy-1, @text, 9999);
+draw_set_color(@useTeamColor);
+__ONLINE_cjk_draw_text(@xx, @yy, @text, 9999);
+#endif
 #if not GM80
+#if not CJKTEXT
 draw_text(@xx+1, @yy, @text);
 draw_text(@xx, @yy+1, @text);
 draw_text(@xx-1, @yy, @text);
 draw_text(@xx, @yy-1, @text);
 draw_set_color(@useTeamColor);
 draw_text(@xx, @yy, @text);
+#endif
 #endif
 draw_set_alpha(@_alpha);
 draw_set_color(@_color);

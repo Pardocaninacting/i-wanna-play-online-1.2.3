@@ -2,7 +2,6 @@ import fs from "fs-extra"
 import path from "path"
 import { SmartBuffer } from "smart-buffer"
 import { Utils } from "./utils"
-// import Jimp from "jimp"
 
 export interface PESection {
 	virtualSize: number;

@@ -84,6 +84,326 @@ internal static class NativeStrings
         Marshal.WriteByte(buffer, bytes.Length, 0);
         return buffer;
     }
+
+    /// <summary>
+    /// Convert a string from the system ANSI codepage (e.g. GBK) to UTF-8 bytes.
+    /// Always performs conversion regardless of UseAnsi mode, because the input
+    /// comes from Windows ANSI APIs (e.g. wd_input_box) which always return
+    /// system codepage bytes.
+    /// </summary>
+    internal static IntPtr ConvertAnsiToUtf8(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero)
+            return Write(string.Empty);
+
+        var length = 0;
+        while (Marshal.ReadByte(ptr, length) != 0)
+            length++;
+
+        if (length == 0)
+            return Write(string.Empty);
+
+        var bytes = new byte[length];
+        Marshal.Copy(ptr, bytes, 0, length);
+
+        // Always decode as system codepage (e.g. GBK) then re-encode as UTF-8.
+        // wd_input_box returns system ANSI bytes regardless of GM version or UseAnsi mode.
+        var utf8Bytes = Encoding.UTF8.GetBytes(AnsiEncoding.GetString(bytes));
+
+        var required = utf8Bytes.Length + 1;
+        if (required > capacity)
+        {
+            if (buffer != IntPtr.Zero)
+                Marshal.FreeHGlobal(buffer);
+            capacity = Math.Max(required, 256);
+            buffer = Marshal.AllocHGlobal(capacity);
+        }
+        Marshal.Copy(utf8Bytes, 0, buffer, utf8Bytes.Length);
+        Marshal.WriteByte(buffer, utf8Bytes.Length, 0);
+        return buffer;
+    }
+}
+
+/// <summary>
+/// Win32-based modal input dialog with full Unicode/IME support.
+/// Returns user input as a .NET string (UTF-16), which the caller encodes as needed.
+/// </summary>
+internal static class InputDialog
+{
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate IntPtr WndProcDelegate(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    private struct WNDCLASS
+    {
+        public uint style;
+        public IntPtr lpfnWndProc;
+        public int cbClsExtra;
+        public int cbWndExtra;
+        public IntPtr hInstance;
+        public IntPtr hIcon;
+        public IntPtr hCursor;
+        public IntPtr hbrBackground;
+        public string? lpszMenuName;
+        public string lpszClassName;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MSG
+    {
+        public IntPtr hwnd;
+        public uint message;
+        public IntPtr wParam;
+        public IntPtr lParam;
+        public uint time;
+        public int ptX;
+        public int ptY;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT
+    {
+        public int left, top, right, bottom;
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern ushort RegisterClassW(ref WNDCLASS wc);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr CreateWindowExW(uint exStyle, string cls, string title, uint style, int x, int y, int w, int h, IntPtr parent, IntPtr menu, IntPtr inst, IntPtr param);
+    [DllImport("user32.dll")]
+    private static extern bool DestroyWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern bool ShowWindow(IntPtr hWnd, int cmd);
+    [DllImport("user32.dll")]
+    private static extern bool UpdateWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern bool EnableWindow(IntPtr hWnd, bool enable);
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetFocus(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowTextW(IntPtr hWnd, char[] buf, int maxCount);
+    [DllImport("user32.dll")]
+    private static extern int GetWindowTextLengthW(IntPtr hWnd);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessageW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern int GetMessageW(out MSG msg, IntPtr hWnd, uint min, uint max);
+    [DllImport("user32.dll")]
+    private static extern bool TranslateMessage(ref MSG msg);
+    [DllImport("user32.dll")]
+    private static extern IntPtr DispatchMessageW(ref MSG msg);
+    [DllImport("user32.dll")]
+    private static extern void PostQuitMessage(int code);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr DefWindowProcW(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern IntPtr LoadCursorW(IntPtr inst, int id);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")]
+    private static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern bool IsDialogMessageW(IntPtr hDlg, ref MSG msg);
+    [DllImport("user32.dll")]
+    private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    [DllImport("user32.dll")]
+    private static extern bool IsWindowVisible(IntPtr hWnd);
+    [DllImport("kernel32.dll")]
+    private static extern uint GetCurrentThreadId();
+    private delegate bool EnumThreadWndProc(IntPtr hWnd, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern bool EnumThreadWindows(uint threadId, EnumThreadWndProc callback, IntPtr lParam);
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr GetModuleHandleW(string? name);
+    [DllImport("gdi32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr CreateFontW(int h, int w, int esc, int orient, int weight, uint italic, uint ul, uint strike, uint charset, uint outPrec, uint clipPrec, uint quality, uint pitch, string face);
+    [DllImport("gdi32.dll")]
+    private static extern bool DeleteObject(IntPtr obj);
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetDC(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    private static extern int ReleaseDC(IntPtr hWnd, IntPtr dc);
+    [DllImport("gdi32.dll")]
+    private static extern int GetDeviceCaps(IntPtr dc, int index);
+
+    private const uint CS_HREDRAW = 2, CS_VREDRAW = 1;
+    private const uint WS_OVERLAPPED = 0, WS_CAPTION = 0xC00000, WS_SYSMENU = 0x80000;
+    private const uint WS_CHILD = 0x40000000, WS_VISIBLE = 0x10000000, WS_TABSTOP = 0x10000;
+    private const uint WS_EX_CLIENTEDGE = 0x200, WS_EX_DLGMODALFRAME = 1;
+    private const uint BS_DEFPUSHBUTTON = 1, ES_AUTOHSCROLL = 0x80, SS_LEFT = 0;
+    private const uint WM_CREATE = 1, WM_DESTROY = 2, WM_CLOSE = 0x10;
+    private const uint WM_COMMAND = 0x111, WM_SETFONT = 0x30, EM_SETSEL = 0xB1;
+    private const int LOGPIXELSY = 90, SW_SHOW = 5, IDC_ARROW = 32512;
+    private const int IDC_EDIT = 101, IDC_OK = 1, IDC_CANCEL = 2;
+
+    private static IntPtr s_editHwnd, s_dlgHwnd, s_parentHwnd, s_font;
+    private static IntPtr s_gameHwnd, s_enumFound; // cached game window handle
+    private static string s_result = "", s_prompt = "", s_default = "";
+    private static bool s_registered;
+    private static WndProcDelegate? s_wndProc;
+    private static EnumThreadWndProc? s_enumProc;
+    private const string CLS = "HttpDll23Input";
+
+    private static IntPtr FindGameWindow()
+    {
+        // If we already cached a valid game window, reuse it
+        if (s_gameHwnd != IntPtr.Zero && IsWindowVisible(s_gameHwnd))
+            return s_gameHwnd;
+        // Find the first visible top-level window on the current thread (the GM runner's main window)
+        s_enumFound = IntPtr.Zero;
+        s_enumProc ??= (hWnd, _) =>
+        {
+            if (IsWindowVisible(hWnd))
+            {
+                s_enumFound = hWnd;
+                return false; // stop enumeration
+            }
+            return true;
+        };
+        EnumThreadWindows(GetCurrentThreadId(), s_enumProc, IntPtr.Zero);
+        if (s_enumFound != IntPtr.Zero)
+            s_gameHwnd = s_enumFound;
+        return s_enumFound;
+    }
+
+    private static IntPtr WndProcImpl(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam)
+    {
+        switch (msg)
+        {
+            case WM_CREATE:
+            {
+                var dc = GetDC(hWnd);
+                int dpi = GetDeviceCaps(dc, LOGPIXELSY);
+                ReleaseDC(hWnd, dc);
+                s_font = CreateFontW(-(9 * dpi / 72), 0, 0, 0, 400, 0, 0, 0,
+                    1 /* DEFAULT_CHARSET */, 0, 0, 0, 0, "MS Shell Dlg 2");
+
+                var lbl = CreateWindowExW(0, "STATIC", s_prompt,
+                    WS_CHILD | WS_VISIBLE | SS_LEFT, 12, 10, 356, 20,
+                    hWnd, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
+                SendMessageW(lbl, WM_SETFONT, s_font, (IntPtr)1);
+
+                s_editHwnd = CreateWindowExW(WS_EX_CLIENTEDGE, "EDIT", s_default,
+                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 12, 35, 356, 24,
+                    hWnd, (IntPtr)IDC_EDIT, IntPtr.Zero, IntPtr.Zero);
+                SendMessageW(s_editHwnd, WM_SETFONT, s_font, (IntPtr)1);
+
+                var ok = CreateWindowExW(0, "BUTTON", "OK",
+                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 208, 70, 75, 28,
+                    hWnd, (IntPtr)IDC_OK, IntPtr.Zero, IntPtr.Zero);
+                SendMessageW(ok, WM_SETFONT, s_font, (IntPtr)1);
+
+                var cancel = CreateWindowExW(0, "BUTTON", "Cancel",
+                    WS_CHILD | WS_VISIBLE | WS_TABSTOP, 293, 70, 75, 28,
+                    hWnd, (IntPtr)IDC_CANCEL, IntPtr.Zero, IntPtr.Zero);
+                SendMessageW(cancel, WM_SETFONT, s_font, (IntPtr)1);
+
+                SetFocus(s_editHwnd);
+                SendMessageW(s_editHwnd, EM_SETSEL, IntPtr.Zero, (IntPtr)(-1));
+                return IntPtr.Zero;
+            }
+            case WM_COMMAND:
+            {
+                int id = (int)wParam & 0xFFFF;
+                if (id == IDC_OK)
+                {
+                    int len = GetWindowTextLengthW(s_editHwnd);
+                    if (len > 0)
+                    {
+                        var buf = new char[len + 1];
+                        GetWindowTextW(s_editHwnd, buf, buf.Length);
+                        s_result = new string(buf, 0, len);
+                    }
+                    else
+                        s_result = "";
+                    DestroyWindow(hWnd);
+                    return IntPtr.Zero;
+                }
+                if (id == IDC_CANCEL)
+                {
+                    s_result = "";
+                    DestroyWindow(hWnd);
+                    return IntPtr.Zero;
+                }
+                break;
+            }
+            case WM_CLOSE:
+                s_result = "";
+                DestroyWindow(hWnd);
+                return IntPtr.Zero;
+            case WM_DESTROY:
+                if (s_font != IntPtr.Zero) { DeleteObject(s_font); s_font = IntPtr.Zero; }
+                if (s_parentHwnd != IntPtr.Zero)
+                {
+                    EnableWindow(s_parentHwnd, true);
+                    SetForegroundWindow(s_parentHwnd);
+                }
+                PostQuitMessage(0);
+                return IntPtr.Zero;
+        }
+        return DefWindowProcW(hWnd, msg, wParam, lParam);
+    }
+
+    internal static string Show(string title, string prompt, string defaultText)
+    {
+        s_prompt = prompt;
+        s_default = defaultText;
+        s_result = "";
+
+        var inst = GetModuleHandleW(null);
+        if (!s_registered)
+        {
+            s_wndProc = WndProcImpl;
+            var wc = new WNDCLASS
+            {
+                style = CS_HREDRAW | CS_VREDRAW,
+                lpfnWndProc = Marshal.GetFunctionPointerForDelegate(s_wndProc),
+                hInstance = inst,
+                hCursor = LoadCursorW(IntPtr.Zero, IDC_ARROW),
+                hbrBackground = (IntPtr)(15 + 1), // COLOR_BTNFACE + 1
+                lpszClassName = CLS
+            };
+            if (RegisterClassW(ref wc) == 0)
+                return "";
+            s_registered = true;
+        }
+
+        s_parentHwnd = FindGameWindow();
+        int dlgW = 392, dlgH = 145;
+        int posX = unchecked((int)0x80000000); // CW_USEDEFAULT
+        int posY = unchecked((int)0x80000000);
+        if (s_parentHwnd != IntPtr.Zero && GetWindowRect(s_parentHwnd, out var rc))
+        {
+            posX = (rc.left + rc.right - dlgW) / 2;
+            posY = (rc.top + rc.bottom - dlgH) / 2;
+        }
+
+        s_dlgHwnd = CreateWindowExW(WS_EX_DLGMODALFRAME, CLS, title,
+            WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU,
+            posX, posY, dlgW, dlgH,
+            s_parentHwnd, IntPtr.Zero, inst, IntPtr.Zero);
+        if (s_dlgHwnd == IntPtr.Zero)
+            return "";
+
+        if (s_parentHwnd != IntPtr.Zero)
+            EnableWindow(s_parentHwnd, false);
+
+        ShowWindow(s_dlgHwnd, SW_SHOW);
+        UpdateWindow(s_dlgHwnd);
+        SetForegroundWindow(s_dlgHwnd);
+
+        MSG msg;
+        while (GetMessageW(out msg, IntPtr.Zero, 0, 0) > 0)
+        {
+            if (!IsDialogMessageW(s_dlgHwnd, ref msg))
+            {
+                TranslateMessage(ref msg);
+                DispatchMessageW(ref msg);
+            }
+        }
+
+        return s_result;
+    }
 }
 
 internal static class NativeCast
@@ -1019,6 +1339,22 @@ public static class Exports
                 sb.Append(ch);
         }
         return NativeStrings.Write(sb.ToString());
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "ansi_to_utf8", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static IntPtr AnsiToUtf8(IntPtr value)
+    {
+        return NativeStrings.ConvertAnsiToUtf8(value);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "input_box", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static IntPtr InputBoxExport(IntPtr titlePtr, IntPtr promptPtr, IntPtr defaultPtr)
+    {
+        var title = NativeStrings.Read(titlePtr);
+        var prompt = NativeStrings.Read(promptPtr);
+        var defaultText = NativeStrings.Read(defaultPtr);
+        var result = InputDialog.Show(title, prompt, defaultText);
+        return NativeStrings.Write(result);
     }
 
     [UnmanagedCallersOnly(EntryPoint = "socket_create", CallConvs = new[] { typeof(CallConvCdecl) })]

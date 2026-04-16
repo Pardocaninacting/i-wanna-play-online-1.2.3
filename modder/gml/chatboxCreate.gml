@@ -5,6 +5,7 @@
 @timer = 180;
 @scale = 0;
 @scaleVel = 0;
+@tailPop = 0;
 @showText = false;
 @textAlpha = 0;
 @bobTime = 0;
@@ -19,3 +20,16 @@
 @springVY = 0;
 @springInited = false;
 @prevSpringVX = 0;
+@c0x = 0;
+@c0y = 0;
+@c0vx = 0;
+@c0vy = 0;
+@c1x = 0;
+@c1y = 0;
+@c1vx = 0;
+@c1vy = 0;
+@c2x = 0;
+@c2y = 0;
+@c2vx = 0;
+@c2vy = 0;
+@chainInited = false;

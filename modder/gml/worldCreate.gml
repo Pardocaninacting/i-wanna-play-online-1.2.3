@@ -12,6 +12,9 @@ if(!instance_exists(@userInterface)){
 if (!file_exists("http_dll_2_3.dll"))
     show_message("http_dll_2_3.dll not found.#Please place it in the same folder as the exe.");
 @httpdll_init();
+#if CJKTEXT
+set_utf8_mode(1);
+#endif
 #endif
 @connected = false;
 @buffer = buffer_create();
@@ -354,7 +357,12 @@ if file_exists(@savesPath) {
 		@name = get_string("Enter your name:", "");
 	#endif
 	#if not STUDIO
+		#if CJKTEXT
+		@name = ansi_to_utf8(wd_input_box("Name", "Enter your name:", ""));
+		#endif
+		#if not CJKTEXT
 		@name = wd_input_box("Name", "Enter your name:", "");
+		#endif
 	#endif
 	if(@name == ""){
 		@name = "Anonymous";
@@ -367,7 +375,12 @@ if file_exists(@savesPath) {
 		@password = get_string("Enter a password:", "");
 	#endif
 	#if not STUDIO
+		#if CJKTEXT
+		@password = ansi_to_utf8(wd_input_box("Password", "Leave it empty for no password:", ""));
+		#endif
+		#if not CJKTEXT
 		@password = wd_input_box("Password", "Leave it empty for no password:", "");
+		#endif
 	#endif
 	if(string_length(@password) > 20){
 		@password = string_copy(@password, 0, 20);
@@ -440,6 +453,10 @@ sound_add_included("__ONLINE_sndSaved.wav", 0, 1)
 globalvar @sndChatbox, @sndSaved;
 @sndChatbox = "__ONLINE_sndChatbox"
 @sndSaved = "__ONLINE_sndSaved"
+#endif
+
+#if CJKTEXT
+__ONLINE_cjk_init();
 #endif
 
 #if GM80

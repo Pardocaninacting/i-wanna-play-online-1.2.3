@@ -56,6 +56,7 @@ const build = async function(): Promise<string> {
 	const readme: Array<string> = (await fs.readFile(readmeFilename, "utf8")).split(/\r\n|\r|\n/g);
 	readme[0] += Utils.getVersion();
 	await fs.writeFile(readmeFilename, readme.join("\r\n"), "utf8");
+	await fs.writeFile(path.join(unpackedDir, "iwpo-settings.ini"), "[settings]\nserver=212.64.24.80\n", "utf8");
 	console.log("Compressing the tool...");
 	await zip(unpackedDir, path.join(buildDir, `iwpo ${Utils.getVersion()}.zip`));
 	return "Success!";

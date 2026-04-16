@@ -7,7 +7,6 @@ import { Utils, Ports } from "./utils"
 
 const getInputGame = async function(): Promise<string> {
 	let input: string = "";
-	// console.log(process.argv);
 	if(process.argv.length > 2)
 		input = process.argv[2];
 	if(input == "")
