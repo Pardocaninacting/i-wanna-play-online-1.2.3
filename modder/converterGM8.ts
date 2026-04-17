@@ -491,8 +491,6 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "udpsocket_send", dllName: "udpsocket_send", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_receive", dllName: "udpsocket_receive", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_get_state", dllName: "udpsocket_get_state", ret: "ty_real", args: ["ty_real"] },
-			{ name: "ansi_to_utf8", dllName: "ansi_to_utf8", ret: "ty_string", args: ["ty_string"] },
-			{ name: "set_utf8_mode", dllName: "set_utf8_mode", ret: "ty_real", args: ["ty_real"] },
 		] : [
 			// DLL export names used directly (for normal GM8 games)
 			{ name: "buffer_create", dllName: "buffer_create", ret: "ty_real", args: [] },
@@ -533,9 +531,11 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "udpsocket_send", dllName: "udpsocket_send", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_receive", dllName: "udpsocket_receive", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_get_state", dllName: "udpsocket_get_state", ret: "ty_real", args: ["ty_real"] },
-			{ name: "ansi_to_utf8", dllName: "ansi_to_utf8", ret: "ty_string", args: ["ty_string"] },
-			{ name: "set_utf8_mode", dllName: "set_utf8_mode", ret: "ty_real", args: ["ty_real"] },
 		];
+		if (gameConfig.version !== GameVersion.GameMaker80) {
+			fns.push({ name: "ansi_to_utf8", dllName: "ansi_to_utf8", ret: "ty_string", args: ["ty_string"] });
+			fns.push({ name: "set_utf8_mode", dllName: "set_utf8_mode", ret: "ty_real", args: ["ty_real"] });
+		}
 		// Generate init script
 		const initLines: Array<string> = [`var dll; dll = "${HTTP_DLL_NAME}";`];
 		for (const fn of fns) {
@@ -768,12 +768,9 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		// __ONLINE_cjk_draw_text(x, y, str, maxW)
 		// GM8 alignment: fa_left=0, fa_center=1, fa_right=2; fa_top=0, fa_middle=1, fa_bottom=2
 		// GaseousMarble: left=-1, center=0, right=1; top=-1, middle=0, bottom=1
-		// GaseousMarble applies font.top() before valign adjustment, shifting center/bottom
-		// aligned text upward by |font.top()| pixels. Compensate by reading _top from .gly.
-		const glyBuf: Buffer = fs.readFileSync(path.join(__dirname, "lib", "__ONLINE_font.gly"));
-		// .gly format: 'GLY\x01\x01\x00' (6 bytes) + u16 height + i16 top + u32 glyphCount
-		const fontTop: number = glyBuf.readInt16LE(8); // _top (negative ascent offset)
-		const valignFix: number = -fontTop + 4; // pixels to shift down for center/bottom
+		// The atlas is built with both fonts at natural positions (no y-offset),
+		// so glyphs are visually aligned. GaseousMarble's font.top() = 0 means
+		// no vertical shift for fa_top, and top cancels for center/bottom.
 		const cjkDrawScript: Script = new Script();
 		cjkDrawScript.name = Buffer.from("__ONLINE_cjk_draw_text", "ascii");
 		cjkDrawScript.source = Buffer.from([
@@ -784,8 +781,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			"gm_set_halign(global.__ONLINE_cjkHalign - 1);",
 			"gm_set_valign(global.__ONLINE_cjkValign - 1);",
 			"gm_set_max_line_length(argument3);",
-			`if(global.__ONLINE_cjkValign > 0) gm_draw(argument0, argument1 + ${valignFix}, argument2);`,
-			`else gm_draw(argument0, argument1, argument2);`,
+			"gm_draw(argument0, argument1, argument2);",
 			"return 0;",
 		].join("\r\n"), "ascii");
 		scripts.push(cjkDrawScript);

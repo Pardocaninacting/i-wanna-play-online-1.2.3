@@ -64,7 +64,6 @@ def generate_font(
     ascii_font: str = "Berlin Sans FB Demi",
     cjk_font: str = "Microsoft YaHei",
     font_size: int = 9,
-    cjk_y_offset: int = -4,
 ):
     """Generate the combined sprite atlas PNG + GLY binary."""
 
@@ -72,17 +71,17 @@ def generate_font(
     ascii_font_obj = ImageFont.truetype(ascii_font, font_size)
     cjk_font_obj = ImageFont.truetype(cjk_font, font_size)
 
-    glyphs = []  # list of (key, char, font_obj, y_offset)
+    glyphs = []  # list of (key, char, font_obj)
 
     # ASCII printable characters (0x20-0x7E)
     for code in range(0x20, 0x7F):
         ch = chr(code)
-        glyphs.append((code, ch, ascii_font_obj, 0))
+        glyphs.append((code, ch, ascii_font_obj))
 
     # GB2312 characters
     gb_chars = get_gb2312_chars()
     for key, ch in gb_chars:
-        glyphs.append((key, ch, cjk_font_obj, cjk_y_offset))
+        glyphs.append((key, ch, cjk_font_obj))
 
     print(f"Total glyphs: {len(glyphs)} (ASCII: 95, CJK: {len(gb_chars)})")
 
@@ -91,18 +90,15 @@ def generate_font(
     tmp_draw = ImageDraw.Draw(tmp_img)
     glyph_spacing = 1
 
-    glyph_data = []  # (key, font, char, w, advance, left, top, bottom, y_offset)
+    glyph_data = []  # (key, font, char, w, advance, left, top, bottom)
     min_glyph_top = 0
     max_glyph_bottom = 0
     total_line_width = 0
     max_glyph_width = 0
 
-    for key, ch, font_obj, y_off in glyphs:
+    for key, ch, font_obj in glyphs:
         tmp_draw.font = font_obj
         (l, t, r, b) = [round(v) for v in tmp_draw.textbbox((0, 0), ch)]
-        # Apply y_offset to vertical metrics
-        t += y_off
-        b += y_off
         w = r - l
         advance = round(tmp_draw.textlength(ch))
 
@@ -111,7 +107,7 @@ def generate_font(
         total_line_width += w + glyph_spacing
         max_glyph_width = max(max_glyph_width, w)
 
-        glyph_data.append((key, font_obj, ch, w, advance, l, t, b, y_off))
+        glyph_data.append((key, font_obj, ch, w, advance, l, t, b))
 
     total_line_width -= glyph_spacing
     line_height = max_glyph_bottom - min_glyph_top
@@ -130,7 +126,7 @@ def generate_font(
     cur_x = 0
     line_num = 1
     max_line_w = 0
-    for key, font_obj, ch, w, advance, l, t, b, y_off in glyph_data:
+    for key, font_obj, ch, w, advance, l, t, b in glyph_data:
         if cur_x + w > sprite_width and cur_x > 0:
             max_line_w = max(max_line_w, cur_x - glyph_spacing)
             cur_x = 0
@@ -158,7 +154,7 @@ def generate_font(
 
         x = 0
         y = 0
-        for key, font_obj, ch, w, advance, l, t, b, y_off in glyph_data:
+        for key, font_obj, ch, w, advance, l, t, b in glyph_data:
             if x + w > sprite_width and x > 0:
                 x = 0
                 y += line_height + glyph_spacing
@@ -168,7 +164,7 @@ def generate_font(
 
             # Draw glyph into sprite
             draw_x = x - l
-            draw_y = y - min_glyph_top + y_off
+            draw_y = y - min_glyph_top
             draw.font = font_obj
             draw.text((draw_x, draw_y), ch, fill='white')
 
@@ -193,5 +189,4 @@ if __name__ == "__main__":
         ascii_font=os.path.join(fonts_dir, "BRLNSDB.TTF"),   # Berlin Sans FB Demi Bold
         cjk_font=os.path.join(fonts_dir, "msyh.ttc"),        # Microsoft YaHei
         font_size=12,
-        cjk_y_offset=-4,
     )
