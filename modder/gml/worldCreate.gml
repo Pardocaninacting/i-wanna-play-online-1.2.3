@@ -10,11 +10,13 @@ if(!instance_exists(@userInterface)){
 }
 #if HTTPDLL_INIT
 if (!file_exists("http_dll_2_3.dll"))
-    show_message("http_dll_2_3.dll not found.#Please place it in the same folder as the exe.");
-@httpdll_init();
-#if CJKTEXT
-set_utf8_mode(1);
-#endif
+	show_message("http_dll_2_3.dll not found.#Please place it in the same folder as the exe.");
+else{
+	@httpdll_init();
+	#if CJKTEXT
+	set_utf8_mode(1);
+	#endif
+}
 #endif
 @connected = false;
 @buffer = buffer_create();
@@ -25,7 +27,9 @@ set_utf8_mode(1);
 @tcpPort = %arg2;
 @udpPort = %arg3;
 @version = "%arg5";
+@protocolVersion = 2;
 @race = false;
+@password = "";
 @vis = 0;
 @save_enabled = 1;
 @udpReady = false;
@@ -36,6 +40,18 @@ set_utf8_mode(1);
 @reconnectTimer = 0;
 @reconnectAttempts = 0;
 @customSlot = 0;
+@hbCounter = 0;
+@listCounter = 0;
+@lastRoom = room;
+@pingPRoom = -1;
+// SETTINGS PANEL
+@kbRow[0] = 0;
+@kbRow[1] = 0;
+@kbRow[2] = 0;
+@kbRow[3] = 0;
+@kbRow[4] = 0;
+@kbFocus = 1;
+@kbDelay = 0;
 @customSlotPrev = -1;
 @gameName = "%arg4";
 @keyChat = 32;
@@ -43,6 +59,7 @@ set_utf8_mode(1);
 @keySave = 84;
 @keyPlayerList = 76;
 @showPlayerList = false;
+@loadHotkeyConsumed = false;
 @settingsOpen = false;
 @keySettings = 79;
 @lerpEnabled = true;
@@ -50,6 +67,7 @@ set_utf8_mode(1);
 @visChanged = false;
 @saveChanged = false;
 @lerpChanged = false;
+@syncEnabledChanged = false;
 @saveHistCount = 0;
 @saveHistMax = 500;
 @saveHistLastTime = 0;
@@ -79,11 +97,14 @@ set_utf8_mode(1);
 @rClearWarn = 0;
 @rClearAutoSet = false;
 @keybindEditing = -1;
+@keybindArmTimer = 0;
 @keybindSave = false;
 @team = 0;
 @keySpectate = 89;
 @keyArrows = 73;
+@keyPing = 72;
 @spectating = false;
+@spectatingPrev = false;
 @specX = 0;
 @specY = 0;
 @specRoom = 0;
@@ -109,6 +130,7 @@ set_utf8_mode(1);
 @chatHistMsg[0] = "";
 @chatHistTeam[0] = 0;
 @saveHistFav[0] = 0;
+@saveHistHotkey[0] = 0;
 @saveHistGrav[0] = 0;
 @saveHistX[0] = 0;
 @saveHistY[0] = 0.0;
@@ -125,6 +147,36 @@ set_utf8_mode(1);
 @teamColors[6] = make_color_rgb(255, 160, 40);
 @teamColors[7] = make_color_rgb(80, 255, 255);
 @teamMap = ds_map_create();
+// PING
+@pingWheelOpen = false;
+@pingWheelCenterX = 0;
+@pingWheelCenterY = 0;
+@pingWheelHover = 4;
+@pingWheelCanceled = false;
+@pingHead = 0;
+@pingMax = 16;
+@pingLifeMs = 4000;
+for(@i = 0; @i < @pingMax; @i += 1){
+	@pingX[@i] = 0;
+	@pingY[@i] = 0;
+	@pingT[@i] = -99999;
+	@pingType[@i] = 4;
+	@pingName[@i] = "";
+	@pingSenderIDArr[@i] = "";
+	@pingTeamArr[@i] = 0;
+}
+@pingLabels[0] = "?";
+@pingLabels[1] = "UP";
+@pingLabels[2] = "SAFE";
+@pingLabels[3] = "LEFT";
+@pingLabels[4] = "HERE";
+@pingLabels[5] = "RIGHT";
+@pingLabels[6] = "WAIT";
+@pingLabels[7] = "DOWN";
+@pingLabels[8] = "!";
+// SYNC
+@syncEnabled = 1;
+@syncEntryCount = 0;
 @cfgDir = program_directory;
 @cfgPath = @cfgDir + "\@config.ini";
 @serverPath = @cfgDir + "\@server.txt";
@@ -141,10 +193,33 @@ if file_exists(@cfgPath) {
 	@keyChatLog = ini_read_real("config", "key_chatlog", @keyChatLog);
 	@keySpectate = ini_read_real("config", "key_spectate", @keySpectate);
 	@keyArrows = ini_read_real("config", "key_arrows", @keyArrows);
+	@keyPing = ini_read_real("config", "key_ping", @keyPing);
+	@pingLabels[0] = ini_read_string("ping", "label_0", @pingLabels[0]);
+	@pingLabels[1] = ini_read_string("ping", "label_1", @pingLabels[1]);
+	@pingLabels[2] = ini_read_string("ping", "label_2", @pingLabels[2]);
+	@pingLabels[3] = ini_read_string("ping", "label_3", @pingLabels[3]);
+	@pingLabels[4] = ini_read_string("ping", "label_4", @pingLabels[4]);
+	@pingLabels[5] = ini_read_string("ping", "label_5", @pingLabels[5]);
+	@pingLabels[6] = ini_read_string("ping", "label_6", @pingLabels[6]);
+	@pingLabels[7] = ini_read_string("ping", "label_7", @pingLabels[7]);
+	@pingLabels[8] = ini_read_string("ping", "label_8", @pingLabels[8]);
 	@lerpEnabled = ini_read_real("config", "lerp", 1);
 	@team = ini_read_real("config", "team", @team);
 	if(@team < 0 || @team > 7) @team = 0;
 	@team = floor(@team);
+	@syncEnabled = ini_read_real("sync", "sync_enabled", 1);
+	@syncEntryCount = ini_read_real("sync", "entryCount", 0);
+	if(@syncEntryCount < 0) @syncEntryCount = 0;
+	if(@syncEntryCount > 16) @syncEntryCount = 16;
+	for(@scI = 0; @scI < @syncEntryCount; @scI += 1){
+		@syncName[@scI]      = ini_read_string("sync", "sync"+string(@scI)+"_name", "");
+		@syncCount[@scI]     = ini_read_real  ("sync", "sync"+string(@scI)+"_count", 0);
+		if(@syncCount[@scI] < 1) @syncCount[@scI] = 0;
+		if(@syncCount[@scI] > 512) @syncCount[@scI] = 512;
+		@syncSlotCount[@scI] = ceil(@syncCount[@scI] / 32);
+		@syncDirty[@scI]     = true;
+		@syncLastSig[@scI]   = "";
+	}
 	ini_close();
 } else if file_exists(@serverPath) {
 	@file = file_text_open_read(@serverPath);
@@ -166,19 +241,24 @@ if file_exists(@savesPath) {
 		@saveHistMagic = buffer_read_u16(@buffer);
 	#endif
 	if(@saveHistMagic == 65535){
-		// V2 FORMAT
+		// VERSIONED FORMAT
 		#if not GMNET
-			buffer_read_uint8(@buffer);
+			@saveHistFormat = buffer_read_uint8(@buffer);
 			@saveHistCount = buffer_read_uint16(@buffer);
 		#endif
 		#if GMNET
-			buffer_read_u8(@buffer);
+			@saveHistFormat = buffer_read_u8(@buffer);
 			@saveHistCount = buffer_read_u16(@buffer);
 		#endif
 		if(@saveHistCount > @saveHistMax) @saveHistCount = @saveHistMax;
 		for(@shI = 0; @shI < @saveHistCount; @shI += 1){
 			#if not GMNET
 				@saveHistFav[@shI] = buffer_read_uint8(@buffer);
+				if(@saveHistFormat >= 2){
+					@saveHistHotkey[@shI] = buffer_read_uint8(@buffer);
+				}else{
+					@saveHistHotkey[@shI] = 0;
+				}
 				@saveHistGrav[@shI] = buffer_read_uint8(@buffer);
 				@saveHistX[@shI] = buffer_read_int32(@buffer);
 				@saveHistY[@shI] = buffer_read_float64(@buffer);
@@ -189,6 +269,11 @@ if file_exists(@savesPath) {
 			#endif
 			#if GMNET
 				@saveHistFav[@shI] = buffer_read_u8(@buffer);
+				if(@saveHistFormat >= 2){
+					@saveHistHotkey[@shI] = buffer_read_u8(@buffer);
+				}else{
+					@saveHistHotkey[@shI] = 0;
+				}
 				@saveHistGrav[@shI] = buffer_read_u8(@buffer);
 				@saveHistX[@shI] = buffer_read_i32(@buffer);
 				@saveHistY[@shI] = buffer_read_double(@buffer);
@@ -197,6 +282,12 @@ if file_exists(@savesPath) {
 				@saveHistName[@shI] = buffer_read_string(@buffer);
 				@saveHistRoomName[@shI] = buffer_read_string(@buffer);
 			#endif
+			if(@saveHistHotkey[@shI] < 1 || @saveHistHotkey[@shI] > 8) @saveHistHotkey[@shI] = 0;
+			if(@saveHistHotkey[@shI] > 0){
+				for(@shJ = 0; @shJ < @shI; @shJ += 1){
+					if(@saveHistHotkey[@shJ] == @saveHistHotkey[@shI]) @saveHistHotkey[@shJ] = 0;
+				}
+			}
 			if(@saveHistFav[@shI]) @saveHistFavCount += 1;
 		}
 	}else{
@@ -206,6 +297,7 @@ if file_exists(@savesPath) {
 		@shMigrateNow = date_current_datetime();
 		for(@shI = 0; @shI < @saveHistCount; @shI += 1){
 			@saveHistFav[@shI] = 0;
+			@saveHistHotkey[@shI] = 0;
 			#if not GMNET
 				@saveHistGrav[@shI] = buffer_read_uint8(@buffer);
 				@saveHistX[@shI] = buffer_read_int32(@buffer);
@@ -240,6 +332,10 @@ if file_exists(@savesPath) {
 			@selfID = buffer_read_string(@buffer);
 			@name = buffer_read_string(@buffer);
 			@selfGameID = buffer_read_string(@buffer);
+			@password = "";
+			if(string_length(@selfGameID) > string_length("%arg0")){
+				@password = string_copy(@selfGameID, string_length("%arg0") + 1, string_length(@selfGameID) - string_length("%arg0"));
+			}
 			@race = buffer_read_uint8(@buffer);
 			@n = buffer_read_uint16(@buffer);
 			@vis = buffer_read_uint16(@buffer);
@@ -254,6 +350,10 @@ if file_exists(@savesPath) {
 			@selfID = buffer_read_string(@buffer);
 			@name = buffer_read_string(@buffer);
 			@selfGameID = buffer_read_string(@buffer);
+			@password = "";
+			if(string_length(@selfGameID) > string_length("%arg0")){
+				@password = string_copy(@selfGameID, string_length("%arg0") + 1, string_length(@selfGameID) - string_length("%arg0"));
+			}
 			@race = buffer_read_u8(@buffer);
 			@n = buffer_read_u16(@buffer);
 			@vis = buffer_read_u16(@buffer);
@@ -304,6 +404,8 @@ if file_exists(@savesPath) {
 			#endif
 			@restoredFromTemp = true;
 			@connected = true;
+			@hbCounter = room_speed * 5;
+			@listCounter = room_speed * 15;
 		}else{
 			file_delete("tempOnline");
 			if(file_exists("tempOnline2")){
@@ -311,6 +413,12 @@ if file_exists(@savesPath) {
 			}
 			if(file_exists("tempOnlineChat")){
 				file_delete("tempOnlineChat");
+			}
+			if(file_exists("tempOnlinePassword")){
+				file_delete("tempOnlinePassword");
+			}
+			if(file_exists("tempOnlineSpectating")){
+				file_delete("tempOnlineSpectating");
 			}
 			socket_destroy(@socket);
 			@socket = socket_create();
@@ -394,14 +502,16 @@ if file_exists(@savesPath) {
 		@race = wd_message_show(wd_mk_information, wd_mb_yes, wd_mb_no, 0) == wd_mb_yes;
 	#endif
 	buffer_clear(@buffer);
+	@hasPassword = 0;
+	if(string_length(string(@password)) > 0) @hasPassword = 1;
 	#if not GMNET
 		buffer_write_uint8(@buffer, 3);
 		buffer_write_string(@buffer, @name);
 		buffer_write_string(@buffer, @selfGameID);
 		buffer_write_string(@buffer, "%arg4");
 		buffer_write_string(@buffer, @version);
-		buffer_write_uint8(@buffer, @password != "");
-		buffer_write_uint8(@buffer, 1);
+		buffer_write_uint8(@buffer, @hasPassword);
+		buffer_write_uint8(@buffer, @protocolVersion);
 		socket_write_message(@socket, @buffer);
 		@udpsocket = udpsocket_create();
 		udpsocket_start(@udpsocket, false, 0);
@@ -419,8 +529,8 @@ if file_exists(@savesPath) {
 		buffer_write_string(@buffer, @selfGameID);
 		buffer_write_string(@buffer, "%arg4");
 		buffer_write_string(@buffer, @version);
-		buffer_write_u8(@buffer, @password != "");
-		buffer_write_u8(@buffer, 1);
+		buffer_write_u8(@buffer, @hasPassword);
+		buffer_write_u8(@buffer, @protocolVersion);
 		socket_write_message(@socket, @buffer);
 		@udpsocket = udpsocket_create();
 		udpsocket_start(@udpsocket, false, 0);
@@ -461,8 +571,23 @@ __ONLINE_cjk_init();
 
 #if GM80
 globalvar @fwBerlin, @fwCjk;
-@fwBerlin = fw_add_font('Berlin Sans FB Demi', 9, false, false, false);
+@fwAsciiPath = "__ONLINE_ascii.ttf";
+if(!file_exists(@fwAsciiPath) && file_exists(working_directory + "__ONLINE_ascii.ttf")){
+	@fwAsciiPath = working_directory + "__ONLINE_ascii.ttf";
+}
+@fwBerlin = -1;
+if(file_exists(@fwAsciiPath)){
+	@fwBerlin = fw_add_font_from_file(@fwAsciiPath, 9, false, false, false);
+}
+if(@fwBerlin < 0) @fwBerlin = fw_add_font('Berlin Sans FB Demi', 9, false, false, false);
+if(@fwBerlin < 0) @fwBerlin = fw_add_font('Tahoma', 9, false, false, false);
+if(@fwBerlin < 0) @fwBerlin = fw_add_font('Arial', 9, false, false, false);
 @fwCjk = fw_add_font('Microsoft Yahei', 9, false, false, false);
-fw_set_font_offset(@fwCjk, -1, -4);
-fw_draw_set_font(@fwBerlin);
+if(@fwCjk < 0) @fwCjk = fw_add_font('SimSun', 9, false, false, false);
+if(@fwCjk >= 0) fw_set_font_offset(@fwCjk, -1, -4);
+if(@fwBerlin >= 0){
+	fw_draw_set_font(@fwBerlin);
+}else if(@fwCjk >= 0){
+	fw_draw_set_font(@fwCjk);
+}
 #endif

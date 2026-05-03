@@ -2,9 +2,9 @@
 // %arg0: The name of the player object
 // %arg1: The name of the player2 object if it exists
 // %arg2: The name of the world object
-visible = @oRoom == room;
+visible = @avatarAlive && @oRoom == room;
 image_alpha = @alpha;
-if(@lerpInit){
+if(@avatarAlive && @lerpInit){
 	@oWorld = noone;
 	if(instance_exists(%arg2)){
 		@oWorld = instance_find(%arg2, 0);
@@ -23,7 +23,7 @@ if(@lerpInit){
 		@p = %arg1;
 	}
 #endif
-if(instance_exists(@p)){
+if(@avatarAlive && instance_exists(@p)){
 	@dist = distance_to_object(@p);
 	image_alpha = min(@alpha, @dist/100);
 }

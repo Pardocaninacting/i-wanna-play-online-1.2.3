@@ -114,29 +114,18 @@ The server exposes an HTTP API that can be consumed by a website or other tools:
 | `GET /api/ratings` | All ratings data |
 | `GET /api/ratings/:id` | Ratings for a specific game (by 32-char hash prefix) |
 
-## What's New in 1.2.3
+## What's New in 1.2.3 beta 4
 
-Major additions over the original 1.1.9:
+Compared with beta 3, beta 4 adds or substantially rewrites:
 
-- **Team system** with color-coded names and team-scoped saves
-- **Save history** with favorites, filtering and one-click rollback
-- **Spectator mode** — observer camera that follows online players across rooms
-- **Chat log** and **chat bubbles** with animation
-- **5-star rating system** with web viewer
-- **Rebindable hotkeys**, 4-tab settings panel
-- **Off-screen player arrows** and player list overlay
-- **Chinese/CJK text support** (GM8 dynamic font switching, GMS glyph atlas embedding)
-- **Emoji/non-BMP character protection**
-- **GM8.2 support** (gm82net/gm82buf network path)
-- **GMS x64 support** (NativeAOT native DLL)
-- **INI config persistence**
-- **Automatic reconnection** with exponential backoff
-- **Custom data channel** for game-specific variable sync
-- **GMS converter rewrite** — standalone 2.5 MB C# binary replacing 60 MB UTMT CLI
-- **Server modernization** — modular TypeScript with TCP stream reassembly, rate limiting, protocol versioning
-- Many engine compatibility improvements and bug fixes
+- **Shared progress sync** with a dedicated Sync tab and protocol v2 `CUSTOM_DATA`
+- **Ping / marker wheel** with 9 marker types, room-aware filtering, and team-colored labels
+- **Expanded settings UI** with 5 tabs, keyboard navigation, save-history actions, rating flow, and key rebinding
+- **Roster / reconnect hardening** with LIST reconcile, periodic heartbeat, spectator-state recovery, and stricter same-team save routing
+- **GMS text and runtime updates** including the bundled CJK atlas path and x64 NativeAOT DLL support
+- **Server-side protocol updates** while preserving beta3 basic interop for chat and movement
 
-See `modder/README.md` for the full changelog.
+See `modder/README.md` for the full beta4 changelog.
 
 ## License
 

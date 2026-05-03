@@ -1,0 +1,143 @@
+====================
+I Wanna Play Online - 玩家指南
+====================
+
+1. 开始前
+- 首次启动会询问名字和房间密码。名字为空时会自动变成 Anonymous；名字和密码最长 20 个字符。
+- 密码留空表示公共房间。想一起玩的人需要使用同一个联机包、同一个服务器、同一个密码。
+- 游戏会额外询问是否启用 RACE 模式；启用后共享存档会被关闭。
+- 请保持以下文件在同一目录：联机版 EXE 或 data.win、http_dll_2_3.dll、__ONLINE_config.ini。
+- 个人设置、队伍、按键和同步开关都会写回 __ONLINE_config.ini。
+
+2. 默认按键
+- Space: 聊天
+- V: 可见性切换 All -> No Names -> Hidden
+- T: 共享存档开/关
+- L: 玩家列表
+- O: 设置面板
+- U: 聊天记录
+- I: 画面外指示箭头开/关
+- Y: 长按约 1 秒进入/退出观战
+- H: 长按打开标记轮盘，松开发送，右键取消
+- 1-8: 读取绑定到该数字的收藏存档
+- 所有按键都可以在 Settings -> Keys 中修改。
+
+3. 功能说明
+- Team: 0 = None，1-7 = 彩色队伍。想共享队伍功能时，请使用相同队伍。
+- Lerp: 平滑远端玩家移动；如果你更喜欢硬切位置，可以关闭。
+- Visual:
+  All = 正常显示。
+  No Names = 隐藏其他玩家名字。
+  Hidden = 隐藏其他玩家的可视表现。
+- Indicator: 为同房间但不在屏幕内的玩家显示箭头。
+- Player List: 显示当前房间内的在线玩家。
+- Chat Log: 保存最近聊天记录，可用鼠标滚轮滚动。
+- Ping: 只对同房间玩家生效。默认 9 格含义是 `?`、Up、Safe、Left、Here、Right、Wait、Down、`!`。标记环和名字使用队伍颜色。
+- 隐藏细节: 远端 Ping 只有在 Visual = All 时才会显示；如果你切到 No Names 或 Hidden，就只会看到自己的 Ping。
+- Spectate: 长按 Y 进入/退出观战；Left/Right 切换目标；Up/Down 切换 Follow / Screen 相机；如果一段时间内没有可跟随目标，会自动退出观战。
+- Save History: Saves 页最多保留 500 条最近存档。`*` 是收藏，数字徽标是 1-8 快速读取键，Apply 会回滚到该位置，Clear 只会清掉非收藏存档。
+- Save ON / OFF: ON 会向队伍内广播你的共享存档动作；OFF 只保留本地效果。
+- Rating: 可以提交 1-5 星评分；Cleared 是可选项。
+
+4. 同步功能 (Sync)
+- Sync 是可选的队伍内进度同步功能。
+- 只有 __ONLINE_config.ini 里存在有效的 `[sync]` 条目时，它才会真正工作。
+- 如果 Sync 页显示 `(no entries configured)`，说明当前包没有配置可同步的目标。
+- 修改 `[sync]` 前请先关闭游戏；改完后重新启动。
+- 可使用下面的样例：
+
+[sync]
+entryCount = 2
+sync0_name  = boss
+sync0_count = 8
+sync1_name  = item
+sync1_count = 8
+
+- `sync*_name` 是要同步的数组名，`sync*_count` 是数组长度。
+- `sync_enabled = 1` 可以省略；省略时默认开启，并且也可以在游戏内的 Sync 页切换。
+- 名字和长度必须与发布者提供的配置一致，写错不会自动推断。
+
+5. 设置面板
+- 标签页依次是 Settings、Saves、Rating、Keys、Sync。
+- 鼠标和键盘都可以操作。
+- 键盘规则: Left/Right 切换标签，Down 或 Enter 进入当前标签，Up 返回标签栏，Enter 执行当前操作。
+- Saves 页键盘附加操作: `F` 收藏/取消收藏，`Shift+F` 或 Backspace 切换“只看收藏”，`1-8` 绑定快速读取，`Delete` 删除当前非收藏存档，`Shift+Delete` 清空所有非收藏，Home/End/PageUp/PageDown 快速翻页。
+
+6. 常见问题
+- 看不到别人: 先确认联机包、服务器、密码一致，再检查 Visual 是否被切到 Hidden。
+- 存档或同步没有共享: 先确认你们是否在同一队伍、Save 是否为 ON、Sync 是否为 ON，以及这个包是否真的配置了 `[sync]`。
+- Ping 队友看不到: 你们必须在同一个房间，而且对方的 Visual 不能是受限模式。
+- 改了配置没生效: 关闭游戏后编辑 __ONLINE_config.ini，再重新启动。
+- 想改服务器: 编辑 __ONLINE_config.ini 里的 `server=`；较旧的联机包也可能兼容 __ONLINE_server.txt。
+
+====================
+I Wanna Play Online - Player Guide
+====================
+
+1. Before You Start
+- On first launch the game asks for a name and a room password. An empty name becomes Anonymous. Both fields are capped at 20 characters.
+- An empty password means a public room. Players who want to meet each other must use the same online build, the same server, and the same password.
+- Games also ask whether to enable RACE mode. If you enable it, shared saves are disabled.
+- Keep these files together in one folder: the online EXE or data.win, http_dll_2_3.dll, and __ONLINE_config.ini.
+- Personal settings, team choice, hotkeys, and the sync toggle are stored in __ONLINE_config.ini.
+
+2. Default Hotkeys
+- Space: Chat
+- V: Cycle visual mode All -> No Names -> Hidden
+- T: Toggle shared saves
+- L: Player list
+- O: Settings panel
+- U: Chat log
+- I: Toggle off-screen indicators
+- Y: Hold for about 1 second to enter or leave spectate
+- H: Hold to open the ping wheel, release to send, RMB to cancel
+- 1-8: Load the favorite save bound to that number
+- All hotkeys can be changed in Settings -> Keys.
+
+3. Feature Guide
+- Team: 0 = None, 1-7 = colored teams. Use the same team when you want team-based features together.
+- Lerp: smooths remote-player movement; turn it off if you prefer snap updates.
+- Visual:
+  All = normal view.
+  No Names = hide remote player names.
+  Hidden = hide remote player visuals.
+- Indicator: shows arrows for players in the same room but outside the screen.
+- Player List: shows online players in the current room.
+- Chat Log: keeps recent chat and supports mouse-wheel scrolling.
+- Ping: only works for players in the same room. The default 9 slots are `?`, Up, Safe, Left, Here, Right, Wait, Down, and `!`. Ping rings and sender names use team colors.
+- Hidden detail: remote pings are only visible when Visual = All. In No Names or Hidden, you only see your own pings.
+- Spectate: hold Y to enter or leave. Left/Right switches target. Up/Down changes Follow / Screen camera. If there is nobody valid to follow for a while, spectate closes automatically.
+- Save History: the Saves tab keeps up to 500 recent saves. `*` means favorite, the number badge is the 1-8 quick-load key, Apply rolls you back to that save, and Clear only removes non-favorites.
+- Save ON / OFF: ON sends your shared-save actions to teammates. OFF keeps them local.
+- Rating: you can submit 1-5 stars; Cleared is optional.
+
+4. Sync
+- Sync is an optional team-only progress-sharing feature.
+- It only works when __ONLINE_config.ini contains valid `[sync]` entries.
+- If the Sync tab says `(no entries configured)`, this build currently has no sync targets.
+- Close the game before editing `[sync]`, then restart after saving the file.
+- Example:
+
+[sync]
+entryCount = 2
+sync0_name  = boss
+sync0_count = 8
+sync1_name  = item
+sync1_count = 8
+
+- `sync*_name` is the array name to sync, and `sync*_count` is the array length.
+- `sync_enabled = 1` is optional; if you omit it, sync defaults to on, and the in-game Sync tab can still toggle it.
+- Names and counts must match the values provided by the pack author.
+
+5. Settings Panel
+- The tabs are Settings, Saves, Rating, Keys, and Sync.
+- Both mouse and keyboard controls are supported.
+- Keyboard rules: Left/Right changes tabs, Down or Enter enters the current tab, Up returns to the tab bar, and Enter confirms the focused action.
+- Extra keyboard controls in Saves: `F` favorite/unfavorite, `Shift+F` or Backspace toggles favorites-only filter, `1-8` binds quick load, `Delete` removes the current non-favorite save, `Shift+Delete` clears all non-favorites, and Home/End/PageUp/PageDown jump around the list.
+
+6. Common Problems
+- You cannot see another player: make sure the online build, server, and password match, then check that Visual is not Hidden.
+- Save or sync is not shared: make sure you are on the same team, Save is ON, Sync is ON, and the build actually has `[sync]` entries.
+- Teammates cannot see your ping: you must be in the same room, and their Visual mode must not be restricted.
+- Config changes do not apply: close the game, edit __ONLINE_config.ini, then launch again.
+- You want another server: edit `server=` in __ONLINE_config.ini. Older online packs may also honor __ONLINE_server.txt.

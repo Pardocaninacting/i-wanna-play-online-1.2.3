@@ -22,18 +22,26 @@ import { Room } from "./asset/room"
 import { IncludedFile } from "./asset/includedfile"
 import { GMLCode } from "./getGMLCode"
 import { Utils, Ports } from "./utils"
+import { CustomSlotConfig, formatSyncIniSection, mergeSyncIntoIni } from "./customSlot"
+import iconv from "iconv-lite"
 
 const HTTP_DLL_FILENAME: string = "http_dll_2_3.dll";
 const HTTP_DLL_X86_PROJECT_DIR: string = path.join(__dirname, "native", "http_dll_2_3_x86");
 
 const EnsureX86HttpDllBuilt = async function(): Promise<void> {
 	const outputDll: string = path.join(__dirname, "lib", HTTP_DLL_FILENAME);
-	if(await fs.exists(outputDll))
-		return;
+	const sourceFile: string = path.join(__dirname, "native", "http_dll_2_3_x64", "Exports.cs");
+	let needsBuild: boolean = !await fs.exists(outputDll);
+	if(!needsBuild && await fs.exists(sourceFile)){
+		const [dllStat, srcStat] = await Promise.all([fs.stat(outputDll), fs.stat(sourceFile)]);
+		needsBuild = srcStat.mtimeMs > dllStat.mtimeMs;
+	}
 	const projectFile: string = path.join(HTTP_DLL_X86_PROJECT_DIR, "HttpDll23X86.csproj");
+	if(!needsBuild)
+		return;
 	if(!await fs.exists(projectFile))
 		throw new Error(`Cannot find ${HTTP_DLL_FILENAME} or its NativeAOT project. Place the pre-built DLL in lib/ or ensure the NativeAOT project exists in native/http_dll_2_3_x86/`);
-	console.log("Building network DLL...");
+	console.log("HTTP DLL: building...");
 	try{
 		await Utils.exec("dotnet publish -c Release", HTTP_DLL_X86_PROJECT_DIR);
 	}catch(e){
@@ -43,7 +51,7 @@ const EnsureX86HttpDllBuilt = async function(): Promise<void> {
 	if(!await fs.exists(publishedDll))
 		throw new Error(`NativeAOT publish succeeded but ${HTTP_DLL_FILENAME} was not found at expected path: ${publishedDll}`);
 	await fs.copyFile(publishedDll, outputDll);
-	console.log("Network DLL ready.");
+	console.log("HTTP DLL: ready");
 }
 
 const asUint8Array = function(buffer: Buffer): Uint8Array {
@@ -70,9 +78,9 @@ const concatBuffers = function(buffers: Array<Buffer>): Buffer {
 	return Buffer.concat(buffers as unknown as Array<Uint8Array>);
 }
 
-export const ConverterGM8 = async function(input: string, gameName: string, server: string, ports: Ports, forceExternalDll: boolean): Promise<void> {
+export const ConverterGM8 = async function(input: string, gameName: string, server: string, ports: Ports, forceExternalDll: boolean, customSlot: CustomSlotConfig | null = null): Promise<void> {
 	const configFilename: string = "__ONLINE_config.ini";
-	console.log("Reading file...");
+	console.log("Reading executable...");
 	let exe: SmartBuffer = SmartBuffer.fromBuffer(await fs.readFile(input));
 	const getExeBuffer = function(): Buffer {
 		return exe.internalBuffer.subarray(0, exe.length);
@@ -123,7 +131,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	let upxData: [number, number] = null;
 	if(upx0VirtualLength !== null && upx1Data !== null)
 		upxData = [upx0VirtualLength+upx1Data[0], upx1Data[1]];
-	console.log("Decrypting...");
+	console.log("Decrypting executable...");
 	const gameConfig: GameConfig = GameData.decrypt(exe, upxData);
 	const settingsLength: number = exe.readUInt32LE();
 	const settingsStart: number = exe.readOffset;
@@ -458,17 +466,23 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "buffer_clear", dllName: "buffer_clear", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_u8", dllName: "buffer_read_uint8", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_u16", dllName: "buffer_read_uint16", ret: "ty_real", args: ["ty_real"] },
+			{ name: "buffer_read_u32", dllName: "buffer_read_uint32", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_u64", dllName: "buffer_read_uint64", ret: "ty_real", args: ["ty_real"] },
+			{ name: "buffer_read_i8", dllName: "buffer_read_int8", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_i16", dllName: "buffer_read_int16", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_i32", dllName: "buffer_read_int32", ret: "ty_real", args: ["ty_real"] },
+			{ name: "buffer_read_i64", dllName: "buffer_read_int64", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_float", dllName: "buffer_read_float32", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_double", dllName: "buffer_read_float64", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_string", dllName: "buffer_read_string", ret: "ty_string", args: ["ty_real"] },
 			{ name: "buffer_write_u8", dllName: "buffer_write_uint8", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_u16", dllName: "buffer_write_uint16", ret: "ty_real", args: ["ty_real", "ty_real"] },
+			{ name: "buffer_write_u32", dllName: "buffer_write_uint32", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_u64", dllName: "buffer_write_uint64", ret: "ty_real", args: ["ty_real", "ty_real"] },
+			{ name: "buffer_write_i8", dllName: "buffer_write_int8", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_i16", dllName: "buffer_write_int16", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_i32", dllName: "buffer_write_int32", ret: "ty_real", args: ["ty_real", "ty_real"] },
+			{ name: "buffer_write_i64", dllName: "buffer_write_int64", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_float", dllName: "buffer_write_float32", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_double", dllName: "buffer_write_float64", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_string", dllName: "buffer_write_string", ret: "ty_real", args: ["ty_real", "ty_string"] },
@@ -498,17 +512,23 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "buffer_clear", dllName: "buffer_clear", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_uint8", dllName: "buffer_read_uint8", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_uint16", dllName: "buffer_read_uint16", ret: "ty_real", args: ["ty_real"] },
+			{ name: "buffer_read_uint32", dllName: "buffer_read_uint32", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_uint64", dllName: "buffer_read_uint64", ret: "ty_real", args: ["ty_real"] },
+			{ name: "buffer_read_int8", dllName: "buffer_read_int8", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_int16", dllName: "buffer_read_int16", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_int32", dllName: "buffer_read_int32", ret: "ty_real", args: ["ty_real"] },
+			{ name: "buffer_read_int64", dllName: "buffer_read_int64", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_float32", dllName: "buffer_read_float32", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_float64", dllName: "buffer_read_float64", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_read_string", dllName: "buffer_read_string", ret: "ty_string", args: ["ty_real"] },
 			{ name: "buffer_write_uint8", dllName: "buffer_write_uint8", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_uint16", dllName: "buffer_write_uint16", ret: "ty_real", args: ["ty_real", "ty_real"] },
+			{ name: "buffer_write_uint32", dllName: "buffer_write_uint32", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_uint64", dllName: "buffer_write_uint64", ret: "ty_real", args: ["ty_real", "ty_real"] },
+			{ name: "buffer_write_int8", dllName: "buffer_write_int8", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_int16", dllName: "buffer_write_int16", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_int32", dllName: "buffer_write_int32", ret: "ty_real", args: ["ty_real", "ty_real"] },
+			{ name: "buffer_write_int64", dllName: "buffer_write_int64", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_float32", dllName: "buffer_write_float32", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_float64", dllName: "buffer_write_float64", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "buffer_write_string", dllName: "buffer_write_string", ret: "ty_real", args: ["ty_real", "ty_string"] },
@@ -592,6 +612,34 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		includedfile.removeAtEnd = true;
 		return includedfile;
 	}
+	const newIncludedfileFromPath = function(fileName: string, sourcePath: string): IncludedFile {
+		let includedfile = new IncludedFile();
+		includedfile.fileName = Buffer.from(fileName, 'ascii');
+		includedfile.sourcePath = Buffer.from(sourcePath, 'ascii');
+		includedfile.dataExists = true;
+		includedfile.sourceLength = fs.statSync(sourcePath)["size"];
+		includedfile.storedInGmk = true;
+		includedfile.embeddedData = fs.readFileSync(sourcePath);
+		includedfile.exportSettings = 0;
+		includedfile.customFolder = Buffer.from("");
+		includedfile.overwriteFile = true;
+		includedfile.freeMemory = true;
+		includedfile.removeAtEnd = true;
+		return includedfile;
+	}
+	const gm80AsciiFontCandidates: string[] = [];
+	if(typeof process.env.WINDIR === "string" && process.env.WINDIR.length > 0)
+		gm80AsciiFontCandidates.push(path.join(process.env.WINDIR, "Fonts", "BRLNSDB.TTF"));
+	gm80AsciiFontCandidates.push(path.join("C:\\Windows", "Fonts", "BRLNSDB.TTF"));
+	let gm80AsciiFontPath: string | null = null;
+	if(gameConfig.version === GameVersion.GameMaker80){
+		for(const candidate of gm80AsciiFontCandidates){
+			if(fs.existsSync(candidate)){
+				gm80AsciiFontPath = candidate;
+				break;
+			}
+		}
+	}
 	// Parse room names for dynamic save room guards (rooms section follows objects in GM8 format)
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Rooms header");
@@ -630,6 +678,11 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			includedfiles.push(newIncludedfile("__ONLINE_sndChatbox.wav"));
 			includedfiles.push(newIncludedfile("__ONLINE_sndSaved.wav"));
 		}
+		if (gm80AsciiFontPath !== null) {
+			const asciiFont: IncludedFile = newIncludedfileFromPath("__ONLINE_ascii.ttf", gm80AsciiFontPath);
+			asciiFont.exportSettings = 2; // Export to game directory (working_directory)
+			includedfiles.push(asciiFont);
+		}
 		// GaseousMarble font files — only for GM8.1+ (GM8.0 uses FoxWriting)
 		if (gameConfig.version !== GameVersion.GameMaker80) {
 			const fontPng: IncludedFile = newIncludedfile("__ONLINE_font.png");
@@ -642,7 +695,14 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 
 		replaceChunk(exe, includedfilesOffsets, putAssetRefs(exe, includedfiles));
 	}
-	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), Buffer.from(gameName), Buffer.from(Utils.getVersion(), 'ascii')));
+	// GM8.0 has no string encoding awareness — its runtime, FoxWriting font atlas,
+	// and http_dll (when set_utf8_mode is not enabled, which is the case for GM8.0)
+	// all assume strings are GBK byte pairs. Embedding gameName as UTF-8 here would
+	// cause mojibake everywhere (display + network). Encode as GBK for GM8.0 only.
+	const gameNameBuf: Buffer = (gameConfig.version === GameVersion.GameMaker80)
+		? iconv.encode(gameName, "gbk")
+		: Buffer.from(gameName);
+	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), gameNameBuf, Buffer.from(Utils.getVersion(), 'ascii')));
 	world.addEndStepCode(await GMLCode.getGML("worldEndStep", player.name, player2 ? player2.name : Buffer.from("")));
 	world.addGameEndCode(await GMLCode.getGML("worldGameEnd"));
 	const newObject = function(name: Buffer, visible: boolean, depth: number, persistent: boolean): GMObject {
@@ -660,20 +720,23 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	}
 	const onlinePlayer: GMObject = newObject(Buffer.from("__ONLINE_onlinePlayer", 'ascii'), false, -10, true);
 	onlinePlayer.addCreateCode(await GMLCode.getGML("onlinePlayerCreate"));
-	onlinePlayer.addEndStepCode(await GMLCode.getGML("onlinePlayerEndStep", player.name, player2 ? player2.name : Buffer.from(""), world.name));
+	const onlinePlayerTick: Buffer = await GMLCode.getGML("onlinePlayerEndStep", player.name, player2 ? player2.name : Buffer.from(""), world.name);
+	onlinePlayer.addEndStepCode(onlinePlayerTick);
 	onlinePlayer.addDrawCode(await GMLCode.getGML("onlinePlayerDraw", world.name));
 	const chatbox: GMObject = newObject(Buffer.from("__ONLINE_chatbox",'ascii'), true, -11, true);
 	chatbox.addCreateCode(await GMLCode.getGML("chatboxCreate"));
-	chatbox.addEndStepCode(await GMLCode.getGML("chatboxEndStep", player.name, player2 ? player2.name : Buffer.from("")));
+	const chatboxTick: Buffer = await GMLCode.getGML("chatboxEndStep", player.name, player2 ? player2.name : Buffer.from(""), world.name);
+	chatbox.addEndStepCode(chatboxTick);
 	chatbox.addDrawCode(await GMLCode.getGML("chatboxDraw"));
 	const playerSaved: GMObject = newObject(Buffer.from("__ONLINE_playerSaved",'ascii'), true, -10, false);
 	playerSaved.addCreateCode(await GMLCode.getGML("playerSavedCreate"));
-	playerSaved.addEndStepCode(await GMLCode.getGML("playerSavedEndStep"));
+	const playerSavedTick: Buffer = await GMLCode.getGML("playerSavedEndStep");
+	playerSaved.addEndStepCode(playerSavedTick);
 	playerSaved.addDrawCode(await GMLCode.getGML("playerSavedDraw"));
 	const ui: GMObject = newObject(Buffer.from("__ONLINE_userInterface",'ascii'), true, -2147483648, true);
 	const drawGml: Buffer = await GMLCode.getGML("worldDraw");
 	const worldName: string = world.name.toString('ascii');
-	const wrappedDraw: Buffer = Buffer.concat([
+	const wrappedDraw: Buffer = concatBuffers([
 		Buffer.from(`if(instance_exists(${worldName})){\r\nwith(instance_find(${worldName}, 0)){\r\n`, 'utf8'),
 		drawGml,
 		Buffer.from(`\r\n}\r\n}\r\n`, 'utf8')
@@ -690,6 +753,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const saveExe: Script = findAsset(scripts, ["saveExe", "scrSaveExe"]) as Script;
 	const tempExe: Script = findAsset(scripts, ["tempExe", "scrTempExe"]) as Script;
 	saveGame.source = insertGMLScript(saveGame.source, await GMLCode.getGML("saveGame", world.name, player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(roomGuard, 'ascii')));
+	// v2 (§11): runtime sync is fully driven by `__ONLINE_config.ini [sync]`; no GML codegen here.
 	loadGame.source = insertGMLScript(loadGame.source, await GMLCode.getGML("saveGame2", world.name, player.name, player2 ? player2.name : Buffer.from("")));
 	const loadGameContent: Buffer = await GMLCode.getGML("loadGame", world.name, player.name, player2 ? player2.name : Buffer.from(""));
 	if(saveExe == undefined && tempExe == undefined){
@@ -845,15 +909,22 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	replaceChunk(exe, scriptsOffsets, putAssets(exe, scripts));
 	scripts = null;
 	exe.readOffset = encryptionStartGM80;
-	console.log("Encrypting...");
+	console.log("Encrypting executable...");
 	GM80.encrypt(exe);
 	exe = settings.save(exe);
 	GameData.encrypt(exe, gameConfig);
-	console.log("Writing...");
+	console.log("Writing executable...");
 	const outputDir: string = path.dirname(input);
 	await fs.writeFile(path.join(outputDir, `${gameName}_online.exe`), getExeBuffer());
+	const runtimeConfigPath: string = path.join(outputDir, configFilename);
 	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_rating=85\nteam=0\nlerp=1`;
-	await fs.writeFile(path.join(outputDir, configFilename), configContent, "utf8");
+	await fs.writeFile(runtimeConfigPath, configContent, "utf8");
+	if(customSlot){
+		// Write/merge the runtime `[sync]` section into `__ONLINE_config.ini` next to the produced EXE.
+		let existing: string = "";
+		if(await fs.exists(runtimeConfigPath)) existing = await fs.readFile(runtimeConfigPath, "utf8");
+		await fs.writeFile(runtimeConfigPath, mergeSyncIntoIni(existing, customSlot), "utf8");
+	}
 	await EnsureX86HttpDllBuilt();
 	await fs.copyFile(path.join(__dirname, "lib", HTTP_DLL_FILENAME), path.join(outputDir, HTTP_DLL_FILENAME));
 

@@ -134,7 +134,20 @@ if(instance_exists(@f) && @f.object_index == @onlinePlayer){
 		@drawAlpha = min(1, @dist / 100);
 	}
 	if(instance_exists(@f)){
-		visible = @f.visible;
+		// VISIBILITY FILTER
+		@cbWorldVis = 0;
+		@cbWorld = noone;
+		if(@f.@oWorld != noone && instance_exists(@f.@oWorld)){
+			@cbWorld = @f.@oWorld;
+		}
+		if(@cbWorld != noone){
+			@cbWorldVis = @cbWorld.@vis;
+		}
+		if(@cbWorldVis != 0){
+			visible = false;
+		}else{
+			visible = @f.visible;
+		}
 	}
 }
 // DESTROY OLDER

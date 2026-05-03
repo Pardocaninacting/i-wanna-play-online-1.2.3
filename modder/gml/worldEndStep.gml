@@ -52,7 +52,34 @@ if(@specPending){
 	if(room == @specRoom){
 		@p = %arg0;
 		#if PLAYER2
-			if(!instance_exists(@p)) @p = %arg1;
+			if(@specGrav == 1){
+				if(instance_exists(%arg0)){
+					@specDepth = instance_find(%arg0, 0).depth;
+					#if GMS2
+						instance_create_depth(0, 0, @specDepth, %arg1);
+					#endif
+					#if not GMS2
+						instance_create(0, 0, %arg1);
+					#endif
+					with(%arg0){
+						instance_destroy();
+					}
+				}
+				@p = %arg1;
+			}else{
+				if(instance_exists(%arg1) && !instance_exists(%arg0)){
+					@specDepth = instance_find(%arg1, 0).depth;
+					#if GMS2
+						instance_create_depth(0, 0, @specDepth, %arg0);
+					#endif
+					#if not GMS2
+						instance_create(0, 0, %arg0);
+					#endif
+					with(%arg1){
+						instance_destroy();
+					}
+				}
+			}
 		#endif
 		if(instance_exists(@p)){
 			@p = instance_find(@p, 0);
@@ -97,17 +124,21 @@ socket_receive(@socket);
 #endif
 while(socket_read_message(@socket, @buffer)){
 	#if not GMNET
-		switch(buffer_read_uint8(@buffer)){
+		@opcode = buffer_read_uint8(@buffer);
 	#endif
 	#if GMNET
-		switch(buffer_read_u8(@buffer)){
+		@opcode = buffer_read_u8(@buffer);
 	#endif
+	switch(@opcode){
 		case 0:
 			// CREATED
 			@ID = buffer_read_string(@buffer);
+			@createdName = buffer_read_string(@buffer);
 			@found = false;
+			@oPlayer = noone;
 			for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
-				if(instance_find(@onlinePlayer, @i).@ID == @ID){
+				@oPlayer = instance_find(@onlinePlayer, @i);
+				if(@oPlayer.@ID == @ID){
 					@found = true;
 				}
 			}
@@ -119,23 +150,23 @@ while(socket_read_message(@socket, @buffer)){
 					@oPlayer = instance_create(0, 0, @onlinePlayer);
 				#endif
 				@oPlayer.@ID = @ID;
-				@oPlayer.@name = buffer_read_string(@buffer);
 				if(ds_map_exists(@teamMap, @ID)){
 					@oPlayer.@team = ds_map_find_value(@teamMap, @ID);
 				}
 			}
+			@oPlayer.@name = @createdName;
 			break;
 		case 1:
 			// DESTROYED
 			@ID = buffer_read_string(@buffer);
-			if(ds_map_exists(@teamMap, @ID)) ds_map_delete(@teamMap, @ID);
 			@found = false;
 			for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
 				@oPlayer = instance_find(@onlinePlayer, @i);
 				if(@oPlayer.@ID == @ID){
-					with(@oPlayer){
-						instance_destroy();
-					}
+					@oPlayer.@avatarAlive = false;
+					@oPlayer.@targetX = @oPlayer.x;
+					@oPlayer.@targetY = @oPlayer.y;
+					@oPlayer.visible = false;
 					@found = true;
 				}
 			}
@@ -244,6 +275,7 @@ while(socket_read_message(@socket, @buffer)){
 				@shIdx = @saveHistCount;
 				@saveHistCount += 1;
 				@saveHistFav[@shIdx] = 0;
+				@saveHistHotkey[@shIdx] = 0;
 				@saveHistGrav[@shIdx] = @sGravity;
 				@saveHistX[@shIdx] = @sX;
 				@saveHistY[@shIdx] = @sY;
@@ -286,20 +318,75 @@ while(socket_read_message(@socket, @buffer)){
 		case 6:
 			// SELF ID
 			@selfID = buffer_read_string(@buffer);
+			@listCounter = room_speed * 15;
 			break;
 		case 7:
 			// CUSTOM DATA
-			@ID = buffer_read_string(@buffer);
 			#if not GMNET
-				@customSlotCount = buffer_read_uint16(@buffer);
-				if (@customSlotCount >= 1)
-					@receivedSlot = buffer_read_int32(@buffer);
+				@cs_v2flag = buffer_read_uint8(@buffer);
 			#endif
 			#if GMNET
-				@customSlotCount = buffer_read_u16(@buffer);
-				if (@customSlotCount >= 1)
-					@receivedSlot = buffer_read_i32(@buffer);
+				@cs_v2flag = buffer_read_u8(@buffer);
 			#endif
+			if(@cs_v2flag != 1){
+				break;
+			}
+			@cs_owner = buffer_read_string(@buffer);
+			#if not GMNET
+				@cs_entryN = buffer_read_uint8(@buffer);
+			#endif
+			#if GMNET
+				@cs_entryN = buffer_read_u8(@buffer);
+			#endif
+			if(@cs_entryN > 16){ break; }
+			for(@cs_k = 0; @cs_k < @cs_entryN; @cs_k += 1){
+				@cs_rname = buffer_read_string(@buffer);
+				#if not GMNET
+					@cs_rcount    = buffer_read_uint16(@buffer);
+					@cs_rslotCnt  = buffer_read_uint16(@buffer);
+				#endif
+				#if GMNET
+					@cs_rcount    = buffer_read_u16(@buffer);
+					@cs_rslotCnt  = buffer_read_u16(@buffer);
+				#endif
+				if(@cs_rcount > 512 || @cs_rslotCnt > 16){ break; }
+				for(@cs_s = 0; @cs_s < @cs_rslotCnt; @cs_s += 1){
+					#if not GMNET
+						@cs_recvSlot[@cs_s] = buffer_read_uint32(@buffer);
+					#endif
+					#if GMNET
+						@cs_recvSlot[@cs_s] = buffer_read_u32(@buffer);
+					#endif
+				}
+				@cs_matchIdx = -1;
+				for(@cs_i = 0; @cs_i < @syncEntryCount; @cs_i += 1){
+					if(@syncName[@cs_i] == @cs_rname){ @cs_matchIdx = @cs_i; break; }
+				}
+				if(@cs_matchIdx == -1) continue;
+				if(!@syncEnabled) continue;
+				if(!variable_global_exists(@cs_rname)) continue;
+				@cs_applyCount = min(@cs_rcount, @syncCount[@cs_matchIdx]);
+				for(@cs_s = 0; @cs_s < @cs_rslotCnt; @cs_s += 1){
+					@cs_v = @cs_recvSlot[@cs_s];
+					if(@cs_v == 0) continue;
+					for(@cs_b = 0; @cs_b < 32; @cs_b += 1){
+						@cs_idx = @cs_s * 32 + @cs_b + 1;
+						if(@cs_idx > @cs_applyCount) break;
+						if(((@cs_v >> @cs_b) & 1) == 0) continue;
+						#if not STUDIO
+							execute_string("global." + @cs_rname + "[" + string(@cs_idx) + "] = 1;");
+						#endif
+						#if STUDIO
+							@cs_arr = variable_global_get(@cs_rname);
+							if(is_array(@cs_arr) && array_length_1d(@cs_arr) > @cs_idx){
+								@cs_arr[@cs_idx] = 1;
+								variable_global_set(@cs_rname, @cs_arr);
+							}
+						#endif
+					}
+				}
+				@syncLastSig[@cs_matchIdx] = "";
+			}
 			break;
 		case 8:
 			// TEAM
@@ -310,16 +397,21 @@ while(socket_read_message(@socket, @buffer)){
 			#if GMNET
 				@receivedTeam = buffer_read_u8(@buffer);
 			#endif
-			@teamIsNew = !ds_map_exists(@teamMap, @ID);
-			@teamOldVal = ds_map_find_value(@teamMap, @ID);
-			ds_map_replace(@teamMap, @ID, @receivedTeam);
 			@found = false;
 			for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
 				@oPlayer = instance_find(@onlinePlayer, @i);
 				if(@oPlayer.@ID == @ID){
-					@oPlayer.@team = @receivedTeam;
+					if(@receivedTeam == 254){
+						@oPlayer.@spectating = true;
+					}else{
+						@oPlayer.@spectating = false;
+						if(@receivedTeam < 8) @oPlayer.@team = @receivedTeam;
+					}
 					@found = true;
 				}
+			}
+			if(@receivedTeam < 8){
+				ds_map_replace(@teamMap, @ID, @receivedTeam);
 			}
 			break;
 		case 9:
@@ -338,6 +430,120 @@ while(socket_read_message(@socket, @buffer)){
 			}
 			@ratingResultTimer = room_speed * 3;
 			@ratingCooldown = room_speed * 10;
+			break;
+		case 10:
+			// LIST RECONCILE
+			#if not GMNET
+				@listCount = buffer_read_uint16(@buffer);
+			#endif
+			#if GMNET
+				@listCount = buffer_read_u16(@buffer);
+			#endif
+			@listSeen = ds_map_create();
+			for(@li = 0; @li < @listCount; @li += 1){
+				@listID = buffer_read_string(@buffer);
+				@listName = buffer_read_string(@buffer);
+				#if not GMNET
+					@listTeam = buffer_read_uint8(@buffer);
+				#endif
+				#if GMNET
+					@listTeam = buffer_read_u8(@buffer);
+				#endif
+				ds_map_add(@listSeen, @listID, 1);
+				if(@listTeam < 8){
+					ds_map_replace(@teamMap, @listID, @listTeam);
+				}
+				@found = false;
+				for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
+					@oPlayer = instance_find(@onlinePlayer, @i);
+					if(@oPlayer.@ID == @listID){
+						@oPlayer.@name = @listName;
+						if(@listTeam == 254){
+							@oPlayer.@spectating = true;
+						}else{
+							@oPlayer.@spectating = false;
+							if(@listTeam < 8) @oPlayer.@team = @listTeam;
+						}
+						@found = true;
+					}
+				}
+				if(!@found){
+					#if GMS2
+						@oPlayer = instance_create_depth(0, 0, @onlinePlayerDepth, @onlinePlayer);
+					#endif
+					#if not GMS2
+						@oPlayer = instance_create(0, 0, @onlinePlayer);
+					#endif
+					@oPlayer.@ID = @listID;
+					@oPlayer.@name = @listName;
+					if(@listTeam == 254){
+						@oPlayer.@spectating = true;
+					}else{
+						@oPlayer.@spectating = false;
+						if(@listTeam < 8) @oPlayer.@team = @listTeam;
+					}
+				}
+			}
+			for(@i = instance_number(@onlinePlayer) - 1; @i >= 0; @i -= 1){
+				@oPlayer = instance_find(@onlinePlayer, @i);
+				if(!ds_map_exists(@listSeen, @oPlayer.@ID)){
+					with(@oPlayer){
+						instance_destroy();
+					}
+				}
+			}
+			ds_map_destroy(@listSeen);
+			break;
+		case 11:
+			// PING
+			@pingSenderID = buffer_read_string(@buffer);
+			#if not GMNET
+				@pingPRoom = buffer_read_int32(@buffer);
+				@pingPx = buffer_read_float32(@buffer);
+				@pingPy = buffer_read_float32(@buffer);
+				@pingPtype = buffer_read_uint8(@buffer);
+			#endif
+			#if GMNET
+				@pingPRoom = buffer_read_i32(@buffer);
+				@pingPx = buffer_read_float(@buffer);
+				@pingPy = buffer_read_float(@buffer);
+				@pingPtype = buffer_read_u8(@buffer);
+			#endif
+			if(@pingPRoom != room) break;
+			@pingSenderName = "?";
+			@pingSenderTeam = -1;
+			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+				@oPlayer = instance_find(@onlinePlayer, @i);
+				if(@oPlayer.@ID == @pingSenderID){
+					@pingSenderName = @oPlayer.@name;
+					@pingSenderTeam = @oPlayer.@team;
+					break;
+				}
+			}
+			@pingX[@pingHead] = @pingPx;
+			@pingY[@pingHead] = @pingPy;
+			@pingT[@pingHead] = current_time;
+			@pingType[@pingHead] = @pingPtype;
+			@pingName[@pingHead] = @pingSenderName;
+			@pingSenderIDArr[@pingHead] = @pingSenderID;
+			if(@pingSenderTeam >= 0 && @pingSenderTeam < 8){
+				@pingTeamArr[@pingHead] = @pingSenderTeam;
+			}else if(ds_map_exists(@teamMap, @pingSenderID)){
+				@pingTeamArr[@pingHead] = ds_map_find_value(@teamMap, @pingSenderID);
+			}else{
+				@pingTeamArr[@pingHead] = 0;
+			}
+			if(@vis == 0 && @pingSenderID != @selfID){
+				#if STUDIO
+					audio_play_sound(@sndChatbox, 0, false);
+				#endif
+				#if not STUDIO
+					sound_play(@sndChatbox);
+				#endif
+			}
+			@pingHead = (@pingHead + 1) mod @pingMax;
+			break;
+		default:
 			break;
 	}
 }
@@ -370,6 +576,7 @@ switch(socket_get_state(@socket)){
 				// RECONNECT
 				@reconnecting = false;
 				@reconnectAttempts = 0;
+				@listCounter = room_speed * 15;
 				buffer_clear(@buffer);
 				#if not GMNET
 					buffer_write_uint8(@buffer, 3);
@@ -377,7 +584,11 @@ switch(socket_get_state(@socket)){
 					buffer_write_string(@buffer, @selfGameID);
 					buffer_write_string(@buffer, @gameName);
 					buffer_write_string(@buffer, @version);
-					buffer_write_uint8(@buffer, 0);				buffer_write_uint8(@buffer, 1);					socket_write_message(@socket, @buffer);
+					@hasPassword = 0;
+					if(string_length(string(@password)) > 0) @hasPassword = 1;
+					buffer_write_uint8(@buffer, @hasPassword);
+					buffer_write_uint8(@buffer, @protocolVersion);
+					socket_write_message(@socket, @buffer);
 				#endif
 				#if GMNET
 					buffer_write_u8(@buffer, 3);
@@ -385,7 +596,11 @@ switch(socket_get_state(@socket)){
 					buffer_write_string(@buffer, @selfGameID);
 					buffer_write_string(@buffer, @gameName);
 					buffer_write_string(@buffer, @version);
-					buffer_write_u8(@buffer, 0);				buffer_write_u8(@buffer, 1);					socket_write_message(@socket, @buffer);
+					@hasPassword = 0;
+					if(string_length(string(@password)) > 0) @hasPassword = 1;
+					buffer_write_u8(@buffer, @hasPassword);
+					buffer_write_u8(@buffer, @protocolVersion);
+					socket_write_message(@socket, @buffer);
 				#endif
 				buffer_clear(@buffer);
 				#if not GMNET
@@ -397,6 +612,20 @@ switch(socket_get_state(@socket)){
 					buffer_write_u8(@buffer, @team);
 				#endif
 				socket_write_message(@socket, @buffer);
+				@spectatingPrev = false;
+				if(@spectating){
+					buffer_clear(@buffer);
+					#if not GMNET
+						buffer_write_uint8(@buffer, 8);
+						buffer_write_uint8(@buffer, 254);
+					#endif
+					#if GMNET
+						buffer_write_u8(@buffer, 8);
+						buffer_write_u8(@buffer, 254);
+					#endif
+					socket_write_message(@socket, @buffer);
+					@spectatingPrev = true;
+				}
 				if(udpsocket_exists(@udpsocket)){
 					udpsocket_destroy(@udpsocket);
 				}
@@ -447,6 +676,61 @@ if(@mustQuit){
 }
 if(@reconnecting){
 	exit;
+}
+// PERIODIC HEARTBEAT
+@hbCounter += 1;
+if(@hbCounter >= room_speed * 5){
+	@hbCounter = 0;
+	if(@connected && socket_get_state(@socket) == 2){
+		buffer_clear(@buffer);
+		#if not GMNET
+			buffer_write_uint8(@buffer, 2);
+		#endif
+		#if GMNET
+			buffer_write_u8(@buffer, 2);
+		#endif
+		socket_write_message(@socket, @buffer);
+		buffer_clear(@buffer);
+		#if not GMNET
+			buffer_write_uint8(@buffer, 8);
+			if(@spectating){
+				buffer_write_uint8(@buffer, 254);
+			}else{
+				buffer_write_uint8(@buffer, @team);
+			}
+		#endif
+		#if GMNET
+			buffer_write_u8(@buffer, 8);
+			if(@spectating){
+				buffer_write_u8(@buffer, 254);
+			}else{
+				buffer_write_u8(@buffer, @team);
+			}
+		#endif
+		socket_write_message(@socket, @buffer);
+	}
+}
+// PERIODIC LIST RECONCILE
+@listCounter += 1;
+if(@lastRoom != room){
+	@lastRoom = room;
+	@listCounter = room_speed * 15;
+}
+if(@listCounter >= room_speed * 15){
+	@listCounter = 0;
+	if(@connected && socket_get_state(@socket) == 2){
+		buffer_clear(@buffer);
+		#if not GMNET
+			buffer_write_uint8(@buffer, 10);
+		#endif
+		#if GMNET
+			buffer_write_u8(@buffer, 10);
+		#endif
+		if(@selfID != ""){
+			buffer_write_string(@buffer, @selfID);
+		}
+		socket_write_message(@socket, @buffer);
+	}
 }
 if(!@spectating){
 @p = %arg0;
@@ -584,7 +868,28 @@ if(@exists){
 		}
 	}
 	@t += 1;
-	if(keyboard_check_pressed(@keyChat)){
+	@loadHotkeyConsumed = false;
+	if(!@settingsOpen && @saveHistCount > 0){
+		if(keyboard_check(vk_shift) && keyboard_check_pressed(82)){
+			@saveHistApply = @saveHistCount - 1;
+			@loadHotkeyConsumed = true;
+		}else{
+			@loadHotkey = 0;
+			for(@hkI = 1; @hkI <= 8 && @loadHotkey == 0; @hkI += 1){
+				if(keyboard_check_pressed(48 + @hkI)) @loadHotkey = @hkI;
+			}
+			if(@loadHotkey > 0){
+				for(@hkI = @saveHistCount - 1; @hkI >= 0; @hkI -= 1){
+					if(@saveHistHotkey[@hkI] == @loadHotkey){
+						@saveHistApply = @hkI;
+						@loadHotkeyConsumed = true;
+						@hkI = -1;
+					}
+				}
+			}
+		}
+	}
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyChat) && !@settingsOpen){
 		#if STUDIO
 			@message = get_string("Say something:", "");
 		#endif
@@ -680,34 +985,16 @@ if(@exists){
 		}
 	}
 }
-// CUSTOM DATA SYNC
-@customSlot = 0;
-if (@customSlot != @customSlotPrev) {
-	@customSlotPrev = @customSlot;
+if(@exists != @pExists){
+	// SEND PLAYER DESTROYED
 	buffer_clear(@buffer);
 	#if not GMNET
-		buffer_write_uint8(@buffer, 7);
-		buffer_write_uint16(@buffer, 1);
-		buffer_write_int32(@buffer, @customSlot);
+		buffer_write_uint8(@buffer, 1);
 	#endif
 	#if GMNET
-		buffer_write_u8(@buffer, 7);
-		buffer_write_u16(@buffer, 1);
-		buffer_write_i32(@buffer, @customSlot);
+		buffer_write_u8(@buffer, 1);
 	#endif
 	socket_write_message(@socket, @buffer);
-}else{
-	if(@exists != @pExists){
-		// SEND PLAYER DESTROYED
-		buffer_clear(@buffer);
-		#if not GMNET
-			buffer_write_uint8(@buffer, 1);
-		#endif
-		#if GMNET
-			buffer_write_u8(@buffer, 1);
-		#endif
-		socket_write_message(@socket, @buffer);
-	}
 }
 @pExists = @exists;
 @pX = @X;
@@ -765,6 +1052,7 @@ while(udpsocket_receive(@udpsocket, @buffer)){
 					@oPlayer.@team = ds_map_find_value(@teamMap, @ID);
 				}
 			}
+			@oPlayer.@avatarAlive = true;
 			#if not GMNET
 				@oPlayer.@oRoom = buffer_read_uint16(@buffer);
 				@syncTime = buffer_read_uint64(@buffer);
@@ -850,7 +1138,7 @@ if(@udpState == 1){
 		}
 	}
 }
-if(keyboard_check_pressed(@keyVis)){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyVis) && !@settingsOpen){
 	if(@vis == 0) @vis = 1;
 	else if(@vis == 1) @vis = 2;
 	else if(@vis == 2) @vis = 0;
@@ -863,7 +1151,7 @@ if(keyboard_check_pressed(@keyVis)){
 	@a.@name = "";
 	@a.@state = @vis;
 }
-if(keyboard_check_pressed(@keySave)){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keySave) && !@settingsOpen){
 	@save_enabled = 1 - @save_enabled;
 	#if GMS2
 		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
@@ -874,17 +1162,23 @@ if(keyboard_check_pressed(@keySave)){
 	@a.@name = "";
 	@a.@state = @save_enabled + 3;
 }
-if(keyboard_check_pressed(@keyPlayerList)){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyPlayerList) && !@settingsOpen){
 	@showPlayerList = !@showPlayerList;
 }
-if(keyboard_check_pressed(@keySettings)){
-	@settingsOpen = !@settingsOpen;
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keySettings)){
+		@settingsOpen = !@settingsOpen;
+		if(@settingsOpen){
+			@kbFocus = 1;
+			@keybindEditing = -1;
+		}else{
+			@keybindEditing = -1;
+		}
 }
-if(keyboard_check_pressed(@keyChatLog)){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyChatLog) && !@settingsOpen){
 	@chatLogOpen = !@chatLogOpen;
 	@chatLogScroll = 0;
 }
-if(keyboard_check_pressed(@keyArrows)){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyArrows) && !@settingsOpen){
 	@showArrows = !@showArrows;
 	#if GMS2
 		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
@@ -899,8 +1193,78 @@ if(keyboard_check_pressed(@keyArrows)){
 	}
 	@a.@state = -2;
 }
+// PING RADIAL MENU
+	if(@socket != -1 && !@settingsOpen && !@chatLogOpen && @keybindEditing < 0 && !@loadHotkeyConsumed){
+	if(keyboard_check_pressed(@keyPing) && !@pingWheelOpen){
+		@pingWheelOpen = true;
+		@pingWheelCanceled = false;
+		@pingWheelCenterX = mouse_x;
+		@pingWheelCenterY = mouse_y;
+		@pingWheelHover = 4;
+	}
+	if(@pingWheelOpen){
+		@pwDx = mouse_x - @pingWheelCenterX;
+		@pwDy = mouse_y - @pingWheelCenterY;
+		if(@pwDx*@pwDx + @pwDy*@pwDy < 19*19){
+			@pingWheelHover = 4;
+		}else{
+			@pwDir = point_direction(0, 0, @pwDx, @pwDy);
+			if(@pwDir >= 337.5 || @pwDir < 22.5) @pingWheelHover = 5;
+			else if(@pwDir < 67.5) @pingWheelHover = 2;
+			else if(@pwDir < 112.5) @pingWheelHover = 1;
+			else if(@pwDir < 157.5) @pingWheelHover = 0;
+			else if(@pwDir < 202.5) @pingWheelHover = 3;
+			else if(@pwDir < 247.5) @pingWheelHover = 6;
+			else if(@pwDir < 292.5) @pingWheelHover = 7;
+			else @pingWheelHover = 8;
+		}
+		if(mouse_check_button_pressed(mb_right)){
+			@pingWheelOpen = false;
+			@pingWheelCanceled = true;
+		}
+		if(!keyboard_check(@keyPing)){
+			@pingWheelOpen = false;
+			if(!@pingWheelCanceled){
+				buffer_clear(@buffer);
+				#if not GMNET
+					buffer_write_uint8(@buffer, 11);
+					buffer_write_int32(@buffer, room);
+					buffer_write_float32(@buffer, @pingWheelCenterX);
+					buffer_write_float32(@buffer, @pingWheelCenterY);
+					buffer_write_uint8(@buffer, @pingWheelHover);
+				#endif
+				#if GMNET
+					buffer_write_u8(@buffer, 11);
+					buffer_write_i32(@buffer, room);
+					buffer_write_float(@buffer, @pingWheelCenterX);
+					buffer_write_float(@buffer, @pingWheelCenterY);
+					buffer_write_u8(@buffer, @pingWheelHover);
+				#endif
+				socket_write_message(@socket, @buffer);
+				@pingX[@pingHead] = @pingWheelCenterX;
+				@pingY[@pingHead] = @pingWheelCenterY;
+				@pingT[@pingHead] = current_time;
+				@pingType[@pingHead] = @pingWheelHover;
+				@pingName[@pingHead] = @name;
+				@pingSenderIDArr[@pingHead] = @selfID;
+				@pingTeamArr[@pingHead] = @team;
+				#if STUDIO
+					audio_play_sound(@sndChatbox, 0, false);
+				#endif
+				#if not STUDIO
+					sound_play(@sndChatbox);
+				#endif
+				@pingHead = (@pingHead + 1) mod @pingMax;
+			}
+			@pingWheelCanceled = false;
+		}
+	}
+}else{
+	@pingWheelOpen = false;
+	@pingWheelCanceled = false;
+}
 // SPECTATOR MODE
-if(!keyboard_check(@keySpectate)){
+	if(@loadHotkeyConsumed || !keyboard_check(@keySpectate) || @settingsOpen){
 	@specHoldFrames = 0;
 	@specProgress -= 3 / room_speed;
 	if(@specProgress < 0) @specProgress = 0;
@@ -934,8 +1298,27 @@ if(@specProgress >= 1){
 			#if STUDIO
 				@specGrav = global.grav;
 			#endif
+			#if GM8YY
+				@specGrav = (global.grav + 1) / 2;
+			#endif
 			#if not STUDIO
-				@specGrav = 0;
+				#if not GM8YY
+					#if RENEX
+						@specGrav = (global.grav + 1) / 2;
+					#endif
+					#if not RENEX
+						#if PLAYER2
+							if(@specObj == %arg0){
+								@specGrav = 0;
+							}else{
+								@specGrav = 1;
+							}
+						#endif
+						#if not PLAYER2
+							@specGrav = 0;
+						#endif
+					#endif
+				#endif
 			#endif
 			with(@p){
 				instance_destroy();
@@ -947,26 +1330,54 @@ if(@specProgress >= 1){
 			@specCamY = @specY;
 			@specGraceFrames = 0;
 			@specSnapCamera = true;
-			if(instance_number(@onlinePlayer) > 0){
-				@specTarget = instance_find(@onlinePlayer, 0);
+			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+				@specTarget = instance_find(@onlinePlayer, @i);
+				if(!@specTarget.@avatarAlive || !@specTarget.@lerpInit) continue;
+				@specTargetIdx = 0;
 				@specTargetID = @specTarget.@ID;
 				@specTargetName = @specTarget.@name;
-				if(@specTarget.@lerpInit){
-					@specCamX = @specTarget.x;
-					@specCamY = @specTarget.y;
-				}
+				@specCamX = @specTarget.x;
+				@specCamY = @specTarget.y;
 				@specSnapCamera = false;
 				if(@specTarget.@oRoom != room && room_exists(@specTarget.@oRoom)){
 					room_goto(@specTarget.@oRoom);
 					@specSnapCamera = true;
 				}
+				@i = instance_number(@onlinePlayer);
 			}
 		}
 	}else{
 		if(@specRoom == room){
 			@p = %arg0;
 			#if PLAYER2
-				if(!instance_exists(@p)) @p = %arg1;
+				if(@specGrav == 1){
+					if(instance_exists(%arg0)){
+						@specDepth = instance_find(%arg0, 0).depth;
+						#if GMS2
+							instance_create_depth(0, 0, @specDepth, %arg1);
+						#endif
+						#if not GMS2
+							instance_create(0, 0, %arg1);
+						#endif
+						with(%arg0){
+							instance_destroy();
+						}
+					}
+					@p = %arg1;
+				}else{
+					if(instance_exists(%arg1) && !instance_exists(%arg0)){
+						@specDepth = instance_find(%arg1, 0).depth;
+						#if GMS2
+							instance_create_depth(0, 0, @specDepth, %arg0);
+						#endif
+						#if not GMS2
+							instance_create(0, 0, %arg0);
+						#endif
+						with(%arg1){
+							instance_destroy();
+						}
+					}
+				}
 			#endif
 			if(instance_exists(@p)){
 				@p = instance_find(@p, 0);
@@ -1022,59 +1433,106 @@ if(@spectating){
 		view_object[0] = -1;
 	}
 	@specFound = false;
-	@specCount = instance_number(@onlinePlayer);
+	@specTargetLive = false;
+	@specCount = 0;
 	if(@specTargetID != ""){
-		for(@i = 0; @i < @specCount; @i += 1){
+		for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
 			@specTarget = instance_find(@onlinePlayer, @i);
 			if(@specTarget.@ID == @specTargetID){
 				@specFound = true;
-				@specTargetIdx = @i;
 				@specTargetName = @specTarget.@name;
-				if(@specTarget.@lerpInit && @specTarget.@oRoom == room){
-					if(@specSnapCamera){
-						@specCamX = @specTarget.x;
-						@specCamY = @specTarget.y;
-						@specSnapCamera = false;
-					}else{
-						@specCamX += (@specTarget.x - @specCamX) * 0.35;
-						@specCamY += (@specTarget.y - @specCamY) * 0.35;
+				if(@specTarget.@avatarAlive && @specTarget.@lerpInit){
+					@specTargetLive = true;
+					@specTargetIdx = @specCount;
+					if(@specTarget.@oRoom == room){
+						if(@specSnapCamera){
+							@specCamX = @specTarget.x;
+							@specCamY = @specTarget.y;
+							@specSnapCamera = false;
+						}else{
+							@specCamX += (@specTarget.x - @specCamX) * 0.35;
+							@specCamY += (@specTarget.y - @specCamY) * 0.35;
+						}
+					}
+					if(@specTarget.@oRoom != room && room_exists(@specTarget.@oRoom)){
+						room_goto(@specTarget.@oRoom);
+						@specSnapCamera = true;
 					}
 				}
-				if(@specTarget.@oRoom != room && @specTarget.@oRoom != -1 && room_exists(@specTarget.@oRoom)){
-					room_goto(@specTarget.@oRoom);
-					@specSnapCamera = true;
-				}
 			}
+			if(@specTarget.@avatarAlive && @specTarget.@lerpInit) @specCount += 1;
+		}
+	}else{
+		for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+			@specTarget = instance_find(@onlinePlayer, @i);
+			if(!@specTarget.@avatarAlive || !@specTarget.@lerpInit) continue;
+			@specCount += 1;
 		}
 	}
 	// SWITCH TARGET
 	if(@specCount > 0){
+		if(!@specFound){
+			@specTargetIdx = 0;
+			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+				@specTarget = instance_find(@onlinePlayer, @i);
+				if(!@specTarget.@avatarAlive || !@specTarget.@lerpInit) continue;
+				@specTargetID = @specTarget.@ID;
+				@specTargetName = @specTarget.@name;
+				@specCamX = @specTarget.x;
+				@specCamY = @specTarget.y;
+				@specSnapCamera = false;
+				if(@specTarget.@oRoom != room && room_exists(@specTarget.@oRoom)){
+					room_goto(@specTarget.@oRoom);
+					@specSnapCamera = true;
+				}
+				@specFound = true;
+				@i = instance_number(@onlinePlayer);
+			}
+		}
 		if(keyboard_check_pressed(vk_left)){
 			@specTargetIdx -= 1;
 			if(@specTargetIdx < 0) @specTargetIdx = @specCount - 1;
-			@specTarget = instance_find(@onlinePlayer, @specTargetIdx);
-			@specTargetID = @specTarget.@ID;
-			@specTargetName = @specTarget.@name;
-			@specCamX = @specTarget.x;
-			@specCamY = @specTarget.y;
-			@specSnapCamera = false;
-			if(@specTarget.@oRoom != room && @specTarget.@oRoom != -1 && room_exists(@specTarget.@oRoom)){
-				room_goto(@specTarget.@oRoom);
-				@specSnapCamera = true;
+			@specLiveIdx = 0;
+			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+				@specTarget = instance_find(@onlinePlayer, @i);
+				if(!@specTarget.@avatarAlive || !@specTarget.@lerpInit) continue;
+				if(@specLiveIdx == @specTargetIdx){
+					@specTargetID = @specTarget.@ID;
+					@specTargetName = @specTarget.@name;
+					@specCamX = @specTarget.x;
+					@specCamY = @specTarget.y;
+					@specSnapCamera = false;
+					if(@specTarget.@oRoom != room && @specTarget.@oRoom != -1 && room_exists(@specTarget.@oRoom)){
+						room_goto(@specTarget.@oRoom);
+						@specSnapCamera = true;
+					}
+					@i = instance_number(@onlinePlayer);
+				}else{
+					@specLiveIdx += 1;
+				}
 			}
 		}
 		if(keyboard_check_pressed(vk_right)){
 			@specTargetIdx += 1;
 			if(@specTargetIdx >= @specCount) @specTargetIdx = 0;
-			@specTarget = instance_find(@onlinePlayer, @specTargetIdx);
-			@specTargetID = @specTarget.@ID;
-			@specTargetName = @specTarget.@name;
-			@specCamX = @specTarget.x;
-			@specCamY = @specTarget.y;
-			@specSnapCamera = false;
-			if(@specTarget.@oRoom != room && @specTarget.@oRoom != -1 && room_exists(@specTarget.@oRoom)){
-				room_goto(@specTarget.@oRoom);
-				@specSnapCamera = true;
+			@specLiveIdx = 0;
+			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+				@specTarget = instance_find(@onlinePlayer, @i);
+				if(!@specTarget.@avatarAlive || !@specTarget.@lerpInit) continue;
+				if(@specLiveIdx == @specTargetIdx){
+					@specTargetID = @specTarget.@ID;
+					@specTargetName = @specTarget.@name;
+					@specCamX = @specTarget.x;
+					@specCamY = @specTarget.y;
+					@specSnapCamera = false;
+					if(@specTarget.@oRoom != room && @specTarget.@oRoom != -1 && room_exists(@specTarget.@oRoom)){
+						room_goto(@specTarget.@oRoom);
+						@specSnapCamera = true;
+					}
+					@i = instance_number(@onlinePlayer);
+				}else{
+					@specLiveIdx += 1;
+				}
 			}
 		}
 	}
@@ -1088,7 +1546,34 @@ if(@spectating){
 		if(@specRoom == room){
 			@p = %arg0;
 			#if PLAYER2
-				if(!instance_exists(@p)) @p = %arg1;
+				if(@specGrav == 1){
+					if(instance_exists(%arg0)){
+						@specDepth = instance_find(%arg0, 0).depth;
+						#if GMS2
+							instance_create_depth(0, 0, @specDepth, %arg1);
+						#endif
+						#if not GMS2
+							instance_create(0, 0, %arg1);
+						#endif
+						with(%arg0){
+							instance_destroy();
+						}
+					}
+					@p = %arg1;
+				}else{
+					if(instance_exists(%arg1) && !instance_exists(%arg0)){
+						@specDepth = instance_find(%arg1, 0).depth;
+						#if GMS2
+							instance_create_depth(0, 0, @specDepth, %arg0);
+						#endif
+						#if not GMS2
+							instance_create(0, 0, %arg0);
+						#endif
+						with(%arg1){
+							instance_destroy();
+						}
+					}
+				}
 			#endif
 			if(instance_exists(@p)){
 				@p = instance_find(@p, 0);
@@ -1163,6 +1648,19 @@ if(@teamChanged){
 	ini_write_real("config", "team", @team);
 	ini_close();
 }
+if(@spectating != @spectatingPrev && @socket != -1){
+	@spectatingPrev = @spectating;
+	buffer_clear(@buffer);
+	#if not GMNET
+		buffer_write_uint8(@buffer, 8);
+		if(@spectating){ buffer_write_uint8(@buffer, 254); }else{ buffer_write_uint8(@buffer, @team); }
+	#endif
+	#if GMNET
+		buffer_write_u8(@buffer, 8);
+		if(@spectating){ buffer_write_u8(@buffer, 254); }else{ buffer_write_u8(@buffer, @team); }
+	#endif
+	socket_write_message(@socket, @buffer);
+}
 if(@visChanged){
 	@visChanged = false;
 	#if GMS2
@@ -1203,9 +1701,28 @@ if(@lerpChanged){
 	ini_write_real("config", "lerp", @lerpEnabled);
 	ini_close();
 }
+if(@syncEnabledChanged){
+	@syncEnabledChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("sync", "sync_enabled", @syncEnabled);
+	ini_close();
+}
 if(@saveHistApply >= 0){
 	if(@spectating){
+		if(@socket != -1){
+			buffer_clear(@buffer);
+			#if not GMNET
+				buffer_write_uint8(@buffer, 8);
+				buffer_write_uint8(@buffer, @team);
+			#endif
+			#if GMNET
+				buffer_write_u8(@buffer, 8);
+				buffer_write_u8(@buffer, @team);
+			#endif
+			socket_write_message(@socket, @buffer);
+		}
 		@spectating = false;
+		@spectatingPrev = false;
 		@specPending = false;
 	}
 	@shIdx = @saveHistApply;
@@ -1256,6 +1773,7 @@ if(@saveHistClearFiles){
 		if(@saveHistFav[@shI]){
 			if(@shThinWrite != @shI){
 				@saveHistFav[@shThinWrite] = @saveHistFav[@shI];
+				@saveHistHotkey[@shThinWrite] = @saveHistHotkey[@shI];
 				@saveHistGrav[@shThinWrite] = @saveHistGrav[@shI];
 				@saveHistX[@shThinWrite] = @saveHistX[@shI];
 				@saveHistY[@shThinWrite] = @saveHistY[@shI];
@@ -1322,6 +1840,7 @@ if(@saveHistDirty){
 					}
 					if(@shThinWrite != @shI){
 						@saveHistFav[@shThinWrite] = @saveHistFav[@shI];
+						@saveHistHotkey[@shThinWrite] = @saveHistHotkey[@shI];
 						@saveHistGrav[@shThinWrite] = @saveHistGrav[@shI];
 						@saveHistX[@shThinWrite] = @saveHistX[@shI];
 						@saveHistY[@shThinWrite] = @saveHistY[@shI];
@@ -1343,6 +1862,7 @@ if(@saveHistDirty){
 				@saveHistCount -= 1;
 				for(@shI = @shFound; @shI < @saveHistCount; @shI += 1){
 					@saveHistFav[@shI] = @saveHistFav[@shI + 1];
+					@saveHistHotkey[@shI] = @saveHistHotkey[@shI + 1];
 					@saveHistGrav[@shI] = @saveHistGrav[@shI + 1];
 					@saveHistX[@shI] = @saveHistX[@shI + 1];
 					@saveHistY[@shI] = @saveHistY[@shI + 1];
@@ -1356,10 +1876,11 @@ if(@saveHistDirty){
 		buffer_clear(@buffer);
 		#if not GMNET
 			buffer_write_uint16(@buffer, 65535);
-			buffer_write_uint8(@buffer, 1);
+			buffer_write_uint8(@buffer, 2);
 			buffer_write_uint16(@buffer, @saveHistCount);
 			for(@shI = 0; @shI < @saveHistCount; @shI += 1){
 				buffer_write_uint8(@buffer, @saveHistFav[@shI]);
+				buffer_write_uint8(@buffer, @saveHistHotkey[@shI]);
 				buffer_write_uint8(@buffer, @saveHistGrav[@shI]);
 				buffer_write_int32(@buffer, @saveHistX[@shI]);
 				buffer_write_float64(@buffer, @saveHistY[@shI]);
@@ -1372,10 +1893,11 @@ if(@saveHistDirty){
 		#endif
 		#if GMNET
 			buffer_write_u16(@buffer, 65535);
-			buffer_write_u8(@buffer, 1);
+			buffer_write_u8(@buffer, 2);
 			buffer_write_u16(@buffer, @saveHistCount);
 			for(@shI = 0; @shI < @saveHistCount; @shI += 1){
 				buffer_write_u8(@buffer, @saveHistFav[@shI]);
+				buffer_write_u8(@buffer, @saveHistHotkey[@shI]);
 				buffer_write_u8(@buffer, @saveHistGrav[@shI]);
 				buffer_write_i32(@buffer, @saveHistX[@shI]);
 				buffer_write_double(@buffer, @saveHistY[@shI]);
@@ -1418,8 +1940,296 @@ socket_update_write(@socket);
 socket_send(@socket);
 #endif
 
+// SETTINGS PANEL
+if(@settingsOpen && @keybindEditing < 0){
+	if(@kbDelay > 0) @kbDelay -= 1;
+	@kbAct = 0;
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 0){
+		if(keyboard_check_pressed(vk_left)){
+			@settingsTab -= 1;
+			if(@settingsTab < 0) @settingsTab = 4;
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_right)){
+			@settingsTab += 1;
+			if(@settingsTab > 4) @settingsTab = 0;
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_down) || keyboard_check_pressed(vk_enter)){
+			@kbFocus = 1;
+			@kbAct = 1;
+		}
+	}
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 0){
+		if(keyboard_check_pressed(vk_up)){
+			if(@kbRow[0] <= 0){
+				@kbRow[0] = 0;
+				@kbFocus = 0;
+			}else{
+				@kbRow[0] -= 1;
+			}
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_down)){
+			@kbRow[0] += 1; if(@kbRow[0] > 5) @kbRow[0] = 5;
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
+			if(keyboard_check_pressed(vk_right)) @kbDir = 1; else @kbDir = -1;
+			if(@kbRow[0] == 0){
+				@team += @kbDir;
+				if(@team < 0) @team = 7;
+				if(@team > 7) @team = 0;
+				@teamChanged = true;
+			}else if(@kbRow[0] == 1){
+				@lerpEnabled = !@lerpEnabled;
+				@lerpChanged = true;
+			}else if(@kbRow[0] == 2){
+				@save_enabled = 1 - @save_enabled;
+				@saveChanged = true;
+			}else if(@kbRow[0] == 3){
+				@vis += @kbDir;
+				if(@vis < 0) @vis = 2;
+				if(@vis > 2) @vis = 0;
+				@visChanged = true;
+			}else if(@kbRow[0] == 4){
+				@showArrows = !@showArrows;
+			}else if(@kbRow[0] == 5){
+				@specCamMode += @kbDir;
+				if(@specCamMode < 0) @specCamMode = 1;
+				if(@specCamMode > 1) @specCamMode = 0;
+			}
+			@kbAct = 1;
+		}
+	}
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 1){
+		@kbVisCount = 0;
+		for(@kbI = 0; @kbI < @saveHistCount; @kbI += 1){
+			if(@saveHistFilter == 0 || @saveHistFav[@kbI]) @kbVisCount += 1;
+		}
+		if(keyboard_check(vk_shift) && keyboard_check_pressed(70)){
+			@saveHistFilter = 1 - @saveHistFilter;
+			@saveHistPage = 0;
+			@kbRow[1] = 0;
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_backspace)){
+			@saveHistFilter = 1 - @saveHistFilter;
+			@saveHistPage = 0;
+			@kbRow[1] = 0;
+			@kbAct = 1;
+		}
+		if(@kbAct == 0 && keyboard_check(vk_shift) && keyboard_check_pressed(vk_delete)){
+			if(@saveHistCount > @saveHistFavCount){
+				@saveHistClearFiles = true;
+			}
+			@kbAct = 1;
+		}
+		if(@kbAct == 0 && keyboard_check_pressed(vk_home)){
+			@saveHistPage = 0;
+			@kbRow[1] = 0;
+			@kbAct = 1;
+		}
+		if(@kbAct == 0 && keyboard_check_pressed(vk_end)){
+			if(@kbVisCount > 0){
+				@kbRow[1] = @kbVisCount - 1;
+				@saveHistPage = @kbRow[1] div 8;
+			}
+			@kbAct = 1;
+		}
+		if(@kbVisCount > 0){
+			if(@kbRow[1] >= @kbVisCount) @kbRow[1] = @kbVisCount - 1;
+			if(@kbRow[1] < 0) @kbRow[1] = 0;
+			if(keyboard_check_pressed(vk_up)){
+				if(@kbRow[1] <= 0){
+					@kbRow[1] = 0;
+					@kbFocus = 0;
+				}else{
+					@kbRow[1] -= 1;
+					@saveHistPage = @kbRow[1] div 8;
+				}
+				@kbAct = 1;
+			}
+			if(keyboard_check_pressed(vk_down)){
+				@kbRow[1] += 1; if(@kbRow[1] >= @kbVisCount) @kbRow[1] = @kbVisCount - 1;
+				@saveHistPage = @kbRow[1] div 8;
+				@kbAct = 1;
+			}
+			if(keyboard_check_pressed(vk_pageup) || keyboard_check_pressed(vk_left)){
+				@kbRow[1] -= 8; if(@kbRow[1] < 0) @kbRow[1] = 0;
+				@saveHistPage = @kbRow[1] div 8;
+				@kbAct = 1;
+			}
+			if(keyboard_check_pressed(vk_pagedown) || keyboard_check_pressed(vk_right)){
+				@kbRow[1] += 8; if(@kbRow[1] >= @kbVisCount) @kbRow[1] = @kbVisCount - 1;
+				@saveHistPage = @kbRow[1] div 8;
+				@kbAct = 1;
+			}
+			@kbVisCur = -1;
+			@kbVI = 0;
+			for(@kbI = @saveHistCount - 1; @kbI >= 0 && @kbVisCur < 0; @kbI -= 1){
+				if(@saveHistFilter == 0 || @saveHistFav[@kbI]){
+					if(@kbVI == @kbRow[1]) @kbVisCur = @kbI;
+					@kbVI += 1;
+				}
+			}
+			if(keyboard_check_pressed(vk_enter)){
+				if(@kbVisCur >= 0){
+					@saveHistApply = @kbVisCur;
+					@settingsOpen = false;
+				}
+				@kbAct = 1;
+			}
+			if(!keyboard_check(vk_shift) && keyboard_check_pressed(70)){
+				if(@kbVisCur >= 0){
+					if(@saveHistFav[@kbVisCur]){
+						@saveHistFav[@kbVisCur] = 0;
+						@saveHistFavCount -= 1;
+					}else{
+						if(@saveHistFavCount < @saveHistFavMax){
+							@saveHistFav[@kbVisCur] = 1;
+							@saveHistFavCount += 1;
+						}
+					}
+					if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
+					@saveHistDirty = true;
+				}
+				@kbAct = 1;
+			}
+			for(@kbHot = 1; @kbHot <= 8 && @kbAct == 0; @kbHot += 1){
+				if(keyboard_check_pressed(48 + @kbHot)){
+					if(@kbVisCur >= 0){
+						if(@saveHistHotkey[@kbVisCur] == @kbHot){
+							@saveHistHotkey[@kbVisCur] = 0;
+						}else{
+							for(@kbI = 0; @kbI < @saveHistCount; @kbI += 1){
+								if(@saveHistHotkey[@kbI] == @kbHot) @saveHistHotkey[@kbI] = 0;
+							}
+							@saveHistHotkey[@kbVisCur] = @kbHot;
+						}
+						if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
+						@saveHistDirty = true;
+						@kbAct = 1;
+					}
+				}
+			}
+			if(keyboard_check_pressed(vk_delete)){
+				if(@kbVisCur >= 0 && !@saveHistFav[@kbVisCur]){
+					for(@kbI = @kbVisCur; @kbI < @saveHistCount - 1; @kbI += 1){
+						@saveHistFav[@kbI] = @saveHistFav[@kbI + 1];
+						@saveHistHotkey[@kbI] = @saveHistHotkey[@kbI + 1];
+						@saveHistGrav[@kbI] = @saveHistGrav[@kbI + 1];
+						@saveHistX[@kbI] = @saveHistX[@kbI + 1];
+						@saveHistY[@kbI] = @saveHistY[@kbI + 1];
+						@saveHistRoom[@kbI] = @saveHistRoom[@kbI + 1];
+						@saveHistName[@kbI] = @saveHistName[@kbI + 1];
+						@saveHistRoomName[@kbI] = @saveHistRoomName[@kbI + 1];
+						@saveHistTime[@kbI] = @saveHistTime[@kbI + 1];
+					}
+					@saveHistCount -= 1;
+					if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
+					@saveHistDirty = true;
+				}
+				@kbAct = 1;
+			}
+		}
+		if(@kbVisCount <= 0 && keyboard_check_pressed(vk_up)){
+			@kbFocus = 0;
+			@kbAct = 1;
+		}
+	}
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 2){
+		if(keyboard_check_pressed(vk_up)){
+			if(@kbRow[2] <= 0){
+				@kbRow[2] = 0;
+				@kbFocus = 0;
+			}else{
+				@kbRow[2] -= 1;
+			}
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_down)){
+			@kbRow[2] += 1; if(@kbRow[2] > 2) @kbRow[2] = 2;
+			@kbAct = 1;
+		}
+		for(@kbI = 1; @kbI <= 5; @kbI += 1){
+			if(keyboard_check_pressed(48 + @kbI)){
+				if(@rStars == @kbI) @rStars = 0; else @rStars = @kbI;
+				@kbRow[2] = 0;
+				@kbAct = 1;
+			}
+		}
+		if(@kbAct == 0 && @kbRow[2] == 0 && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right))){
+			if(keyboard_check_pressed(vk_left)) @rStars -= 1; else @rStars += 1;
+			if(@rStars < 0) @rStars = 5;
+			if(@rStars > 5) @rStars = 0;
+			@kbAct = 1;
+		}
+		if(@kbAct == 0 && (@kbRow[2] == 1 && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)))){
+			@rCleared = 1 - @rCleared;
+			@rClearAutoSet = false;
+			@kbAct = 1;
+		}
+		if(@kbAct == 0 && @kbRow[2] == 2 && keyboard_check_pressed(vk_enter)){
+			if(@rStars > 0 && @ratingCooldown <= 0 && !@ratingSubmitting){
+				@ratingSubmit = true;
+			}
+			@kbAct = 1;
+		}
+	}
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 3){
+		if(keyboard_check_pressed(vk_up)){
+			if(@kbRow[3] <= 0){
+				@kbRow[3] = 0;
+				@kbFocus = 0;
+			}else{
+				@kbRow[3] -= 1;
+			}
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_down)){
+			@kbRow[3] += 1; if(@kbRow[3] > 9) @kbRow[3] = 9;
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_enter)){
+			if(@kbRow[3] < 9){
+				@keybindEditing = @kbRow[3];
+				@keybindArmTimer = 6;
+			}else{
+				@keyVis = 86;
+				@keySave = 84;
+				@keySpectate = 89;
+				@keyChatLog = 85;
+				@keyArrows = 73;
+				@keySettings = 79;
+				@keyPlayerList = 76;
+				@keyChat = 32;
+				@keyPing = 72;
+				@keybindEditing = -1;
+				@keybindSave = true;
+			}
+			@kbAct = 1;
+		}
+	}
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 4){
+		if(keyboard_check_pressed(vk_up)){
+			@kbFocus = 0;
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
+			@syncEnabled = !@syncEnabled;
+			@syncEnabledChanged = true;
+			@kbAct = 1;
+		}
+	}
+	if(@kbAct){
+		@kbDelay = 6;
+	}
+}
+
 // KEYBIND EDITING
-if(@keybindEditing >= 0 && @settingsOpen && @settingsTab == 3){
+if(@keybindArmTimer > 0) @keybindArmTimer -= 1;
+if(@keybindEditing >= 0 && @settingsOpen && @settingsTab == 3 && @keybindArmTimer <= 0){
 	@kbPressed = keyboard_key;
 	if(@kbPressed > 0 && @kbPressed < 256 && keyboard_check_pressed(@kbPressed)){
 		if(@kbPressed != vk_escape){
@@ -1431,9 +2241,11 @@ if(@keybindEditing >= 0 && @settingsOpen && @settingsTab == 3){
 			if(@keybindEditing == 5) @keySettings = @kbPressed;
 			if(@keybindEditing == 6) @keyPlayerList = @kbPressed;
 			if(@keybindEditing == 7) @keyChat = @kbPressed;
+			if(@keybindEditing == 8) @keyPing = @kbPressed;
 			@keybindSave = true;
 		}
 		@keybindEditing = -1;
+		@keybindArmTimer = 0;
 	}
 }
 if(@keybindSave){
@@ -1448,6 +2260,7 @@ if(@keybindSave){
 	ini_write_real("config", "key_chatlog", @keyChatLog);
 	ini_write_real("config", "key_spectate", @keySpectate);
 	ini_write_real("config", "key_arrows", @keyArrows);
+	ini_write_real("config", "key_ping", @keyPing);
 	ini_write_real("config", "team", @team);
 	ini_write_real("config", "lerp", @lerpEnabled);
 	ini_close();

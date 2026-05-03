@@ -23,9 +23,9 @@ const build = async function(): Promise<string> {
 	const nccCli: string = path.join(__dirname, "node_modules", "@zeit", "ncc", "dist", "ncc", "cli.js");
 	const nodeMajorVersion: number = Number(process.versions.node.split(".")[0]);
 	const nodeCompatFlags: Array<string> = nodeMajorVersion >= 17 ? ["--openssl-legacy-provider"] : [];
-	console.log("Cleaning the build directory...");
+	console.log("Cleaning build directory...");
 	await Utils.rimraf(buildDir);
-	console.log("Merging the javascript files into one...");
+	console.log("Bundling JavaScript...");
 	await fs.mkdir(buildDir);
 	await fs.mkdir(unpackedDir);
 	await Utils.exec([
@@ -37,7 +37,7 @@ const build = async function(): Promise<string> {
 		"-o",
 		`"${dataDir}"`,
 	].join(" "), __dirname);
-	console.log("Copying files...");
+	console.log("Copying runtime files...");
 	await Promise.all([
 		await Utils.rimraf(path.join(dataDir, "linux")),
 		await Utils.rimraf(path.join(dataDir, "win", "ia32")),
@@ -45,6 +45,7 @@ const build = async function(): Promise<string> {
 		await fs.unlink(path.join(dataDir, "7za")),
 		await fs.copyFile(path.join(__dirname, "launcher.exe"), path.join(unpackedDir, "iwpo.exe")),
 		await fs.copyFile(path.join(__dirname, "README.txt"), path.join(unpackedDir, "README.txt")),
+		await fs.copyFile(path.join(__dirname, "PLAYER_GUIDE.txt"), path.join(unpackedDir, "PLAYER_GUIDE.txt")),
 		await fs.copyFile(path.join(__dirname, "node-portable.exe"), path.join(dataDir, "node-portable.exe")),
 		await Utils.rimraf(path.join(dataDir, "tmp")),
 		await fs.mkdir(path.join(dataDir, "tmp")),
@@ -57,7 +58,7 @@ const build = async function(): Promise<string> {
 	readme[0] += Utils.getVersion();
 	await fs.writeFile(readmeFilename, readme.join("\r\n"), "utf8");
 	await fs.writeFile(path.join(unpackedDir, "iwpo-settings.ini"), "[settings]\nserver=212.64.24.80\n", "utf8");
-	console.log("Compressing the tool...");
+	console.log("Packing release archive...");
 	await zip(unpackedDir, path.join(buildDir, `iwpo ${Utils.getVersion()}.zip`));
 	return "Success!";
 }

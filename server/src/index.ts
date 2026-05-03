@@ -7,7 +7,8 @@ import {
     PORT_HTTP, PORT_TCP, PORT_UDP, LAST_VERSION, PROTOCOL_VERSION, MIN_PROTOCOL_VERSION,
     MAX_PLAYERS_PER_IP, HEARTBEAT_INTERVAL_SEC, HEARTBEAT_TIMEOUT_SEC,
     UDP_CLEANUP_INTERVAL_MIN, UDP_EXPIRY_MIN,
-    MAX_TCP_MESSAGE, MAX_TCP_BUFFER, MAX_UDP_MESSAGE, MAX_CUSTOM_SLOTS, MAX_TEAMS,
+    MAX_TCP_MESSAGE, MAX_TCP_BUFFER, MAX_UDP_MESSAGE, MAX_CUSTOM_SLOTS, MAX_PER_ENTRY_SLOTS,
+    MAX_SYNC_ENTRIES, MAX_SYNC_NAME_LEN, MAX_TEAMS,
     TCP_RATE_LIMIT, UDP_RATE_LIMIT,
     RATING_COOLDOWN_SEC, RATING_MAX_PER_GAME, RATING_DATA_DIR,
 } from "./config.js";
@@ -45,10 +46,15 @@ interface TcpPlayer {
     msgWindowStart: number;
     lastHeartbeat: number;
     customSlots: Uint32Array | null;
+    /** True once we've replayed the team-shared sync snapshot to this player. */
+    syncReplayed: boolean;
     protocolVersion: number;
     team: number;
+    spectating: boolean;
     quitted: boolean;
     recvBuf: Buffer;
+    /** Has the client sent its first CREATED message yet? Used to gate roster replay. */
+    rosterSent: boolean;
 }
 
 /* ── State ─────────────────────────────────────────── */
@@ -56,6 +62,66 @@ interface TcpPlayer {
 const tcpPlayers: TcpPlayer[] = [];
 const udpEndpoints: UdpEndpoint[] = [];
 const udpByGame = new Map<string, Set<UdpEndpoint>>();
+
+/* ── Sync (CUSTOM_DATA v2) shared state ────────────── */
+
+interface SyncEntry {
+    count: number;        // 1..512  (bit count)
+    slotCount: number;    // ceil(count/32), 1..MAX_PER_ENTRY_SLOTS
+    bits: Uint32Array;    // length === slotCount
+}
+// gameID → team → name → entry
+const syncState: Map<string, Map<number, Map<string, SyncEntry>>> = new Map();
+const SYNC_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+const CUSTOM_DATA_V2_PROTOCOL_VERSION = 2;
+
+function supportsCustomDataV2(player: TcpPlayer): boolean {
+    return player.protocolVersion >= CUSTOM_DATA_V2_PROTOCOL_VERSION;
+}
+
+function getTeamSync(game: string, team: number, create: boolean): Map<string, SyncEntry> | null {
+    let g = syncState.get(game);
+    if (!g) {
+        if (!create) return null;
+        g = new Map(); syncState.set(game, g);
+    }
+    let t = g.get(team);
+    if (!t) {
+        if (!create) return null;
+        t = new Map(); g.set(team, t);
+    }
+    return t;
+}
+
+function encodeSyncSnapshot(ownerID: string, team: Map<string, SyncEntry>): SmartBuffer {
+    const reply = new SmartBuffer();
+    reply.writeUInt8(TcpMsg.CUSTOM_DATA);
+    reply.writeUInt8(1);                     // v2flag
+    reply.writeStringNT(ownerID);
+    reply.writeUInt8(team.size);
+    for (const [name, e] of team) {
+        reply.writeStringNT(name);
+        reply.writeUInt16LE(e.count);
+        reply.writeUInt16LE(e.slotCount);
+        for (let i = 0; i < e.slotCount; i++) reply.writeUInt32LE(e.bits[i]);
+    }
+    return reply;
+}
+
+function replaySyncTo(player: TcpPlayer): void {
+    if (player.game === "" || !supportsCustomDataV2(player)) return;
+    const team = getTeamSync(player.game, player.team, false);
+    if (!team || team.size === 0) return;
+    sendTo(player, encodeSyncSnapshot("", team));
+}
+
+function cleanupSyncForGameIfEmpty(game: string): void {
+    if (game === "") return;
+    for (const p of tcpPlayers) {
+        if (p.game === game && !p.quitted) return;
+    }
+    syncState.delete(game);
+}
 
 /* ── Rating storage ────────────────────────────────── */
 
@@ -155,6 +221,38 @@ function sendTo(player: TcpPlayer, msg: SmartBuffer): void {
     msg.destroy();
 }
 
+function sendRosterTo(player: TcpPlayer): void {
+    if (player.quitted || player.game === "" || player.name === "") return;
+    const peers = tcpPlayers.filter(p =>
+        p.id !== player.id && p.game === player.game && !p.quitted && p.name !== ""
+    );
+    const reply = new SmartBuffer();
+    reply.writeUInt8(TcpMsg.LIST);
+    reply.writeUInt16LE(peers.length);
+    for (const p of peers) {
+        reply.writeStringNT(p.id);
+        reply.writeStringNT(p.name);
+        reply.writeUInt8(p.team);
+    }
+    sendTo(player, reply);
+    for (const p of peers) {
+        if (!p.spectating) continue;
+        const spectatingMsg = new SmartBuffer();
+        spectatingMsg.writeUInt8(TcpMsg.TEAM);
+        spectatingMsg.writeStringNT(p.id);
+        spectatingMsg.writeUInt8(0xFE);
+        sendTo(player, spectatingMsg);
+    }
+}
+
+function broadcastRoster(game: string): void {
+    if (game === "") return;
+    for (const p of tcpPlayers) {
+        if (p.quitted || p.game !== game || p.name === "") continue;
+        sendRosterTo(p);
+    }
+}
+
 function broadcastFrom(sender: TcpPlayer, msg: SmartBuffer): void {
     const framed = frameMessage(msg.toBuffer());
     for (const p of tcpPlayers) {
@@ -168,15 +266,16 @@ function broadcastFromSameTeam(sender: TcpPlayer, msg: SmartBuffer): void {
     const framed = frameMessage(msg.toBuffer());
     for (const p of tcpPlayers) {
         if (p.id === sender.id || p.game !== sender.game || sender.game === "") continue;
-        if (sender.team > 0 && p.team > 0 && sender.team !== p.team) continue;
+        if (p.team !== sender.team) continue;
         if (!p.quitted) p.socket.write(framed);
     }
     msg.destroy();
 }
 
-function quitPlayer(player: TcpPlayer): void {
+function quitPlayer(player: TcpPlayer, reason: string = "unknown"): void {
     if (player.quitted) return;
     player.quitted = true;
+    log.info(`quit ${player.id} name=${JSON.stringify(player.name)} game=${JSON.stringify(player.game)} team=${player.team} reason=${reason}`);
     // Clean udpByGame index before removing
     for (let i = udpEndpoints.length - 1; i >= 0; i--) {
         if (udpEndpoints[i].id === player.id) {
@@ -193,7 +292,9 @@ function quitPlayer(player: TcpPlayer): void {
     msg.writeUInt8(TcpMsg.DESTROYED);
     msg.writeStringNT(player.id);
     broadcastFrom(player, msg);
+    broadcastRoster(player.game);
     player.socket.destroy();
+    cleanupSyncForGameIfEmpty(player.game);
 }
 
 /**
@@ -208,7 +309,7 @@ function extractMessages(player: TcpPlayer): SmartBuffer[] {
         if (player.recvBuf.length < vLen) break; // need more data for VarInt
         const payloadLen = readVarint(player.recvBuf, 0, vLen);
         if (payloadLen > MAX_TCP_MESSAGE) {
-            quitPlayer(player);
+            quitPlayer(player, `frame_too_large(${payloadLen})`);
             return out;
         }
         const totalLen = vLen + payloadLen;
@@ -225,27 +326,50 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
     let reply: SmartBuffer;
     switch (msg.readUInt8()) {
         case TcpMsg.CREATED:
-            if (msg.remaining() > 0) { quitPlayer(player); return; }
+            if (msg.remaining() > 0) { quitPlayer(player, "created_extra_bytes"); return; }
             reply = new SmartBuffer();
             reply.writeUInt8(TcpMsg.CREATED);
             reply.writeStringNT(player.id);
             reply.writeStringNT(player.name);
             broadcastFrom(player, reply);
-            // Send existing players' teams to the newly joined player
-            for (const p of tcpPlayers) {
-                if (p.id === player.id || p.game !== player.game || p.quitted) continue;
-                if (p.team > 0) {
-                    const teamMsg = new SmartBuffer();
-                    teamMsg.writeUInt8(TcpMsg.TEAM);
-                    teamMsg.writeStringNT(p.id);
-                    teamMsg.writeUInt8(p.team);
-                    sendTo(player, teamMsg);
+            // On the FIRST CREATED from this player, replay the full roster
+            // (existing players + their teams) so the new joiner sees everyone
+            // even if they're idle. Subsequent CREATEDs (e.g. respawn) skip this.
+            if (!player.rosterSent) {
+                player.rosterSent = true;
+                for (const p of tcpPlayers) {
+                    if (p.id === player.id || p.game !== player.game || p.quitted) continue;
+                    if (p.name === "") continue; // not yet registered (no NAME)
+                    const cMsg = new SmartBuffer();
+                    cMsg.writeUInt8(TcpMsg.CREATED);
+                    cMsg.writeStringNT(p.id);
+                    cMsg.writeStringNT(p.name);
+                    sendTo(player, cMsg);
+                    if (p.team > 0) {
+                        const teamMsg = new SmartBuffer();
+                        teamMsg.writeUInt8(TcpMsg.TEAM);
+                        teamMsg.writeStringNT(p.id);
+                        teamMsg.writeUInt8(p.team);
+                        sendTo(player, teamMsg);
+                    }
+                    if (p.spectating) {
+                        const spectatingMsg = new SmartBuffer();
+                        spectatingMsg.writeUInt8(TcpMsg.TEAM);
+                        spectatingMsg.writeStringNT(p.id);
+                        spectatingMsg.writeUInt8(0xFE);
+                        sendTo(player, spectatingMsg);
+                    }
                 }
+            }
+            // Replay current team-shared sync snapshot once on first CREATED.
+            if (!player.syncReplayed) {
+                player.syncReplayed = true;
+                replaySyncTo(player);
             }
             break;
 
         case TcpMsg.DESTROYED:
-            if (msg.remaining() > 0) { quitPlayer(player); return; }
+            if (msg.remaining() > 0) { quitPlayer(player, "destroyed_extra_bytes"); return; }
             reply = new SmartBuffer();
             reply.writeUInt8(TcpMsg.DESTROYED);
             reply.writeStringNT(player.id);
@@ -253,11 +377,11 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             break;
 
         case TcpMsg.HEARTBEAT:
-            if (msg.remaining() > 0) quitPlayer(player);
+            if (msg.remaining() > 0) quitPlayer(player, "heartbeat_extra_bytes");
             break;
 
         case TcpMsg.NAME:
-            if (msg.remaining() > 990) { quitPlayer(player); return; }
+            if (msg.remaining() > 990) { quitPlayer(player, "name_too_large"); return; }
             player.name = msg.readStringNT();
             player.game = msg.readStringNT();
             player.gameName = msg.readStringNT();
@@ -273,13 +397,15 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                     reply.writeUInt8(2); // Incompatible version (server→client)
                     reply.writeStringNT(LAST_VERSION);
                     sendTo(player, reply);
-                    setTimeout(() => quitPlayer(player), 1000);
+                    setTimeout(() => quitPlayer(player, `incompatible_version(${version})`), 1000);
+                } else {
+                    broadcastRoster(player.game);
                 }
             }
             break;
 
         case TcpMsg.CHAT:
-            if (msg.remaining() > 990) { quitPlayer(player); return; }
+            if (msg.remaining() > 990) { quitPlayer(player, "chat_too_large"); return; }
             {
                 let text = msg.readStringNT().replace(/[\uD800-\uDFFF]/g, "");
                 if (text.length > 300) text = text.slice(0, 300);
@@ -292,7 +418,7 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             break;
 
         case TcpMsg.SAVE:
-            if (msg.remaining() > 80) { quitPlayer(player); return; }
+            if (msg.remaining() > 80) { quitPlayer(player, "save_too_large"); return; }
             {
                 const gravity = msg.readUInt8();
                 const x = msg.readInt32LE();
@@ -310,34 +436,89 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             break;
 
         case TcpMsg.CUSTOM_DATA:
-            if (msg.remaining() < 2) { quitPlayer(player); return; }
+            // Backward-compat: silently drop legacy v1 frames or any malformed
+            // payload instead of disconnecting. Old clients (beta3 and earlier)
+            // sent `[u16 1][i32 customSlot]` here, which would otherwise be
+            // mis-parsed as v2 and trigger a kick on first save.
+            if (msg.remaining() < 2) return;
+            if (!supportsCustomDataV2(player)) return;
             {
-                const slotCount = msg.readUInt16LE();
-                if (slotCount > MAX_CUSTOM_SLOTS || msg.remaining() < slotCount * 4) {
-                    quitPlayer(player);
-                    return;
+                const v2flag = msg.readUInt8();
+                if (v2flag !== 1) return;
+                const entryCount = msg.readUInt8();
+                if (entryCount === 0 || entryCount > MAX_SYNC_ENTRIES) return;
+                // Parse first; silently drop the frame on any validation failure.
+                const incoming: { name: string; count: number; slotCount: number; bits: Uint32Array }[] = [];
+                let totalSlots = 0;
+                for (let k = 0; k < entryCount; k++) {
+                    if (msg.remaining() < 5) return; // name(>=1) + count(2) + slotCount(2)
+                    const name = msg.readStringNT();
+                    if (name.length === 0 || name.length > MAX_SYNC_NAME_LEN || !SYNC_NAME_RE.test(name)) {
+                        return;
+                    }
+                    const count = msg.readUInt16LE();
+                    const slotCount = msg.readUInt16LE();
+                    if (count === 0 || count > 512) return;
+                    const expectSlots = (count + 31) >>> 5;
+                    if (slotCount !== expectSlots || slotCount > MAX_PER_ENTRY_SLOTS) return;
+                    totalSlots += slotCount;
+                    if (totalSlots > MAX_CUSTOM_SLOTS) return;
+                    if (msg.remaining() < slotCount * 4) return;
+                    const bits = new Uint32Array(slotCount);
+                    for (let i = 0; i < slotCount; i++) bits[i] = msg.readUInt32LE();
+                    incoming.push({ name, count, slotCount, bits });
                 }
-                player.customSlots = new Uint32Array(slotCount);
-                for (let i = 0; i < slotCount; i++) {
-                    player.customSlots[i] = msg.readUInt32LE();
+                // Merge (OR) into team-shared state.
+                const team = getTeamSync(player.game, player.team, true)!;
+                for (const inc of incoming) {
+                    let cur = team.get(inc.name);
+                    if (!cur) {
+                        // enforce per-team entry cap
+                        if (team.size >= MAX_SYNC_ENTRIES) return;
+                        cur = { count: inc.count, slotCount: inc.slotCount, bits: new Uint32Array(inc.bits) };
+                        team.set(inc.name, cur);
+                        continue;
+                    }
+                    if (inc.count > cur.count) {
+                        // grow
+                        const grown = new Uint32Array(inc.slotCount);
+                        grown.set(cur.bits);
+                        cur.bits = grown;
+                        cur.count = inc.count;
+                        cur.slotCount = inc.slotCount;
+                    }
+                    for (let i = 0; i < inc.slotCount; i++) cur.bits[i] = (cur.bits[i] | inc.bits[i]) >>> 0;
                 }
-                reply = new SmartBuffer();
-                reply.writeUInt8(TcpMsg.CUSTOM_DATA);
-                reply.writeStringNT(player.id);
-                reply.writeUInt16LE(slotCount);
-                for (let i = 0; i < slotCount; i++) {
-                    reply.writeUInt32LE(player.customSlots[i]);
+                // Broadcast merged snapshot to all teammates (incl. sender).
+                // Sync is bucketed strictly by (game, team), so only same-team peers receive.
+                const framed = frameMessage(encodeSyncSnapshot(player.id, team).toBuffer());
+                for (const p of tcpPlayers) {
+                    if (p.game !== player.game || p.quitted) continue;
+                    if (p.team !== player.team) continue;
+                    if (!supportsCustomDataV2(p)) continue;
+                    p.socket.write(framed);
                 }
-                broadcastFromSameTeam(player, reply);
             }
             break;
 
         case TcpMsg.TEAM:
-            if (msg.remaining() !== 1) { quitPlayer(player); return; }
+            if (msg.remaining() !== 1) { quitPlayer(player, "team_bad_size"); return; }
             {
                 const team = msg.readUInt8();
-                if (team >= MAX_TEAMS) { quitPlayer(player); return; }
-                player.team = team;
+                // 0xFE = spectator-on marker (sent by client when entering spectator).
+                // Keep the player's real team for sync/save routing, but persist the
+                // spectator flag so CREATED replay and LIST can rebuild the state.
+                if (team === 0xFE) {
+                    player.spectating = true;
+                } else {
+                    if (team >= MAX_TEAMS) { quitPlayer(player, `team_out_of_range(${team})`); return; }
+                    player.spectating = false;
+                    if (team !== player.team) {
+                        player.team = team;
+                        // Replay the new team's shared sync snapshot.
+                        replaySyncTo(player);
+                    }
+                }
                 reply = new SmartBuffer();
                 reply.writeUInt8(TcpMsg.TEAM);
                 reply.writeStringNT(player.id);
@@ -347,12 +528,12 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             break;
 
         case TcpMsg.RATING:
-            if (msg.remaining() < 2) { quitPlayer(player); return; }
+            if (msg.remaining() < 2) { quitPlayer(player, "rating_short"); return; }
             if (player.game === "" || player.name === "") break;
             {
                 const stars = msg.readUInt8();
                 const cleared = msg.readUInt8();
-                if (stars < 1 || stars > 5 || cleared > 1) { quitPlayer(player); return; }
+                if (stars < 1 || stars > 5 || cleared > 1) { quitPlayer(player, `rating_bad(${stars},${cleared})`); return; }
                 const ok = addRating(player, stars, cleared);
                 reply = new SmartBuffer();
                 reply.writeUInt8(TcpMsg.RATING);
@@ -361,8 +542,52 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             }
             break;
 
+        case TcpMsg.PING:
+            // Map ping. Whole-game broadcast (not team-restricted).
+            // beta.4 client: 9 bytes [f32 x][f32 y][u8 type] — no room id, peers may render off-screen.
+            // beta.5+ client: 13 bytes [i32 room][f32 x][f32 y][u8 type] — receivers filter by room.
+            if (msg.remaining() !== 9 && msg.remaining() !== 13) { quitPlayer(player, "ping_bad_size"); return; }
+            if (player.game === "" || player.name === "") { log.info(`PING dropped from ${player.id}: game=${JSON.stringify(player.game)} name=${JSON.stringify(player.name)}`); break; }
+            {
+                const hasRoom = msg.remaining() === 13;
+                const room = hasRoom ? msg.readInt32LE() : -1;
+                const px = msg.readFloatLE();
+                const py = msg.readFloatLE();
+                const pt = msg.readUInt8();
+                reply = new SmartBuffer();
+                reply.writeUInt8(TcpMsg.PING);
+                reply.writeStringNT(player.id);
+                if (hasRoom) reply.writeInt32LE(room);
+                reply.writeFloatLE(px);
+                reply.writeFloatLE(py);
+                reply.writeUInt8(pt);
+                let recipientCount = 0;
+                for (const p of tcpPlayers) {
+                    if (p.id === player.id || p.game !== player.game || player.game === "") continue;
+                    if (!p.quitted) recipientCount++;
+                }
+                log.info(`PING from ${player.id} (${JSON.stringify(player.name)}) game=${JSON.stringify(player.game)} hasRoom=${hasRoom} room=${room} pt=${pt} -> ${recipientCount} peers`);
+                broadcastFrom(player, reply);
+            }
+            break;
+
+        case TcpMsg.LIST:
+            // Roster reconciliation request. Newer clients append their SELF_ID so
+            // the server can assert the request is bound to the expected connection.
+            if (msg.remaining() > 0) {
+                const requestedBy = msg.readStringNT();
+                if (msg.remaining() > 0) { quitPlayer(player, "list_extra_bytes"); return; }
+                if (requestedBy !== "" && requestedBy !== player.id) {
+                    quitPlayer(player, `list_id_mismatch(${JSON.stringify(requestedBy)})`);
+                    return;
+                }
+            }
+            if (player.game === "") break;
+            sendRosterTo(player);
+            break;
+
         default:
-            quitPlayer(player);
+            quitPlayer(player, "unknown_opcode");
     }
 }
 
@@ -381,16 +606,19 @@ createServer((socket: Socket) => {
         msgWindowStart: Date.now(),
         lastHeartbeat: Date.now(),
         customSlots: null,
+        syncReplayed: false,
         protocolVersion: 0,
         team: 0,
+        spectating: false,
         quitted: false,
         recvBuf: Buffer.alloc(0),
+        rosterSent: false,
     };
 
     tcpPlayers.push(player);
 
     if (tcpPlayers.filter(p => p.address === player.address).length > MAX_PLAYERS_PER_IP) {
-        quitPlayer(player);
+        quitPlayer(player, "max_players_per_ip");
         return;
     }
 
@@ -405,41 +633,43 @@ createServer((socket: Socket) => {
 
         player.recvBuf = Buffer.concat([player.recvBuf, chunk]);
         if (player.recvBuf.length > MAX_TCP_BUFFER) {
-            quitPlayer(player);
+            quitPlayer(player, `recv_buf_overflow(${player.recvBuf.length})`);
             return;
         }
 
         for (const msg of extractMessages(player)) {
             if (player.quitted) break;
-            // Rate limit per message
-            player.msgCount++;
+            // Rate limit per message (sliding 1-second window).
+            // Reset the window FIRST so accumulated counts from previous
+            // bursts don't kill an otherwise-quiet player as soon as a 1 s
+            // gap appears.
             const now = Date.now();
             if (now - player.msgWindowStart > 1000) {
-                if (player.msgCount > TCP_RATE_LIMIT) { quitPlayer(player); break; }
                 player.msgCount = 0;
                 player.msgWindowStart = now;
             }
+            player.msgCount++;
+            if (player.msgCount > TCP_RATE_LIMIT) { quitPlayer(player, "tcp_rate_limit"); break; }
             try {
                 handleTcpMessage(player, msg);
-            } catch {
-                quitPlayer(player);
+            } catch (e) {
+                quitPlayer(player, `handler_throw(${(e as Error)?.message || e})`);
             }
             msg.destroy();
         }
     });
 
-    const onDisconnect = () => quitPlayer(player);
-    socket.on("close", onDisconnect);
-    socket.on("timeout", onDisconnect);
-    socket.on("error", onDisconnect);
-    socket.on("end", onDisconnect);
+    socket.on("close", (hadError) => quitPlayer(player, `socket_close(hadError=${hadError})`));
+    socket.on("timeout", () => quitPlayer(player, "socket_timeout"));
+    socket.on("error", (err) => quitPlayer(player, `socket_error(${err.message})`));
+    socket.on("end", () => quitPlayer(player, "socket_end"));
 }).listen(PORT_TCP, () => log.info(`TCP server on port ${PORT_TCP}`));
 
 // Heartbeat check
 setInterval(() => {
     const now = Date.now();
     const expired = tcpPlayers.filter(p => p.lastHeartbeat + HEARTBEAT_TIMEOUT_SEC * 1000 < now);
-    for (const p of expired) quitPlayer(p);
+    for (const p of expired) quitPlayer(p, `heartbeat_timeout(idle=${Math.floor((now - p.lastHeartbeat)/1000)}s)`);
 }, HEARTBEAT_INTERVAL_SEC * 1000);
 
 /* ── UDP server ────────────────────────────────────── */
@@ -474,20 +704,22 @@ udpSocket.on("message", (data: Buffer, remote: RemoteInfo) => {
 
     if (ep.killed) return;
 
-    // Rate limit
-    ep.msgCount++;
+    // Rate limit (sliding 1-second window).
+    // Reset BEFORE counting so a prior burst followed by an idle gap
+    // doesn't immediately trip on the next packet.
     ep.lastActivity = Date.now();
     if (ep.lastActivity - ep.msgWindowStart > 1000) {
-        if (ep.msgCount > UDP_RATE_LIMIT) {
-            ep.killed = true;
-            if (ep.id) {
-                const tcp = tcpPlayers.find(p => p.id === ep!.id);
-                if (tcp) quitPlayer(tcp);
-            }
-            return;
-        }
         ep.msgCount = 0;
         ep.msgWindowStart = ep.lastActivity;
+    }
+    ep.msgCount++;
+    if (ep.msgCount > UDP_RATE_LIMIT) {
+        ep.killed = true;
+        if (ep.id) {
+            const tcp = tcpPlayers.find(p => p.id === ep!.id);
+            if (tcp) quitPlayer(tcp, "udp_rate_limit");
+        }
+        return;
     }
 
     const msg = SmartBuffer.fromBuffer(data);

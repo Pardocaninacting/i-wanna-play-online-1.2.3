@@ -164,7 +164,7 @@ static class Program
         var sharedSavePatch = BuildSharedSavePatch(saveGame, saveGameHookCode, loadGame, loadGameHookCode);
         var sharedSaveSupported = sharedSavePatch != null;
         if (!sharedSaveSupported)
-            Console.WriteLine("Shared save hooks disabled (scripts could not be decompiled).");
+            Console.WriteLine("Shared save hooks: disabled (scripts could not be decompiled)");
 
         // Add extension
         if (Config.UseX64NativeHttpDll)
@@ -184,7 +184,7 @@ static class Program
 
         // Find a suitable small font for the online UI
         var onlineFontIndex = FindBestFontIndex();
-        Console.WriteLine($"Using font index {onlineFontIndex}.");
+        Console.WriteLine($"Online UI font index: {onlineFontIndex}");
 
         // Embed CJK font for Chinese text support (font_add is broken in GMS1.4)
         var cjkFontIndex = EmbedCjkFont();
@@ -242,7 +242,7 @@ static class Program
             RenderTemplate(activeFlags, "chatboxCreate"));
         importGroup.QueueReplace(
             chatbox.EventHandlerFor(EventType.Step, EventSubtypeStep.EndStep, Data),
-            RenderTemplate(activeFlags, "chatboxEndStep", player.Name.Content, player2Name));
+            RenderTemplate(activeFlags, "chatboxEndStep", player.Name.Content, player2Name, world.Name.Content));
         importGroup.QueueReplace(
             chatbox.EventHandlerFor(EventType.Draw, EventSubtypeDraw.Draw, Data),
             RenderTemplate(activeFlags, "chatboxDraw"));
@@ -617,11 +617,17 @@ static class Program
         Font sysFont = null;
         string fontFamily = null;
 
+        // CJK font size in pixels. The CJK atlas also includes ASCII (32-126),
+        // so this size applies to both Chinese AND English UI text rendered via
+        // global.__ONLINE_ftOnline. 12px is a balance: readable Chinese without
+        // overwhelming the small game viewport.
+        const float cjkFontSize = 12f;
+
         foreach (var name in candidates)
         {
             try
             {
-                var f = new Font(name, 10f, FontStyle.Regular, GraphicsUnit.Pixel);
+                var f = new Font(name, cjkFontSize, FontStyle.Regular, GraphicsUnit.Pixel);
                 if (!f.FontFamily.Name.Equals("Microsoft Sans Serif", StringComparison.OrdinalIgnoreCase))
                 {
                     sysFont = f;
@@ -635,11 +641,11 @@ static class Program
 
         if (sysFont == null)
         {
-            Console.WriteLine("No CJK system font found, skipping CJK font embedding.");
+            Console.WriteLine("CJK font: not found, skipping embed");
             return -1;
         }
 
-        Console.WriteLine($"Embedding CJK font: {fontFamily} ...");
+        Console.WriteLine($"CJK font: {fontFamily}");
 
         // Characters to render on the atlas
         var renderSet = new HashSet<int>();
@@ -654,7 +660,61 @@ static class Program
         ushort rangeStart = 32;
         ushort rangeEnd = 0xFF5E;
 
-        int atlasW = 2048, atlasH = 2048;
+        // Pass 1 — measure all glyphs using a throwaway Graphics context.
+        // We need char metrics before allocating the atlas so we can pack tight.
+        Console.WriteLine("Measuring CJK glyphs...");
+        int lineH;
+        var glyphMetrics = new List<(int ch, int w, int h)>(renderSet.Count);
+        using (var tmpBmp = new Bitmap(1, 1, PixelFormat.Format32bppArgb))
+        using (var tmpG = Graphics.FromImage(tmpBmp))
+        {
+            tmpG.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            tmpG.SmoothingMode = SmoothingMode.HighQuality;
+            using var tmpSf = new StringFormat(StringFormat.GenericTypographic);
+            tmpSf.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
+            lineH = sysFont.Height;
+            foreach (int ch in renderSet)
+            {
+                var sz = tmpG.MeasureString(((char)ch).ToString(), sysFont, PointF.Empty, tmpSf);
+                int w = Math.Max(1, (int)Math.Ceiling(sz.Width));
+                int h = Math.Max(lineH, (int)Math.Ceiling(sz.Height));
+                glyphMetrics.Add((ch, w, h));
+            }
+        }
+
+        // Shelf-packing: sort by height descending so each shelf's wasted vertical
+        // space is bounded by the tallest glyph in that shelf only. Within a shelf
+        // glyphs are placed left-to-right. Atlas width is fixed; height is whatever
+        // the packing requires (rounded up to a multiple of 64 for tidy texture sizes).
+        glyphMetrics.Sort((a, b) => b.h.CompareTo(a.h));
+
+        const int cellPad = 1;
+        const int atlasW = 4096;
+        var positions = new Dictionary<int, (int x, int y, int w, int h)>(glyphMetrics.Count);
+        int packX = 0, packY = 0, shelfH = 0;
+        foreach (var (ch, w, h) in glyphMetrics)
+        {
+            if (packX + w + cellPad > atlasW)
+            {
+                packX = 0;
+                packY += shelfH + cellPad;
+                shelfH = 0;
+            }
+            positions[ch] = (packX, packY, w, h);
+            packX += w + cellPad;
+            if (h > shelfH) shelfH = h;
+        }
+        int packedH = packY + shelfH;
+        // GMS texture pages must have power-of-2 dimensions to avoid the runtime
+        // warning "Texture page dimensions are not powers of 2. Sprite blurring is
+        // very likely in-game." Round atlas height up to the next power of 2.
+        int atlasH = 64;
+        while (atlasH < packedH) atlasH <<= 1;
+        long usedPx = 0;
+        foreach (var (_, w, h) in glyphMetrics) usedPx += (long)w * h;
+        Console.WriteLine($"CJK atlas: {atlasW}x{atlasH}, {(usedPx * 100.0 / ((long)atlasW * atlasH)):F1}% used, {glyphMetrics.Count} glyphs");
+
+        // Pass 2 — allocate atlas at packed size and render at computed positions.
         using var atlas = new Bitmap(atlasW, atlasH, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(atlas);
         g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
@@ -664,41 +724,18 @@ static class Program
         using var sf = new StringFormat(StringFormat.GenericTypographic);
         sf.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
 
-        int cellPad = 1;
-        int penX = 0, penY = 0, rowH = 0;
-        int lineH = sysFont.Height;
-
-        // Render glyphs and store positions in a dictionary
         var rendered = new Dictionary<int, (ushort sx, ushort sy, ushort sw, ushort sh, short shift)>();
-
-        foreach (int ch in renderSet.OrderBy(c => c))
+        foreach (var kvp in positions)
         {
-            var sz = g.MeasureString(((char)ch).ToString(), sysFont, PointF.Empty, sf);
-            int charW = Math.Max(1, (int)Math.Ceiling(sz.Width));
-            int charH = Math.Max(lineH, (int)Math.Ceiling(sz.Height));
-
-            if (penX + charW + cellPad > atlasW)
-            {
-                penX = 0;
-                penY += rowH + cellPad;
-                rowH = 0;
-            }
-
-            if (penY + charH > atlasH)
-                break;
-
-            g.DrawString(((char)ch).ToString(), sysFont, brush, penX, penY, sf);
-
-            rendered[ch] = (
-                sx: (ushort)penX,
-                sy: (ushort)penY,
-                sw: (ushort)charW,
-                sh: (ushort)charH,
-                shift: (short)(charW + 1)
+            var (x, y, w, h) = kvp.Value;
+            g.DrawString(((char)kvp.Key).ToString(), sysFont, brush, x, y, sf);
+            rendered[kvp.Key] = (
+                sx: (ushort)x,
+                sy: (ushort)y,
+                sw: (ushort)w,
+                sh: (ushort)h,
+                shift: (short)(w + 1)
             );
-
-            penX += charW + cellPad;
-            if (charH > rowH) rowH = charH;
         }
 
         sysFont.Dispose();
@@ -736,7 +773,7 @@ static class Program
         font.Name = Data.Strings.MakeString("__ONLINE_fnt_cjk");
         font.DisplayName = Data.Strings.MakeString(fontFamily);
         font.EmSizeIsFloat = (Data.GeneralInfo?.Major ?? 0) >= 2;
-        font.EmSize = 10f;
+        font.EmSize = cjkFontSize;
         font.Bold = false;
         font.Italic = false;
         font.RangeStart = rangeStart;

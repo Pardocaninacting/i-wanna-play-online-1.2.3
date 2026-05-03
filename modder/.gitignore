@@ -2,13 +2,22 @@ node_modules/
 tests/
 tmp/
 build/
+
+# Local runtime/config files
 rh.ini
 __ONLINE_server.txt
+
+# Local development notes (not part of release payloads)
 DEVNOTES.md
+PROPOSAL_v*.md
+RESEARCH_v*.md
+BETA*_TEST_CHECKLIST.md
+BETA*测试结果.md
 
 yarn-error.log
 package-lock.json
 
+# TypeScript build output and packaged artifacts
 **/*.js
 **/*.zip
 **/*.dll

@@ -9,7 +9,12 @@ services:
       dockerfile: Dockerfile
     restart: always
     ports:
-      - "${PORT_HTTP}:${PORT_HTTP}"
+      # HTTP API: published ONLY to localhost and the docker bridge.
+      # Public access goes through nginx (proxy_pass http://127.0.0.1:18001/).
+      # See d:/lab/iwpo-server-deployment.md — never publish to host 0.0.0.0:${PORT_HTTP}
+      # or to host 8004 in production; many business paths assume this contract.
+      - "127.0.0.1:18001:${PORT_HTTP}"
+      - "172.17.0.1:18001:${PORT_HTTP}"
       - "${PORT_SOCKETS}:${PORT_SOCKETS}"
       - "${PORT_SOCKETS_UDP}:${PORT_SOCKETS_UDP}/udp"
     volumes:

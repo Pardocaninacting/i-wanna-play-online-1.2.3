@@ -255,7 +255,7 @@ if(@showPlayerList){
 	@plY += 16;
 	for(@plI = 0; @plI < instance_number(@onlinePlayer); @plI += 1){
 		@plObj = instance_find(@onlinePlayer, @plI);
-		if(@plObj.@oRoom == room){
+		if(@plObj.@name != ""){
 			draw_set_color(c_black);
 			#if GM80
 			__ONLINE_fw_use_font(@plObj.@name);
@@ -307,7 +307,7 @@ if(@showPlayerList){
 if(@settingsOpen){
 	@_alpha = draw_get_alpha();
 	@_color = draw_get_color();
-	@spW = 340;
+	@spW = 420;
 	@spH = 400;
 	@spX = 0;
 	@spY = 0;
@@ -334,7 +334,7 @@ if(@settingsOpen){
 	draw_set_alpha(1);
 	draw_set_color(c_white);
 	draw_rectangle(@spX, @spY, @spX + @spW, @spY + @spH, true);
-	@tabCount = 4;
+	@tabCount = 5;
 	@tabW = floor(@spW / @tabCount);
 	@tabH = 22;
 	@tabY = @spY;
@@ -342,6 +342,7 @@ if(@settingsOpen){
 	@tabNames[1] = "Saves(" + string(@saveHistCount) + ")";
 	@tabNames[2] = "Rating";
 	@tabNames[3] = "Keys";
+	@tabNames[4] = "Sync";
 	for(@tI = 0; @tI < @tabCount; @tI += 1){
 		@tX1 = @spX + @tI * @tabW;
 		@tX2 = @tX1 + @tabW;
@@ -361,16 +362,25 @@ if(@settingsOpen){
 			draw_set_color(c_gray);
 		}
 		draw_text(floor((@tX1 + @tX2) / 2), @tabY + 3, @tabNames[@tI]);
+		if(@kbFocus == 0 && @settingsTab == @tI){
+			draw_set_color(make_color_rgb(220, 200, 60));
+			draw_rectangle(@tX1 + 1, @tabY + 1, @tX2 - 1, @tabY + @tabH - 1, true);
+		}
 	}
 	@contentY = @tabY + @tabH + 6;
 	draw_set_halign(fa_left);
 	// TAB 0: SETTINGS
 	if(@settingsTab == 0){
 		@rowY = @contentY + 4;
+		if(@kbFocus == 1){
+			@kbHi = @contentY + 1 + @kbRow[0] * 28;
+			draw_set_color(make_color_rgb(220, 200, 60));
+			draw_rectangle(@spX + 4, @kbHi, @spX + @spW - 4, @kbHi + 26, true);
+		}
 		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Team:");
-		@btnLX = @spX + 100;
-		@btnLY = @rowY - 2;
+		@btnLX = @spX + 190;
+		@btnLY = @rowY;
 		@btnLW = 20;
 		@btnLH = 18;
 		draw_set_color(c_gray);
@@ -387,9 +397,9 @@ if(@settingsOpen){
 		@teamNames[6] = "Orange";
 		@teamNames[7] = "Cyan";
 		draw_set_color(@teamColors[@team]);
-		draw_text(@spX + 200, @rowY, string(@team) + " " + @teamNames[@team]);
-		@btnRX = @spX + 280;
-		@btnRY = @rowY - 2;
+		draw_text(@spX + 280, @rowY, string(@team) + " " + @teamNames[@team]);
+		@btnRX = @spX + 350;
+		@btnRY = @rowY;
 		@btnRW = 20;
 		@btnRH = 18;
 		draw_set_color(c_gray);
@@ -400,9 +410,9 @@ if(@settingsOpen){
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Lerp:");
-		@btnLerpX = @spX + 100;
-		@btnLerpY = @rowY - 2;
-		@btnLerpW = 40;
+		@btnLerpX = @spX + 252;
+		@btnLerpY = @rowY;
+		@btnLerpW = 56;
 		@btnLerpH = 18;
 		if(@lerpEnabled){
 			draw_set_color(make_color_rgb(40, 160, 40));
@@ -421,9 +431,9 @@ if(@settingsOpen){
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Save:");
-		@btnSaveX = @spX + 100;
-		@btnSaveY = @rowY - 2;
-		@btnSaveW = 40;
+		@btnSaveX = @spX + 252;
+		@btnSaveY = @rowY;
+		@btnSaveW = 56;
 		@btnSaveH = 18;
 		if(@save_enabled){
 			draw_set_color(make_color_rgb(40, 160, 40));
@@ -442,8 +452,8 @@ if(@settingsOpen){
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Visual:");
-		@btnVLX = @spX + 100;
-		@btnVLY = @rowY - 2;
+		@btnVLX = @spX + 190;
+		@btnVLY = @rowY;
 		@btnVLW = 20;
 		@btnVLH = 18;
 		draw_set_color(c_gray);
@@ -455,9 +465,9 @@ if(@settingsOpen){
 		@visNames[1] = "No Names";
 		@visNames[2] = "Hidden";
 		draw_set_color(c_white);
-		draw_text(@spX + 200, @rowY, @visNames[@vis]);
-		@btnVRX = @spX + 280;
-		@btnVRY = @rowY - 2;
+		draw_text(@spX + 280, @rowY, @visNames[@vis]);
+		@btnVRX = @spX + 350;
+		@btnVRY = @rowY;
 		@btnVRW = 20;
 		@btnVRH = 18;
 		draw_set_color(c_gray);
@@ -468,9 +478,9 @@ if(@settingsOpen){
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Indicator:");
-		@btnIndX = @spX + 100;
-		@btnIndY = @rowY - 2;
-		@btnIndW = 40;
+		@btnIndX = @spX + 252;
+		@btnIndY = @rowY;
+		@btnIndW = 56;
 		@btnIndH = 18;
 		if(@showArrows){
 			draw_set_color(make_color_rgb(40, 160, 40));
@@ -489,8 +499,8 @@ if(@settingsOpen){
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Spec Cam:");
-		@btnCamLX = @spX + 100;
-		@btnCamLY = @rowY - 2;
+		@btnCamLX = @spX + 190;
+		@btnCamLY = @rowY;
 		@btnCamLW = 20;
 		@btnCamLH = 18;
 		draw_set_color(c_gray);
@@ -501,9 +511,9 @@ if(@settingsOpen){
 		@camModeNames[0] = "Follow";
 		@camModeNames[1] = "Screen";
 		draw_set_color(c_white);
-		draw_text(@spX + 200, @rowY, @camModeNames[@specCamMode]);
-		@btnCamRX = @spX + 280;
-		@btnCamRY = @rowY - 2;
+		draw_text(@spX + 280, @rowY, @camModeNames[@specCamMode]);
+		@btnCamRX = @spX + 350;
+		@btnCamRY = @rowY;
 		@btnCamRW = 20;
 		@btnCamRH = 18;
 		draw_set_color(c_gray);
@@ -594,9 +604,13 @@ if(@settingsOpen){
 		for(@shVI = @shStart; @shVI < @shEnd; @shVI += 1){
 			@shI = @shVisIdx[@shVI];
 			@entIdx = @shVI - @shStart;
-			@entY = @contentY + 26 + @entIdx * 38;
+			@entY = @contentY + 28 + @entIdx * 38;
 			draw_set_color(make_color_rgb(30, 30, 30));
-			draw_rectangle(@spX + 8, @entY - 2, @spX + @spW - 8, @entY + 26, false);
+			draw_rectangle(@spX + 8, @entY - 3, @spX + @spW - 8, @entY + 28, false);
+			if(@kbFocus == 1 && @kbRow[1] == @shVI){
+				draw_set_color(make_color_rgb(220, 200, 60));
+				draw_rectangle(@spX + 4, @entY - 1, @spX + @spW - 4, @entY + 30, true);
+			}
 			@btnFavX = @spX + 10;
 			@btnFavY = @entY + 5;
 			@btnFavW = 16;
@@ -610,17 +624,34 @@ if(@settingsOpen){
 			draw_set_color(c_white);
 			draw_set_halign(fa_center);
 			draw_text(@btnFavX + @btnFavW/2, @entY + 6, "*");
+			@shHot = @saveHistHotkey[@shI];
+			@btnHotX = @spX + 30;
+			@btnHotY = @entY + 5;
+			@btnHotW = 16;
+			@btnHotH = 16;
+			if(@shHot > 0){
+				draw_set_color(make_color_rgb(60, 100, 170));
+			}else{
+				draw_set_color(make_color_rgb(45, 45, 45));
+			}
+			draw_rectangle(@btnHotX, @btnHotY, @btnHotX + @btnHotW, @btnHotY + @btnHotH, false);
+			draw_set_color(c_white);
+			if(@shHot > 0){
+				draw_text(@btnHotX + @btnHotW/2, @entY + 5, string(@shHot));
+			}else{
+				draw_text(@btnHotX + @btnHotW/2, @entY + 5, "-");
+			}
 			draw_set_halign(fa_left);
 			@shDispName = @saveHistName[@shI];
 			#if GM80
-			@shDispName = __ONLINE_gbk_trunc(@shDispName, 10, "..");
+			@shDispName = __ONLINE_gbk_trunc(@shDispName, 14, "..");
 			#endif
 			#if CJKTEXT
-			@shDispName = __ONLINE_gbk_trunc(@shDispName, 10, "..");
+			@shDispName = __ONLINE_gbk_trunc(@shDispName, 14, "..");
 			#endif
 			#if not GM80
 			#if not CJKTEXT
-			if(string_length(@shDispName) > 10) @shDispName = string_copy(@shDispName, 1, 10) + "..";
+			if(string_length(@shDispName) > 14) @shDispName = string_copy(@shDispName, 1, 14) + "..";
 			#endif
 			#endif
 			draw_set_color(c_lime);
@@ -628,22 +659,22 @@ if(@settingsOpen){
 			fw_draw_set_halign(fa_left);
 			fw_draw_set_valign(fa_top);
 			__ONLINE_fw_use_font(@shDispName);
-			fw_draw_text_ext(@spX + 30, @entY, @shDispName, 9999);
+			fw_draw_text_ext(@spX + 54, @entY, @shDispName, 9999);
 			#endif
 			#if CJKTEXT
 			global.__ONLINE_cjkHalign = 0;
 			global.__ONLINE_cjkValign = 0;
-			__ONLINE_cjk_draw_text(@spX + 30, @entY, @shDispName, 9999);
+			__ONLINE_cjk_draw_text(@spX + 54, @entY, @shDispName, 9999);
 			#endif
 			#if not GM80
 			#if not CJKTEXT
-			draw_text(@spX + 30, @entY, @shDispName);
+			draw_text(@spX + 54, @entY, @shDispName);
 			#endif
 			#endif
 			@shDispRoom = @saveHistRoomName[@shI];
-			if(string_length(@shDispRoom) > 12) @shDispRoom = string_copy(@shDispRoom, 1, 12) + "..";
+			if(string_length(@shDispRoom) > 14) @shDispRoom = string_copy(@shDispRoom, 1, 14) + "..";
 			draw_set_color(c_aqua);
-			draw_text(@spX + 130, @entY, @shDispRoom);
+			draw_text(@spX + 204, @entY, @shDispRoom);
 			if(@saveHistTime[@shI] <= 0){
 				@shTimeDisp = "?";
 			}else{
@@ -662,18 +693,18 @@ if(@settingsOpen){
 				}
 			}
 			draw_set_color(c_gray);
-			draw_text(@spX + 240, @entY, @shTimeDisp);
+			draw_text(@spX + 320, @entY, @shTimeDisp);
 			draw_set_color(make_color_rgb(160, 160, 160));
-			draw_text(@spX + 30, @entY + 13, "x:" + string(@saveHistX[@shI]) + " y:" + string(round(@saveHistY[@shI])));
-			@btnApX = @spX + @spW - 62;
-			@btnApY = @entY + 6;
-			@btnApW = 50;
+			draw_text(@spX + 54, @entY + 13, "x:" + string(@saveHistX[@shI]) + " y:" + string(round(@saveHistY[@shI])));
+			@btnApX = @spX + @spW - 66;
+			@btnApY = @entY + 5;
+			@btnApW = 54;
 			@btnApH = 18;
 			draw_set_color(make_color_rgb(40, 100, 160));
 			draw_rectangle(@btnApX, @btnApY, @btnApX + @btnApW, @btnApY + @btnApH, false);
 			draw_set_color(c_white);
 			draw_set_halign(fa_center);
-			draw_text(@btnApX + @btnApW/2, @entY + 7, "Apply");
+			draw_text(@btnApX + @btnApW/2, @entY + 6, "Apply");
 			draw_set_halign(fa_left);
 		}
 		if(@shVisCount == 0){
@@ -690,9 +721,32 @@ if(@settingsOpen){
 	// TAB 2: RATING
 	if(@settingsTab == 2){
 		@rowY = @contentY + 4;
+		if(@kbFocus == 1){
+			if(@kbRow[2] == 0) @kbHi = @contentY + 24;
+			if(@kbRow[2] == 1) @kbHi = @contentY + 54;
+			if(@kbRow[2] == 2) @kbHi = @contentY + 101;
+			draw_set_color(make_color_rgb(220, 200, 60));
+			draw_rectangle(@spX + 4, @kbHi, @spX + @spW - 4, @kbHi + 28, true);
+		}
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Game: " + @gameName);
+		@gameLabel = "Game: " + @gameName;
+		#if GM80
+		__ONLINE_fw_use_font(@gameLabel);
+		fw_draw_set_halign(fa_left);
+		fw_draw_set_valign(fa_top);
+		fw_draw_text_ext(@spX + 16, @rowY, @gameLabel, 9999);
+		#endif
+		#if CJKTEXT
+		global.__ONLINE_cjkHalign = 0;
+		global.__ONLINE_cjkValign = 0;
+		__ONLINE_cjk_draw_text(@spX + 16, @rowY, @gameLabel, 9999);
+		#endif
+		#if not GM80
+		#if not CJKTEXT
+		draw_text(@spX + 16, @rowY, @gameLabel);
+		#endif
+		#endif
 		@rowY += 26;
 		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Rating:");
@@ -782,6 +836,11 @@ if(@settingsOpen){
 	// TAB 3: KEYS
 	if(@settingsTab == 3){
 		@rowY = @contentY + 4;
+		if(@kbFocus == 1 && @kbRow[3] < 9){
+			@kbHi = @rowY - 4 + @kbRow[3] * 28;
+			draw_set_color(make_color_rgb(220, 200, 60));
+			draw_rectangle(@spX + 4, @kbHi, @spX + @spW - 4, @kbHi + 27, true);
+		}
 		draw_set_halign(fa_left);
 		@kbLabels[0] = "Visibility";
 		@kbLabels[1] = "Toggle Save";
@@ -791,6 +850,7 @@ if(@settingsOpen){
 		@kbLabels[5] = "Options";
 		@kbLabels[6] = "Player List";
 		@kbLabels[7] = "Chat";
+		@kbLabels[8] = "Here";
 		@kbKeys[0] = @keyVis;
 		@kbKeys[1] = @keySave;
 		@kbKeys[2] = @keySpectate;
@@ -799,7 +859,8 @@ if(@settingsOpen){
 		@kbKeys[5] = @keySettings;
 		@kbKeys[6] = @keyPlayerList;
 		@kbKeys[7] = @keyChat;
-		for(@kI = 0; @kI < 8; @kI += 1){
+		@kbKeys[8] = @keyPing;
+		for(@kI = 0; @kI < 9; @kI += 1){
 			@kbY = @rowY + @kI * 28;
 			draw_set_color(c_white);
 			draw_text(@spX + 16, @kbY, @kbLabels[@kI]);
@@ -829,9 +890,13 @@ if(@settingsOpen){
 			draw_set_halign(fa_left);
 		}
 		@btnRstX = @spX + @spW/2 - 55;
-		@btnRstY = @rowY + 8 * 28 + 10;
+		@btnRstY = @rowY + 9 * 28 + 10;
 		@btnRstW = 110;
 		@btnRstH = 22;
+		if(@kbFocus == 1 && @kbRow[3] == 9){
+			draw_set_color(make_color_rgb(220, 200, 60));
+			draw_rectangle(@spX + 4, @btnRstY - 3, @spX + @spW - 4, @btnRstY + @btnRstH + 3, true);
+		}
 		draw_set_color(make_color_rgb(100, 50, 50));
 		draw_rectangle(@btnRstX, @btnRstY, @btnRstX + @btnRstW, @btnRstY + @btnRstH, false);
 		draw_set_color(c_white);
@@ -839,10 +904,62 @@ if(@settingsOpen){
 		draw_text(@btnRstX + @btnRstW/2, @btnRstY + 2, "Reset Keys");
 		draw_set_halign(fa_left);
 	}
-	@btnCX = @spX + @spW/2 - 35;
+	// TAB 4: SYNC
+	if(@settingsTab == 4){
+		@rowY = @contentY + 4;
+		if(@kbFocus == 1){
+			draw_set_color(make_color_rgb(220, 200, 60));
+			draw_rectangle(@spX + 4, @rowY - 3, @spX + @spW - 4, @rowY + 25, true);
+		}
+		draw_set_color(c_white);
+		draw_set_halign(fa_left);
+		draw_text(@spX + 16, @rowY, "Sync Enabled:");
+		@btnSyncX = @spX + 140;
+		@btnSyncY = @rowY;
+		@btnSyncW = 50;
+		@btnSyncH = 18;
+		if(@syncEnabled){
+			draw_set_color(make_color_rgb(40, 160, 40));
+		}else{
+			draw_set_color(c_gray);
+		}
+		draw_rectangle(@btnSyncX, @btnSyncY, @btnSyncX + @btnSyncW, @btnSyncY + @btnSyncH, false);
+		draw_set_color(c_white);
+		draw_set_halign(fa_center);
+		if(@syncEnabled){
+			draw_text(@btnSyncX + @btnSyncW/2, @rowY + 2, "ON");
+		}else{
+			draw_text(@btnSyncX + @btnSyncW/2, @rowY + 2, "OFF");
+		}
+		draw_set_halign(fa_left);
+		draw_set_color(c_white);
+		@rowY = @contentY + 32;
+		draw_text(@spX + 16, @rowY, "Entries (" + string(@syncEntryCount) + "):");
+		@rowY += 18;
+		draw_set_color(make_color_rgb(180, 180, 180));
+		draw_text(@spX + 16,  @rowY, "#");
+		draw_text(@spX + 40,  @rowY, "Name");
+		draw_text(@spX + 220, @rowY, "Count");
+		draw_set_color(c_white);
+		@rowY += 16;
+		for(@scI = 0; @scI < @syncEntryCount; @scI += 1){
+			if(@scI >= 10) break;
+			draw_text(@spX + 16,  @rowY, string(@scI));
+			draw_text(@spX + 40,  @rowY, @syncName[@scI]);
+			draw_text(@spX + 220, @rowY, string(@syncCount[@scI]));
+			@rowY += 16;
+		}
+		if(@syncEntryCount == 0){
+			draw_set_color(make_color_rgb(150, 150, 150));
+			draw_text(@spX + 16, @rowY, "(no entries configured)");
+			draw_set_color(c_white);
+		}
+		draw_set_halign(fa_left);
+	}
 	@btnCY = @spY + @spH - 28;
 	@btnCW = 70;
 	@btnCH = 22;
+	@btnCX = @spX + @spW - @btnCW - 8;
 	draw_set_color(c_gray);
 	draw_rectangle(@btnCX, @btnCY, @btnCX + @btnCW, @btnCY + @btnCH, false);
 	draw_set_color(c_white);
@@ -859,12 +976,14 @@ if(@settingsOpen){
 				if(@tI == @tabCount - 1) @tX2 = @spX + @spW;
 				if(@mx >= @tX1 && @mx <= @tX2){
 					@settingsTab = @tI;
+					@kbFocus = 0;
 					@keybindEditing = -1;
 					@tabClicked = true;
 				}
 			}
 		}
 		if(!@tabClicked && @settingsTab == 0){
+			@kbFocus = 1;
 			if(@mx >= @btnLX && @mx <= @btnLX + @btnLW && @my >= @btnLY && @my <= @btnLY + @btnLH){
 				@team -= 1;
 				if(@team < 0) @team = 7;
@@ -940,6 +1059,7 @@ if(@settingsOpen){
 			}
 		}
 		if(!@tabClicked && @settingsTab == 1){
+			@kbFocus = 1;
 			if(@mx >= @btnPFX && @mx <= @btnPFX + @btnPFW && @my >= @btnPFY && @my <= @btnPFY + @btnPFH){
 				@saveHistPage = 0;
 			}
@@ -964,7 +1084,7 @@ if(@settingsOpen){
 			for(@shVI = @shStart; @shVI < @shEnd; @shVI += 1){
 				@shI = @shVisIdx[@shVI];
 				@entIdx = @shVI - @shStart;
-				@entY = @contentY + 26 + @entIdx * 38;
+				@entY = @contentY + 28 + @entIdx * 38;
 				@btnFavX = @spX + 10;
 				@btnFavY = @entY + 5;
 				@btnFavW = 16;
@@ -985,7 +1105,7 @@ if(@settingsOpen){
 					@saveHistDirty = true;
 				}
 				@btnApX = @spX + @spW - 62;
-				@btnApY = @entY + 6;
+				@btnApY = @entY + 5;
 				@btnApW = 50;
 				@btnApH = 18;
 				if(@mx >= @btnApX && @mx <= @btnApX + @btnApW && @my >= @btnApY && @my <= @btnApY + @btnApH){
@@ -995,6 +1115,7 @@ if(@settingsOpen){
 			}
 		}
 		if(!@tabClicked && @settingsTab == 2){
+			@kbFocus = 1;
 			for(@sI = 1; @sI <= 5; @sI += 1){
 				@sX = @starX + (@sI - 1) * @starW;
 				if(@mx >= @sX && @mx <= @sX + @starW - 2 && @my >= @starY && @my <= @starY + @starH){
@@ -1011,9 +1132,7 @@ if(@settingsOpen){
 					@rClearWarn = 0;
 				}else{
 					@rCleared = 1;
-					if(!variable_global_exists("clear") || !variable_global_get("clear")){
-						@rClearWarn = room_speed * 5;
-					}
+					@rClearWarn = 0;
 				}
 			}
 			if(!@ratingSubmitting && @ratingCooldown <= 0 && @rStars >= 1){
@@ -1023,7 +1142,8 @@ if(@settingsOpen){
 			}
 		}
 		if(!@tabClicked && @settingsTab == 3){
-			for(@kI = 0; @kI < 8; @kI += 1){
+			@kbFocus = 1;
+			for(@kI = 0; @kI < 9; @kI += 1){
 				@kbY = @rowY + @kI * 28;
 				@btnKX = @spX + 140;
 				@btnKY = @kbY - 2;
@@ -1034,6 +1154,7 @@ if(@settingsOpen){
 						@keybindEditing = -1;
 					}else{
 						@keybindEditing = @kI;
+						@keybindArmTimer = 0;
 					}
 				}
 			}
@@ -1046,8 +1167,16 @@ if(@settingsOpen){
 				@keySettings = 79;
 				@keyPlayerList = 76;
 				@keyChat = 32;
+				@keyPing = 72;
 				@keybindEditing = -1;
 				@keybindSave = true;
+			}
+		}
+		if(!@tabClicked && @settingsTab == 4){
+			@kbFocus = 1;
+			if(@mx >= @btnSyncX && @mx <= @btnSyncX + @btnSyncW && @my >= @btnSyncY && @my <= @btnSyncY + @btnSyncH){
+				@syncEnabled = !@syncEnabled;
+				@syncEnabledChanged = true;
 			}
 		}
 		if(@mx >= @btnCX && @mx <= @btnCX + @btnCW && @my >= @btnCY && @my <= @btnCY + @btnCH){
@@ -1294,6 +1423,314 @@ if(@showArrows || @spectating){
 	#endif
 	draw_set_alpha(@_alpha);
 	draw_set_color(@_color);
+	if(font_exists(0)){
+		draw_set_font(0);
+	}
+}
+// PING DRAW
+{
+	@pdAlpha = draw_get_alpha();
+	@pdColor = draw_get_color();
+	#if STUDIO
+		if(global.@ftOnline >= 0){
+			draw_set_font(global.@ftOnline);
+		}
+	#endif
+	#if not STUDIO
+		draw_set_font(@ftOnlinePlayerName);
+	#endif
+	draw_set_halign(fa_center);
+	draw_set_valign(fa_middle);
+	@pdSelfOnly = false;
+	if(@vis != 0) @pdSelfOnly = true;
+	for(@i = 0; @i < @pingMax; @i += 1){
+		@pAge = current_time - @pingT[@i];
+		if(@pAge < 0 || @pAge >= @pingLifeMs) continue;
+		if(@pdSelfOnly && @pingSenderIDArr[@i] != @selfID) continue;
+		@pT = @pAge / @pingLifeMs;
+		@pOuterAlpha = 0;
+		@pOuterR = 0;
+		if(@pT < 0.053){
+			@pK = @pT / 0.053;
+			@pScale = 1.15 - 0.15 * (1 - @pK) * (1 - @pK);
+			@pA = @pK;
+			@pOuterAlpha = 1 - @pK;
+			@pOuterR = 16 * (1 + 0.6 * @pK);
+		}else if(@pT < 0.833){
+			@pScale = 1;
+			@pA = 1;
+		}else{
+			@pK = (@pT - 0.833) / 0.167;
+			@pScale = 1 - 0.08 * @pK;
+			@pA = 1 - @pK;
+		}
+		@pX = round(@pingX[@i]);
+		@pY = round(@pingY[@i]);
+		if(!@spectating && @pExists){
+			@pA *= min(1, point_distance(@X, @Y, @pX, @pY) / 100);
+		}
+		if(@pA < 0) @pA = 0;
+		if(@pA <= 0) continue;
+		@pType = @pingType[@i];
+		if(@pType < 0 || @pType > 8) @pType = 4;
+		@pNT = @pingTeamArr[@i];
+		if(@pNT < 0 || @pNT > 7) @pNT = 0;
+		@pNC = @teamColors[@pNT];
+		draw_set_alpha(@pA);
+		draw_set_alpha(@pA * 0.55);
+		draw_set_color(c_black);
+		draw_circle(@pX, @pY, 16 * @pScale, false);
+		draw_set_alpha(@pA);
+		draw_set_color(@pNC);
+		draw_circle(@pX, @pY, 18 * @pScale, true);
+		draw_circle(@pX, @pY, 19 * @pScale, true);
+		if(@pOuterAlpha > 0){
+			draw_set_alpha(@pA * @pOuterAlpha * 0.6);
+			draw_circle(@pX, @pY, @pOuterR * @pScale, true);
+		}
+		draw_set_alpha(@pA);
+		if(@pType == 0){
+			@pQBob = round(sin(@pAge * 0.010) * @pScale);
+			@pQR = 8 * @pScale + sin(@pAge * 0.008) * 1.2 * @pScale;
+			draw_set_color(make_color_rgb(88, 118, 150));
+			draw_circle(@pX, @pY, @pQR, true);
+			draw_set_color(c_black);
+			draw_text(@pX - 1, @pY + @pQBob, "?");
+			draw_text(@pX + 1, @pY + @pQBob, "?");
+			draw_text(@pX, @pY - 1 + @pQBob, "?");
+			draw_text(@pX, @pY + 1 + @pQBob, "?");
+			draw_set_color(c_white);
+			draw_text(@pX, @pY + @pQBob, "?");
+		}
+		if(@pType == 1 || @pType == 3 || @pType == 5 || @pType == 7){
+			@pArrowLen = (6 + sin(@pAge * 0.014) * 1.5) * @pScale;
+			@pArrowTail = 2 * @pScale;
+			draw_set_color(c_white);
+			if(@pType == 1){
+				draw_triangle(@pX - 5 * @pScale, @pY, @pX + 5 * @pScale, @pY, @pX, @pY - @pArrowLen, false);
+				draw_rectangle(@pX - @pArrowTail, @pY, @pX + @pArrowTail, @pY + @pArrowLen, false);
+			}
+			if(@pType == 3){
+				draw_triangle(@pX, @pY - 5 * @pScale, @pX, @pY + 5 * @pScale, @pX - @pArrowLen, @pY, false);
+				draw_rectangle(@pX, @pY - @pArrowTail, @pX + @pArrowLen, @pY + @pArrowTail, false);
+			}
+			if(@pType == 5){
+				draw_triangle(@pX, @pY - 5 * @pScale, @pX, @pY + 5 * @pScale, @pX + @pArrowLen, @pY, false);
+				draw_rectangle(@pX - @pArrowLen, @pY - @pArrowTail, @pX, @pY + @pArrowTail, false);
+			}
+			if(@pType == 7){
+				draw_triangle(@pX - 5 * @pScale, @pY, @pX + 5 * @pScale, @pY, @pX, @pY + @pArrowLen, false);
+				draw_rectangle(@pX - @pArrowTail, @pY - @pArrowLen, @pX + @pArrowTail, @pY, false);
+			}
+		}
+		if(@pType == 2){
+			@pSafeR = (8 + sin(@pAge * 0.010) * 1.3) * @pScale;
+			draw_set_alpha(@pA * 0.24);
+			draw_set_color(make_color_rgb(74, 222, 128));
+			draw_circle(@pX, @pY, @pSafeR, false);
+			draw_set_alpha(@pA);
+			draw_circle(@pX, @pY, 8 * @pScale, true);
+			draw_set_color(c_black);
+			draw_line_width(@pX - 5 * @pScale, @pY + 1 * @pScale, @pX - 1 * @pScale, @pY + 5 * @pScale, 3);
+			draw_line_width(@pX - 1 * @pScale, @pY + 5 * @pScale, @pX + 6 * @pScale, @pY - 4 * @pScale, 3);
+			draw_set_color(c_white);
+			draw_line_width(@pX - 5 * @pScale, @pY, @pX - 1 * @pScale, @pY + 4 * @pScale, 2);
+			draw_line_width(@pX - 1 * @pScale, @pY + 4 * @pScale, @pX + 6 * @pScale, @pY - 5 * @pScale, 2);
+		}
+		if(@pType == 4){
+			@pInner = 3 * @pScale;
+			if(@pT >= 0.053 && @pT < 0.833 && ((@pAge div 200) mod 2) == 0) @pInner = 5 * @pScale;
+			draw_set_color(c_white);
+			draw_circle(@pX, @pY, 7 * @pScale, true);
+			draw_circle(@pX, @pY, @pInner, true);
+			draw_line_width(@pX - 11 * @pScale, @pY, @pX - 6 * @pScale, @pY, 2);
+			draw_line_width(@pX + 6 * @pScale, @pY, @pX + 11 * @pScale, @pY, 2);
+			draw_line_width(@pX, @pY - 11 * @pScale, @pX, @pY - 6 * @pScale, 2);
+			draw_line_width(@pX, @pY + 6 * @pScale, @pX, @pY + 11 * @pScale, 2);
+			draw_circle(@pX, @pY, 1, false);
+		}
+		if(@pType == 6){
+			@pWaitR = 8 * @pScale + sin(@pAge * 0.008) * 0.8 * @pScale;
+			@pWaitH = 6 * @pScale + sin(@pAge * 0.010) * 1.0 * @pScale;
+			@pWaitGap = 4 * @pScale + sin(@pAge * 0.008) * 0.7 * @pScale;
+			draw_set_color(make_color_rgb(88, 106, 122));
+			draw_circle(@pX, @pY, @pWaitR, true);
+			draw_set_color(c_white);
+			draw_rectangle(@pX - @pWaitGap - 2, @pY - @pWaitH, @pX - @pWaitGap + 2, @pY + @pWaitH, false);
+			draw_rectangle(@pX + @pWaitGap - 2, @pY - @pWaitH, @pX + @pWaitGap + 2, @pY + @pWaitH, false);
+		}
+		if(@pType == 8){
+			@pWarnCol = make_color_rgb(250, 204, 21);
+			if(@pT >= 0.053 && @pT < 0.833 && ((@pAge div 100) mod 2) == 0) @pWarnCol = make_color_rgb(251, 191, 36);
+			draw_set_color(@pWarnCol);
+			draw_triangle(@pX - 10 * @pScale, @pY + 8 * @pScale, @pX + 10 * @pScale, @pY + 8 * @pScale, @pX, @pY - 10 * @pScale, false);
+			draw_set_color(c_black);
+			draw_text(@pX, @pY + 1 * @pScale, "!");
+		}
+		draw_set_alpha(@pA);
+		if(@pingName[@i] != ""){
+			@pNameDrawX = @pX;
+			@pNameDrawY = @pY - 22;
+			#if CJKTEXT
+			@pNameDrawW = __ONLINE_cjk_string_width_ext(@pingName[@i], -1, 9999);
+			@pNameDrawH = __ONLINE_cjk_string_height_ext(@pingName[@i], -1, 9999);
+			@pNameDrawX = round(@pX - @pNameDrawW * 0.5);
+			@pNameDrawY = round((@pY - 22) - @pNameDrawH * 0.5);
+			#endif
+			#if not GM80
+			#if not CJKTEXT
+			@pNameDrawW = string_width(@pingName[@i]);
+			@pNameDrawH = string_height(@pingName[@i]);
+			@pNameDrawX = round(@pX - @pNameDrawW * 0.5);
+			@pNameDrawY = round((@pY - 22) - @pNameDrawH * 0.5);
+			draw_set_halign(fa_left);
+			draw_set_valign(fa_top);
+			#endif
+			#endif
+			draw_set_color(c_black);
+			#if GM80
+			fw_draw_set_halign(fa_center);
+			fw_draw_set_valign(fa_middle);
+			__ONLINE_fw_use_font(@pingName[@i]);
+			fw_draw_text_ext(@pX - 1, @pY - 22, @pingName[@i], 9999);
+			fw_draw_text_ext(@pX + 1, @pY - 22, @pingName[@i], 9999);
+			fw_draw_text_ext(@pX, @pY - 23, @pingName[@i], 9999);
+			fw_draw_text_ext(@pX, @pY - 21, @pingName[@i], 9999);
+			#endif
+			#if CJKTEXT
+			global.__ONLINE_cjkHalign = 0;
+			global.__ONLINE_cjkValign = 0;
+			__ONLINE_cjk_draw_text(@pNameDrawX - 1, @pNameDrawY, @pingName[@i], 9999);
+			__ONLINE_cjk_draw_text(@pNameDrawX + 1, @pNameDrawY, @pingName[@i], 9999);
+			__ONLINE_cjk_draw_text(@pNameDrawX, @pNameDrawY - 1, @pingName[@i], 9999);
+			__ONLINE_cjk_draw_text(@pNameDrawX, @pNameDrawY + 1, @pingName[@i], 9999);
+			#endif
+			#if not GM80
+			#if not CJKTEXT
+			draw_text(@pNameDrawX - 1, @pNameDrawY, @pingName[@i]);
+			draw_text(@pNameDrawX + 1, @pNameDrawY, @pingName[@i]);
+			draw_text(@pNameDrawX, @pNameDrawY - 1, @pingName[@i]);
+			draw_text(@pNameDrawX, @pNameDrawY + 1, @pingName[@i]);
+			#endif
+			#endif
+			draw_set_color(@pNC);
+			#if GM80
+			fw_draw_text_ext(@pX, @pY - 22, @pingName[@i], 9999);
+			#endif
+			#if CJKTEXT
+			__ONLINE_cjk_draw_text(@pNameDrawX, @pNameDrawY, @pingName[@i], 9999);
+			#endif
+			#if not GM80
+			#if not CJKTEXT
+			draw_text(@pNameDrawX, @pNameDrawY, @pingName[@i]);
+			draw_set_halign(fa_center);
+			draw_set_valign(fa_middle);
+			#endif
+			#endif
+		}
+	}
+	if(@pingWheelOpen){
+		@wcx = @pingWheelCenterX;
+		@wcy = @pingWheelCenterY;
+		@wstep = 38;
+		@wTeam = @team;
+		if(@wTeam < 0 || @wTeam > 7) @wTeam = 0;
+		draw_set_alpha(0.5);
+		draw_set_color(c_black);
+		draw_circle(@wcx, @wcy, 80, false);
+		for(@row = 0; @row < 3; @row += 1){
+			for(@col = 0; @col < 3; @col += 1){
+				@cellIdx = @row * 3 + @col;
+				@cx = round(@wcx + (@col - 1) * @wstep);
+				@cy = round(@wcy + (@row - 1) * @wstep);
+				draw_set_alpha(0.22);
+				draw_set_color(c_black);
+				draw_circle(@cx, @cy, 14, false);
+				if(@cellIdx == @pingWheelHover){
+					draw_set_alpha(0.62);
+					draw_set_color(@teamColors[@wTeam]);
+					draw_circle(@cx, @cy, 12, false);
+					draw_set_alpha(1);
+					draw_set_color(c_white);
+					draw_circle(@cx, @cy, 13, true);
+				}else{
+					draw_set_alpha(0.34);
+					draw_set_color(c_dkgray);
+					draw_circle(@cx, @cy, 12, true);
+				}
+				draw_set_alpha(1);
+				if(@cellIdx == 0){
+					draw_set_color(make_color_rgb(88, 118, 150));
+					draw_circle(@cx, @cy, 6, true);
+					draw_set_color(c_black);
+					draw_text(@cx - 1, @cy, "?");
+					draw_text(@cx + 1, @cy, "?");
+					draw_text(@cx, @cy - 1, "?");
+					draw_text(@cx, @cy + 1, "?");
+					draw_set_color(c_white);
+					draw_text(@cx, @cy, "?");
+				}
+				if(@cellIdx == 1 || @cellIdx == 3 || @cellIdx == 5 || @cellIdx == 7){
+					@wArrowLen = 5;
+					@wArrowTail = 1;
+					draw_set_color(c_white);
+					if(@cellIdx == 1){
+						draw_triangle(@cx - 4, @cy, @cx + 4, @cy, @cx, @cy - @wArrowLen, false);
+						draw_rectangle(@cx - @wArrowTail, @cy, @cx + @wArrowTail, @cy + @wArrowLen, false);
+					}
+					if(@cellIdx == 3){
+						draw_triangle(@cx, @cy - 4, @cx, @cy + 4, @cx - @wArrowLen, @cy, false);
+						draw_rectangle(@cx, @cy - @wArrowTail, @cx + @wArrowLen, @cy + @wArrowTail, false);
+					}
+					if(@cellIdx == 5){
+						draw_triangle(@cx, @cy - 4, @cx, @cy + 4, @cx + @wArrowLen, @cy, false);
+						draw_rectangle(@cx - @wArrowLen, @cy - @wArrowTail, @cx, @cy + @wArrowTail, false);
+					}
+					if(@cellIdx == 7){
+						draw_triangle(@cx - 4, @cy, @cx + 4, @cy, @cx, @cy + @wArrowLen, false);
+						draw_rectangle(@cx - @wArrowTail, @cy - @wArrowLen, @cx + @wArrowTail, @cy, false);
+					}
+				}
+				if(@cellIdx == 2){
+					draw_set_color(make_color_rgb(74, 222, 128));
+					draw_circle(@cx, @cy, 6, true);
+					draw_set_color(c_black);
+					draw_line_width(@cx - 4, @cy, @cx - 1, @cy + 3, 3);
+					draw_line_width(@cx - 1, @cy + 3, @cx + 5, @cy - 4, 3);
+					draw_set_color(c_white);
+					draw_line_width(@cx - 4, @cy - 1, @cx - 1, @cy + 2, 2);
+					draw_line_width(@cx - 1, @cy + 2, @cx + 5, @cy - 5, 2);
+				}
+				if(@cellIdx == 4){
+					draw_set_color(c_white);
+					draw_circle(@cx, @cy, 5, true);
+					draw_circle(@cx, @cy, 2, true);
+					draw_line_width(@cx - 8, @cy, @cx - 5, @cy, 2);
+					draw_line_width(@cx + 5, @cy, @cx + 8, @cy, 2);
+					draw_line_width(@cx, @cy - 8, @cx, @cy - 5, 2);
+					draw_line_width(@cx, @cy + 5, @cx, @cy + 8, 2);
+					draw_circle(@cx, @cy, 1, false);
+				}
+				if(@cellIdx == 6){
+					draw_set_color(make_color_rgb(88, 106, 122));
+					draw_circle(@cx, @cy, 6, true);
+					draw_set_color(c_white);
+					draw_rectangle(@cx - 4, @cy - 5, @cx - 2, @cy + 5, false);
+					draw_rectangle(@cx + 2, @cy - 5, @cx + 4, @cy + 5, false);
+				}
+				if(@cellIdx == 8){
+					draw_set_color(make_color_rgb(250, 204, 21));
+					draw_triangle(@cx - 9, @cy + 7, @cx + 9, @cy + 7, @cx, @cy - 9, false);
+					draw_set_color(c_black);
+					draw_text(@cx, @cy + 1, "!");
+				}
+			}
+		}
+	}
+	draw_set_alpha(@pdAlpha);
+	draw_set_color(@pdColor);
+	draw_set_halign(fa_left);
+	draw_set_valign(fa_top);
 	if(font_exists(0)){
 		draw_set_font(0);
 	}

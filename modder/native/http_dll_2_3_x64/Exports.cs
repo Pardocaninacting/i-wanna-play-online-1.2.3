@@ -410,6 +410,7 @@ internal static class NativeCast
 {
     internal static bool ToBool(double value) => value >= 0.5;
     internal static byte ToByte(double value) => value <= byte.MinValue ? byte.MinValue : value >= byte.MaxValue ? byte.MaxValue : (byte)value;
+    internal static sbyte ToSByte(double value) => value <= sbyte.MinValue ? sbyte.MinValue : value >= sbyte.MaxValue ? sbyte.MaxValue : (sbyte)value;
     internal static ushort ToUInt16(double value) => value <= ushort.MinValue ? ushort.MinValue : value >= ushort.MaxValue ? ushort.MaxValue : (ushort)value;
     internal static uint ToUInt32(double value) => value <= uint.MinValue ? uint.MinValue : value >= uint.MaxValue ? uint.MaxValue : (uint)value;
     internal static ulong ToUInt64(double value) => value <= 0 ? 0UL : value >= ulong.MaxValue ? ulong.MaxValue : (ulong)value;
@@ -564,6 +565,13 @@ internal sealed class NativeBuffer
         return data[Position++];
     }
 
+    internal sbyte ReadInt8()
+    {
+        if (!EnsureReadable(1))
+            return 0;
+        return (sbyte)data[Position++];
+    }
+
     internal ushort ReadUInt16()
     {
         if (!EnsureReadable(2))
@@ -588,6 +596,24 @@ internal sealed class NativeBuffer
             return 0;
         var value = BinaryPrimitives.ReadInt32LittleEndian(data.AsSpan(Position, 4));
         Position += 4;
+        return value;
+    }
+
+    internal uint ReadUInt32()
+    {
+        if (!EnsureReadable(4))
+            return 0;
+        var value = BinaryPrimitives.ReadUInt32LittleEndian(data.AsSpan(Position, 4));
+        Position += 4;
+        return value;
+    }
+
+    internal long ReadInt64()
+    {
+        if (!EnsureReadable(8))
+            return 0;
+        var value = BinaryPrimitives.ReadInt64LittleEndian(data.AsSpan(Position, 8));
+        Position += 8;
         return value;
     }
 
@@ -672,6 +698,12 @@ internal sealed class NativeBuffer
         data[Length - 1] = value;
     }
 
+    internal void WriteInt8(sbyte value)
+    {
+        SetLength(Length + 1);
+        data[Length - 1] = (byte)value;
+    }
+
     internal void WriteUInt16(ushort value)
     {
         var start = Length;
@@ -691,6 +723,20 @@ internal sealed class NativeBuffer
         var start = Length;
         SetLength(Length + 4);
         BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(start, 4), value);
+    }
+
+    internal void WriteUInt32(uint value)
+    {
+        var start = Length;
+        SetLength(Length + 4);
+        BinaryPrimitives.WriteUInt32LittleEndian(data.AsSpan(start, 4), value);
+    }
+
+    internal void WriteInt64(long value)
+    {
+        var start = Length;
+        SetLength(Length + 8);
+        BinaryPrimitives.WriteInt64LittleEndian(data.AsSpan(start, 8), value);
     }
 
     internal void WriteUInt64(ulong value)
@@ -1216,6 +1262,9 @@ public static class Exports
     [UnmanagedCallersOnly(EntryPoint = "buffer_read_uint8", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static double BufferReadUInt8(double id) => GetBuffer(id)?.ReadUInt8() ?? 0;
 
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_int8", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadInt8(double id) => GetBuffer(id)?.ReadInt8() ?? 0;
+
     [UnmanagedCallersOnly(EntryPoint = "buffer_read_uint16", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static double BufferReadUInt16(double id) => GetBuffer(id)?.ReadUInt16() ?? 0;
 
@@ -1224,6 +1273,12 @@ public static class Exports
 
     [UnmanagedCallersOnly(EntryPoint = "buffer_read_int32", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static double BufferReadInt32(double id) => GetBuffer(id)?.ReadInt32() ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_uint32", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadUInt32(double id) => GetBuffer(id)?.ReadUInt32() ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_read_int64", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferReadInt64(double id) => GetBuffer(id)?.ReadInt64() ?? 0;
 
     [UnmanagedCallersOnly(EntryPoint = "buffer_read_uint64", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static double BufferReadUInt64(double id) => GetBuffer(id)?.ReadUInt64() ?? 0;
@@ -1278,6 +1333,36 @@ public static class Exports
         if (buffer == null)
             return 0;
         buffer.WriteInt32(NativeCast.ToInt32(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_uint32", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteUInt32(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteUInt32(NativeCast.ToUInt32(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_int64", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteInt64(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteInt64(NativeCast.ToInt64(value));
+        return 1;
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_write_int8", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferWriteInt8(double id, double value)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return 0;
+        buffer.WriteInt8(NativeCast.ToSByte(value));
         return 1;
     }
 

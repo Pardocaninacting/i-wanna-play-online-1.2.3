@@ -7,7 +7,36 @@ if(instance_exists(%arg0)){
 	@_w = instance_find(%arg0, 0);
 	with(@_w){
 		if(@spectating){
+			if(@socket != -1){
+				buffer_clear(@buffer);
+				#if not GMNET
+					buffer_write_uint8(@buffer, 8);
+					buffer_write_uint8(@buffer, @team);
+				#endif
+				#if GMNET
+					buffer_write_u8(@buffer, 8);
+					buffer_write_u8(@buffer, @team);
+				#endif
+				socket_write_message(@socket, @buffer);
+				#if not GMNET
+					socket_update_write(@socket);
+				#endif
+				#if GMNET
+					socket_send(@socket);
+				#endif
+			}
+			if(@socket != -1){
+				socket_destroy(@socket);
+				@socket = -1;
+			}
+			if(udpsocket_exists(@udpsocket)){
+				udpsocket_destroy(@udpsocket);
+			}
+			@udpsocket = -1;
+			@connected = false;
+			@udpReady = false;
 			@spectating = false;
+			@spectatingPrev = false;
 			@specPending = false;
 		}
 		if(@save_enabled || @saveForceLoad){

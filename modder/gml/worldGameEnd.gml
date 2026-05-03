@@ -39,6 +39,7 @@ if(@saveHistDirty){
 				}
 				if(@shThinWrite != @shI){
 					@saveHistFav[@shThinWrite] = @saveHistFav[@shI];
+					@saveHistHotkey[@shThinWrite] = @saveHistHotkey[@shI];
 					@saveHistGrav[@shThinWrite] = @saveHistGrav[@shI];
 					@saveHistX[@shThinWrite] = @saveHistX[@shI];
 					@saveHistY[@shThinWrite] = @saveHistY[@shI];
@@ -60,6 +61,7 @@ if(@saveHistDirty){
 			@saveHistCount -= 1;
 			for(@shI = @shFound; @shI < @saveHistCount; @shI += 1){
 				@saveHistFav[@shI] = @saveHistFav[@shI + 1];
+				@saveHistHotkey[@shI] = @saveHistHotkey[@shI + 1];
 				@saveHistGrav[@shI] = @saveHistGrav[@shI + 1];
 				@saveHistX[@shI] = @saveHistX[@shI + 1];
 				@saveHistY[@shI] = @saveHistY[@shI + 1];
@@ -73,10 +75,11 @@ if(@saveHistDirty){
 	buffer_clear(@buffer);
 	#if not GMNET
 		buffer_write_uint16(@buffer, 65535);
-		buffer_write_uint8(@buffer, 1);
+		buffer_write_uint8(@buffer, 2);
 		buffer_write_uint16(@buffer, @saveHistCount);
 		for(@shI = 0; @shI < @saveHistCount; @shI += 1){
 			buffer_write_uint8(@buffer, @saveHistFav[@shI]);
+			buffer_write_uint8(@buffer, @saveHistHotkey[@shI]);
 			buffer_write_uint8(@buffer, @saveHistGrav[@shI]);
 			buffer_write_int32(@buffer, @saveHistX[@shI]);
 			buffer_write_float64(@buffer, @saveHistY[@shI]);
@@ -89,10 +92,11 @@ if(@saveHistDirty){
 	#endif
 	#if GMNET
 		buffer_write_u16(@buffer, 65535);
-		buffer_write_u8(@buffer, 1);
+		buffer_write_u8(@buffer, 2);
 		buffer_write_u16(@buffer, @saveHistCount);
 		for(@shI = 0; @shI < @saveHistCount; @shI += 1){
 			buffer_write_u8(@buffer, @saveHistFav[@shI]);
+			buffer_write_u8(@buffer, @saveHistHotkey[@shI]);
 			buffer_write_u8(@buffer, @saveHistGrav[@shI]);
 			buffer_write_i32(@buffer, @saveHistX[@shI]);
 			buffer_write_double(@buffer, @saveHistY[@shI]);
@@ -114,6 +118,12 @@ if(@saveHistDirty){
 		}
 		if(file_exists("tempOnlineChat")){
 			file_delete("tempOnlineChat");
+		}
+		if(file_exists("tempOnlinePassword")){
+			file_delete("tempOnlinePassword");
+		}
+		if(file_exists("tempOnlineSpectating")){
+			file_delete("tempOnlineSpectating");
 		}
 	}
 #endif

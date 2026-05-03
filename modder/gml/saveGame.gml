@@ -104,6 +104,7 @@ if(instance_exists(%arg0)){
 					@shIdx = @saveHistCount;
 					@saveHistCount += 1;
 					@saveHistFav[@shIdx] = 0;
+					@saveHistHotkey[@shIdx] = 0;
 					@saveHistGrav[@shIdx] = @selfGrav;
 					@saveHistX[@shIdx] = @p.x;
 					@saveHistY[@shIdx] = @p.y;
@@ -116,6 +117,69 @@ if(instance_exists(%arg0)){
 					}
 					@saveHistDirty = true;
 					}
+				}
+			}
+			// SYNC
+			if(@syncEnabled && @socket != -1 && @syncEntryCount > 0){
+				@scSendCount = 0;
+				for(@scI = 0; @scI < @syncEntryCount; @scI += 1){
+					if(@syncName[@scI] == "") continue;
+					if(!variable_global_exists(@syncName[@scI])) continue;
+					@scSig = "";
+					for(@scS = 0; @scS < @syncSlotCount[@scI]; @scS += 1){
+						@scV = 0;
+						for(@scB = 0; @scB < 32; @scB += 1){
+							@scIdx = @scS * 32 + @scB + 1;
+							if(@scIdx > @syncCount[@scI]) break;
+							#if not STUDIO
+								@scBit = real(execute_string("return global." + @syncName[@scI] + "[" + string(@scIdx) + "];"));
+							#endif
+							#if STUDIO
+								@scArr = variable_global_get(@syncName[@scI]);
+								@scBit = is_array(@scArr) && array_length_1d(@scArr) > @scIdx ? real(@scArr[@scIdx]) : 0;
+							#endif
+							if(@scBit != 0) @scV = @scV | (1 << @scB);
+						}
+						@scSlotVal[@scI, @scS] = @scV;
+						@scSig += string(@scV) + ",";
+					}
+					if(@scSig == @syncLastSig[@scI] && !@syncDirty[@scI]) continue;
+					@syncLastSig[@scI] = @scSig;
+					@syncDirty[@scI] = false;
+					@scSendIdx[@scSendCount] = @scI;
+					@scSendCount += 1;
+				}
+				if(@scSendCount > 0){
+					buffer_clear(@buffer);
+					#if not GMNET
+						buffer_write_uint8(@buffer, 7);
+						buffer_write_uint8(@buffer, 1);
+						buffer_write_uint8(@buffer, @scSendCount);
+						for(@scK = 0; @scK < @scSendCount; @scK += 1){
+							@scI = @scSendIdx[@scK];
+							buffer_write_string(@buffer, @syncName[@scI]);
+							buffer_write_uint16(@buffer, @syncCount[@scI]);
+							buffer_write_uint16(@buffer, @syncSlotCount[@scI]);
+							for(@scS = 0; @scS < @syncSlotCount[@scI]; @scS += 1){
+								buffer_write_uint32(@buffer, @scSlotVal[@scI, @scS]);
+							}
+						}
+					#endif
+					#if GMNET
+						buffer_write_u8(@buffer, 7);
+						buffer_write_u8(@buffer, 1);
+						buffer_write_u8(@buffer, @scSendCount);
+						for(@scK = 0; @scK < @scSendCount; @scK += 1){
+							@scI = @scSendIdx[@scK];
+							buffer_write_string(@buffer, @syncName[@scI]);
+							buffer_write_u16(@buffer, @syncCount[@scI]);
+							buffer_write_u16(@buffer, @syncSlotCount[@scI]);
+							for(@scS = 0; @scS < @syncSlotCount[@scI]; @scS += 1){
+								buffer_write_u32(@buffer, @scSlotVal[@scI, @scS]);
+							}
+						}
+					#endif
+					socket_write_message(@socket, @buffer);
 				}
 			}
 		}

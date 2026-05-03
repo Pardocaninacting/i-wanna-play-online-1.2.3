@@ -5,20 +5,23 @@ export const PORT_HTTP = parseInt(process.env.PORT_HTTP || "8001");
 export const PORT_TCP = parseInt(process.env.PORT_SOCKETS || "8002");
 export const PORT_UDP = parseInt(process.env.PORT_SOCKETS_UDP || "8003");
 
-export const LAST_VERSION = "1.1.9";
-export const PROTOCOL_VERSION = 1;
+export const LAST_VERSION = "1.2.3_beta_4";
+export const PROTOCOL_VERSION = 2;
 export const MIN_PROTOCOL_VERSION = 1;
 export const MAX_PLAYERS_PER_IP = 8;
-export const HEARTBEAT_INTERVAL_SEC = 10;
-export const HEARTBEAT_TIMEOUT_SEC = 20;
+export const HEARTBEAT_INTERVAL_SEC = 5;
+export const HEARTBEAT_TIMEOUT_SEC = 12;
 export const UDP_CLEANUP_INTERVAL_MIN = 2;
 export const UDP_EXPIRY_MIN = 5;
 export const MAX_TCP_MESSAGE = 1000;
 export const MAX_TCP_BUFFER = 8192;
 export const MAX_UDP_MESSAGE = 127;
-export const MAX_CUSTOM_SLOTS = 256;
+export const MAX_CUSTOM_SLOTS = 128;       // sum of slotCount across all sync entries (uint32 slots)
+export const MAX_PER_ENTRY_SLOTS = 16;     // per-entry slot count cap (= 512 bits)
+export const MAX_SYNC_ENTRIES = 16;        // distinct entry names per team
+export const MAX_SYNC_NAME_LEN = 32;       // bytes of an entry name
 export const MAX_TEAMS = 8;
-export const TCP_RATE_LIMIT = 20;  // per second
+export const TCP_RATE_LIMIT = 60;  // per second (legitimate bursts: rapid save-on-death loops, boss-flag CUSTOM_DATA, chat, etc.)
 export const UDP_RATE_LIMIT = 100; // per second
 
 export const RATING_COOLDOWN_SEC = 300;     // 5 min between ratings per player

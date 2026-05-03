@@ -1,16 +1,20 @@
 /// ONLINE
 // %arg0: The name of the world object
+if(@oRoom != room){
+	exit;
+}
 @oWorld = noone;
 if(instance_exists(%arg0)){
 	@oWorld = instance_find(%arg0, 0);
 }
 if(@oWorld != noone && @oWorld.@vis <= 1){
 	if(sprite_exists(sprite_index)){
-		draw_sprite_ext(sprite_index, image_index, x, y, image_xscale, image_yscale, image_angle, c_white, image_alpha);
+		@_drawAlpha = image_alpha;
+		draw_sprite_ext(sprite_index, image_index, x, y, image_xscale, image_yscale, image_angle, c_white, @_drawAlpha);
 		if(@oWorld.@vis == 0){
 			@_alpha = draw_get_alpha();
 			@_color = draw_get_color();
-			draw_set_alpha(image_alpha);
+			draw_set_alpha(@_drawAlpha);
 			#if STUDIO
 				if(global.@ftOnline >= 0){
 					draw_set_font(global.@ftOnline);
@@ -24,10 +28,83 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 			draw_set_color(c_black);
 			@border = 2;
 			@padding = 30;
-			@xx = x;
-			@yy = y-@padding;
+			@xx = round(x);
+			@yy = round(y-@padding);
+			if(@spectating){
+				@specLabel = "[SPEC]";
+				@specY = @yy - 14;
+				@specDrawX = @xx;
+				@specDrawY = @specY;
+				#if CJKTEXT
+				@specDrawW = __ONLINE_cjk_string_width_ext(@specLabel, -1, 9999);
+				@specDrawH = __ONLINE_cjk_string_height_ext(@specLabel, -1, 9999);
+				@specDrawX = round(@xx - @specDrawW * 0.5);
+				@specDrawY = round(@specY - @specDrawH * 0.5);
+				#endif
+				#if not GM80
+				#if not CJKTEXT
+				@specDrawW = string_width(@specLabel);
+				@specDrawH = string_height(@specLabel);
+				@specDrawX = round(@xx - @specDrawW * 0.5);
+				@specDrawY = round(@specY - @specDrawH * 0.5);
+				draw_set_halign(fa_left);
+				draw_set_valign(fa_top);
+				#endif
+				#endif
+				draw_set_alpha(@_drawAlpha);
+				draw_set_color(c_black);
+				#if GM80
+				fw_draw_set_halign(fa_center);
+				fw_draw_set_valign(fa_center);
+				__ONLINE_fw_use_font(@specLabel);
+				fw_draw_text_ext(@xx+@border, @specY, @specLabel, 9999);
+				fw_draw_text_ext(@xx, @specY+@border, @specLabel, 9999);
+				fw_draw_text_ext(@xx-@border, @specY, @specLabel, 9999);
+				fw_draw_text_ext(@xx, @specY-@border, @specLabel, 9999);
+				draw_set_color(make_color_rgb(160, 220, 255));
+				fw_draw_text_ext(@xx, @specY, @specLabel, 9999);
+				#endif
+				#if CJKTEXT
+				global.__ONLINE_cjkHalign = 0;
+				global.__ONLINE_cjkValign = 0;
+				__ONLINE_cjk_draw_text(@specDrawX+@border, @specDrawY, @specLabel, 9999);
+				__ONLINE_cjk_draw_text(@specDrawX, @specDrawY+@border, @specLabel, 9999);
+				__ONLINE_cjk_draw_text(@specDrawX-@border, @specDrawY, @specLabel, 9999);
+				__ONLINE_cjk_draw_text(@specDrawX, @specDrawY-@border, @specLabel, 9999);
+				draw_set_color(make_color_rgb(160, 220, 255));
+				__ONLINE_cjk_draw_text(@specDrawX, @specDrawY, @specLabel, 9999);
+				#endif
+				#if not GM80
+				#if not CJKTEXT
+				draw_text(@specDrawX+@border, @specDrawY, @specLabel);
+				draw_text(@specDrawX, @specDrawY+@border, @specLabel);
+				draw_text(@specDrawX-@border, @specDrawY, @specLabel);
+				draw_text(@specDrawX, @specDrawY-@border, @specLabel);
+				draw_set_color(make_color_rgb(160, 220, 255));
+				draw_text(@specDrawX, @specDrawY, @specLabel);
+				#endif
+				#endif
+			}
 			// PLAYER NAME
-			draw_set_alpha(1);
+			@nameDrawX = @xx;
+			@nameDrawY = @yy;
+			#if CJKTEXT
+			@nameDrawW = __ONLINE_cjk_string_width_ext(@name, -1, 9999);
+			@nameDrawH = __ONLINE_cjk_string_height_ext(@name, -1, 9999);
+			@nameDrawX = round(@xx - @nameDrawW * 0.5);
+			@nameDrawY = round(@yy - @nameDrawH * 0.5);
+			#endif
+			#if not GM80
+			#if not CJKTEXT
+			@nameDrawW = string_width(@name);
+			@nameDrawH = string_height(@name);
+			@nameDrawX = round(@xx - @nameDrawW * 0.5);
+			@nameDrawY = round(@yy - @nameDrawH * 0.5);
+			draw_set_halign(fa_left);
+			draw_set_valign(fa_top);
+			#endif
+			#endif
+			draw_set_alpha(@_drawAlpha);
 			draw_set_color(c_black);
 			#if GM80
 			fw_draw_set_halign(fa_center);
@@ -39,19 +116,19 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 			fw_draw_text_ext(@xx, @yy-@border, @name, 9999);
 			#endif
 			#if CJKTEXT
-			global.__ONLINE_cjkHalign = 1;
-			global.__ONLINE_cjkValign = 1;
-			__ONLINE_cjk_draw_text(@xx+@border, @yy, @name, 9999);
-			__ONLINE_cjk_draw_text(@xx, @yy+@border, @name, 9999);
-			__ONLINE_cjk_draw_text(@xx-@border, @yy, @name, 9999);
-			__ONLINE_cjk_draw_text(@xx, @yy-@border, @name, 9999);
+			global.__ONLINE_cjkHalign = 0;
+			global.__ONLINE_cjkValign = 0;
+			__ONLINE_cjk_draw_text(@nameDrawX+@border, @nameDrawY, @name, 9999);
+			__ONLINE_cjk_draw_text(@nameDrawX, @nameDrawY+@border, @name, 9999);
+			__ONLINE_cjk_draw_text(@nameDrawX-@border, @nameDrawY, @name, 9999);
+			__ONLINE_cjk_draw_text(@nameDrawX, @nameDrawY-@border, @name, 9999);
 			#endif
 			#if not GM80
 			#if not CJKTEXT
-			draw_text(@xx+@border, @yy, @name);
-			draw_text(@xx, @yy+@border, @name);
-			draw_text(@xx-@border, @yy, @name);
-			draw_text(@xx, @yy-@border, @name);
+			draw_text(@nameDrawX+@border, @nameDrawY, @name);
+			draw_text(@nameDrawX, @nameDrawY+@border, @name);
+			draw_text(@nameDrawX-@border, @nameDrawY, @name);
+			draw_text(@nameDrawX, @nameDrawY-@border, @name);
 			#endif
 			#endif
 			@_tc = c_white;
@@ -59,15 +136,16 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 				other.@_tc = @teamColors[other.@team];
 			}
 			draw_set_color(@_tc);
+			draw_set_alpha(@_drawAlpha);
 			#if GM80
 			fw_draw_text_ext(@xx, @yy, @name, 9999);
 			#endif
 			#if CJKTEXT
-			__ONLINE_cjk_draw_text(@xx, @yy, @name, 9999);
+			__ONLINE_cjk_draw_text(@nameDrawX, @nameDrawY, @name, 9999);
 			#endif
 			#if not GM80
 			#if not CJKTEXT
-			draw_text(@xx, @yy, @name);
+			draw_text(@nameDrawX, @nameDrawY, @name);
 			#endif
 			#endif
 			draw_set_alpha(@_alpha);

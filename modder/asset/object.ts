@@ -90,6 +90,9 @@ export class GMObject extends Asset {
 	public addCreateCode(GML: Buffer): void {
 		this.addCode(GML, 0, 0);
 	}
+	public addStepCode(GML: Buffer): void {
+		this.addCode(GML, 3, 0);
+	}
 	public addEndStepCode(GML: Buffer): void {
 		this.addCode(GML, 3, 2);
 	}

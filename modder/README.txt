@@ -29,7 +29,28 @@ How to use:
    - If the game is made with GameMaker 8 (or 8.1), the online game will be created as a new executable in the same directory.
    - If the game is made with GameMaker Studio and is self contained, the online game will be created in a new folder with all the resources unpacked.
    - If the game is made with GameMaker Studio and is already unpacked, a file data_backup.win will be created. The game will now be online, and in order to get back to the original version replace the file data.win by data_backup.win.
-  In early versions, the converter also writes a file named __ONLINE_server.txt next to the converted game. You can edit this file if you need to point the game to another server.
+  The runtime config file for the converted game is __ONLINE_config.ini.
+  PLAYER_GUIDE.txt is the bilingual manual for players. Keep it in the tool package or distribute it separately if you want to provide player-facing instructions.
+  Older online packs may also read __ONLINE_server.txt as a server override fallback.
+
+Files to keep with the converted game:
+ - the converted exe or online folder
+ - http_dll_2_3.dll
+ - __ONLINE_config.ini
+
+Shared progress sync:
+  If you want to ship default sync targets, edit the generated __ONLINE_config.ini or prefill iwpo-settings.ini before converting.
+  The runtime [sync] section looks like this:
+
+  [sync]
+  entryCount = 2
+  sync0_name  = boss
+  sync0_count = 8
+  sync1_name  = item
+  sync1_count = 8
+
+  sync_enabled = 1 is optional because the game defaults it to ON when omitted.
+  Players should close the game before editing this section and restart afterward.
 
 FAQ:
   Q: Me and my friend can't play [some game] together, the server seems to think we are playing two different games
@@ -52,6 +73,16 @@ Thank you so much for downloading, I really hope you will have a lot of fun!
 
 
 CHANGE LOGS:
+
+1.2.3 beta 4:
+ - Shared progress sync with a dedicated Sync tab
+ - Ping wheel and map markers
+ - Expanded 5-tab settings panel, save history, ratings, key rebinding
+ - More reliable online roster, reconnect, spectator and team-state recovery
+ - Chat log, player list, off-screen arrows and ping HUD polish
+ - GMS CJK atlas pipeline, GMS x64 DLL path, improved GM8.2 / GMS compatibility
+ - Server protocol v2 with beta3 basic compatibility for chat and movement
+ - Various bug fixes and release-stabilization work
 
 1.2.3:
  - Team system with color-coded names and team-scoped saves

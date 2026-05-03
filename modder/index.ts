@@ -4,6 +4,7 @@ import process from "process"
 import { ConverterGM8 } from "./converterGM8"
 import { ConverterGMS, IsGMS } from "./converterGMS"
 import { Utils, Ports } from "./utils"
+import { CustomSlotConfig, parseCustomSlotConfig } from "./customSlot"
 
 const getInputGame = async function(): Promise<string> {
 	let input: string = "";
@@ -26,6 +27,7 @@ interface ToolSettings {
 	tcpPort?: number;
 	udpPort?: number;
 	forceExternalDll?: boolean;
+	customSlot?: CustomSlotConfig | null;
 }
 
 const readToolSettings = async function(): Promise<ToolSettings> {
@@ -34,28 +36,40 @@ const readToolSettings = async function(): Promise<ToolSettings> {
 		return {};
 	const content: string = await fs.readFile(settingsPath, "utf8");
 	const result: ToolSettings = {};
-	let inSection: boolean = false;
+	let currentSection: string = "";
+	const modSection: Record<string, string> = {};
+	let hasModSection: boolean = false;
 	for(const line of content.split(/\r?\n/)){
 		const trimmed: string = line.trim();
-		if(trimmed === "[settings]"){ inSection = true; continue; }
-		if(trimmed.startsWith("[")){ inSection = false; continue; }
-		if(!inSection || !trimmed || trimmed.startsWith(";") || trimmed.startsWith("#")) continue;
+		if(trimmed.startsWith("[") && trimmed.endsWith("]")){
+			currentSection = trimmed.slice(1, -1).toLowerCase();
+			if(currentSection === "mod") hasModSection = true;
+			continue;
+		}
+		if(!trimmed || trimmed.startsWith(";") || trimmed.startsWith("#")) continue;
 		const eq: number = trimmed.indexOf("=");
 		if(eq < 0) continue;
 		const key: string = trimmed.slice(0, eq).trim();
 		const val: string = trimmed.slice(eq + 1).trim();
-		if(!val) continue;
-		switch(key){
-			case "server": result.server = val; break;
-			case "tcp_port": result.tcpPort = Number(val); break;
-			case "udp_port": result.udpPort = Number(val); break;
-			case "force_external_dll": result.forceExternalDll = val === "1" || val.toLowerCase() === "true"; break;
+		if(currentSection === "settings"){
+			if(!val) continue;
+			switch(key){
+				case "server": result.server = val; break;
+				case "tcp_port": result.tcpPort = Number(val); break;
+				case "udp_port": result.udpPort = Number(val); break;
+				case "force_external_dll": result.forceExternalDll = val === "1" || val.toLowerCase() === "true"; break;
+			}
+		}else if(currentSection === "mod"){
+			modSection[key.toLowerCase()] = val;
 		}
+	}
+	if(hasModSection){
+		result.customSlot = parseCustomSlotConfig(modSection);
 	}
 	return result;
 }
 
-const getServer = async function(): Promise<{server: string, ports: Ports, forceExternalDll: boolean}> {
+const getServer = async function(): Promise<{server: string, ports: Ports, forceExternalDll: boolean, customSlot: CustomSlotConfig | null}> {
 	let server: string = "localhost";
 	let ports: Ports = {
 		tcp: 8002,
@@ -67,6 +81,7 @@ const getServer = async function(): Promise<{server: string, ports: Ports, force
 	if(toolSettings.tcpPort) ports.tcp = toolSettings.tcpPort;
 	if(toolSettings.udpPort) ports.udp = toolSettings.udpPort;
 	if(toolSettings.forceExternalDll) forceExternalDll = true;
+	const customSlot: CustomSlotConfig | null = toolSettings.customSlot ? toolSettings.customSlot : null;
 	const keyword: string = "server=";
 	for(const arg of process.argv){
 		if(arg.slice(0, keyword.length) == keyword){
@@ -79,27 +94,31 @@ const getServer = async function(): Promise<{server: string, ports: Ports, force
 			break;
 		}
 	}
-	return {server, ports, forceExternalDll};
+	return {server, ports, forceExternalDll, customSlot};
 }
 
 const main = async function(): Promise<string> {
 	const input: string = await getInputGame();
 	const gameName: string = path.basename(input, ".exe");
-	const {server, ports, forceExternalDll} = await getServer();
-	console.log(`Using Server ${server}, Ports`, ports);
+	const {server, ports, forceExternalDll, customSlot} = await getServer();
+	console.log(`Server: ${server} (TCP ${ports.tcp}, UDP ${ports.udp})`);
+	if(customSlot){
+		const totalSlots = customSlot.entries.reduce((s, e) => s + Math.ceil(e.count / 32), 0);
+		console.log(`Progress sync: ${customSlot.entries.length} entries, ${totalSlots} uint32 slots -> default [sync] in __ONLINE_config.ini`);
+	}
 	if(await IsGMS(input)){
-		console.log("GameMaker Studio detected!");
-		await ConverterGMS(input, gameName, server, ports);
+		console.log("Target: GameMaker Studio");
+		await ConverterGMS(input, gameName, server, ports, customSlot);
 	}else{
-		console.log("Assuming it is Game Maker 8");
+		console.log("Target: Game Maker 8");
 		if(forceExternalDll)
-			console.log("Using external DLL mode (force_external_dll)");
-		await ConverterGM8(input, gameName, server, ports, forceExternalDll);
+			console.log("HTTP DLL mode: external (force_external_dll)");
+		await ConverterGM8(input, gameName, server, ports, forceExternalDll, customSlot);
 	}
 	return "Success!";
 }
 
 main()
 .then(console.log)
-.catch(err => console.log(err.toString()))
+.catch(err => console.error(err.toString()))
 .then(() => Utils.getString("Press enter to quit\n"))
