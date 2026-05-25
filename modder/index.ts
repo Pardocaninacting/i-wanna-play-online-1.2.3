@@ -27,6 +27,8 @@ interface ToolSettings {
 	tcpPort?: number;
 	udpPort?: number;
 	forceExternalDll?: boolean;
+	noExtensionPackages?: boolean;
+	extensionPackages?: string;
 	customSlot?: CustomSlotConfig | null;
 }
 
@@ -58,6 +60,8 @@ const readToolSettings = async function(): Promise<ToolSettings> {
 				case "tcp_port": result.tcpPort = Number(val); break;
 				case "udp_port": result.udpPort = Number(val); break;
 				case "force_external_dll": result.forceExternalDll = val === "1" || val.toLowerCase() === "true"; break;
+				case "no_extension_packages": result.noExtensionPackages = val === "1" || val.toLowerCase() === "true"; break;
+				case "extension_packages": result.extensionPackages = val.toLowerCase(); break;
 			}
 		}else if(currentSection === "mod"){
 			modSection[key.toLowerCase()] = val;
@@ -69,18 +73,22 @@ const readToolSettings = async function(): Promise<ToolSettings> {
 	return result;
 }
 
-const getServer = async function(): Promise<{server: string, ports: Ports, forceExternalDll: boolean, customSlot: CustomSlotConfig | null}> {
+const getServer = async function(): Promise<{server: string, ports: Ports, forceExternalDll: boolean, noExtensionPackages: boolean, extensionPackages: string | null, customSlot: CustomSlotConfig | null}> {
 	let server: string = "localhost";
 	let ports: Ports = {
 		tcp: 8002,
 		udp: 8003,
 	}
 	let forceExternalDll: boolean = false;
+	let noExtensionPackages: boolean = false;
+	let extensionPackages: string | null = null;
 	const toolSettings = await readToolSettings();
 	if(toolSettings.server) server = toolSettings.server;
 	if(toolSettings.tcpPort) ports.tcp = toolSettings.tcpPort;
 	if(toolSettings.udpPort) ports.udp = toolSettings.udpPort;
 	if(toolSettings.forceExternalDll) forceExternalDll = true;
+	if(toolSettings.noExtensionPackages) noExtensionPackages = true;
+	if(toolSettings.extensionPackages) extensionPackages = toolSettings.extensionPackages;
 	const customSlot: CustomSlotConfig | null = toolSettings.customSlot ? toolSettings.customSlot : null;
 	const keyword: string = "server=";
 	for(const arg of process.argv){
@@ -94,13 +102,13 @@ const getServer = async function(): Promise<{server: string, ports: Ports, force
 			break;
 		}
 	}
-	return {server, ports, forceExternalDll, customSlot};
+	return {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, customSlot};
 }
 
 const main = async function(): Promise<string> {
 	const input: string = await getInputGame();
 	const gameName: string = path.basename(input, ".exe");
-	const {server, ports, forceExternalDll, customSlot} = await getServer();
+	const {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, customSlot} = await getServer();
 	console.log(`Server: ${server} (TCP ${ports.tcp}, UDP ${ports.udp})`);
 	if(customSlot){
 		const totalSlots = customSlot.entries.reduce((s, e) => s + Math.ceil(e.count / 32), 0);
@@ -113,6 +121,20 @@ const main = async function(): Promise<string> {
 		console.log("Target: Game Maker 8");
 		if(forceExternalDll)
 			console.log("HTTP DLL mode: external (force_external_dll)");
+		if(noExtensionPackages){
+			process.env.IWPO_NO_EXTENSION_PACKAGES = "1";
+			console.log("GM8 extension packages: disabled (no_extension_packages)");
+		}
+		if(extensionPackages){
+			const mode: string = extensionPackages;
+			const valid: Set<string> = new Set(["auto", "all", "fw_only", "wd_only", "gm_only", "none"]);
+			if(!valid.has(mode)){
+				console.log(`GM8 extension packages: ignoring unknown value "${mode}" (use auto|fw_only|wd_only|gm_only|none)`);
+			}else{
+				process.env.IWPO_EXT_PACKAGES = mode;
+				console.log(`GM8 extension packages: ${mode}`);
+			}
+		}
 		await ConverterGM8(input, gameName, server, ports, forceExternalDll, customSlot);
 	}
 	return "Success!";

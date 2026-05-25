@@ -13,6 +13,7 @@ PROPOSAL_v*.md
 RESEARCH_v*.md
 BETA*_TEST_CHECKLIST.md
 BETA*测试结果.md
+ISSUE_FISH_UPX_ANTIDEC_CJK.md
 
 yarn-error.log
 package-lock.json

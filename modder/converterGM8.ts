@@ -5,6 +5,8 @@ import { SmartBuffer } from "smart-buffer"
 import { PESection, WindowsIcon, Icon } from "./icon"
 import { GameConfig, GameData, GameVersion } from "./gamedata"
 import { GM80 } from "./gamedata/gm80"
+import { Antidec } from "./gamedata/antidec"
+import { Unpack as UpxUnpack } from "./upx"
 import { Settings } from "./settings"
 import { Asset } from "./asset"
 import { Extension } from "./asset/extension"
@@ -78,9 +80,68 @@ const concatBuffers = function(buffers: Array<Buffer>): Buffer {
 	return Buffer.concat(buffers as unknown as Array<Uint8Array>);
 }
 
+const isAntidecProtected = async function(input: string): Promise<boolean> {
+	try {
+		const raw: SmartBuffer = SmartBuffer.fromBuffer(await fs.readFile(input));
+		if(raw.readString(2) != "MZ") return false;
+		raw.readOffset = 0x3C;
+		raw.readOffset = raw.readUInt32LE();
+		if(raw.readString(6) != "PE\0\0\x4C\x01") return false;
+		const sectionCount: number = raw.readUInt16LE();
+		raw.readOffset += 12;
+		const optionalLength: number = raw.readUInt16LE();
+		raw.readOffset += optionalLength + 2;
+		let upx0VirtualLength: number = null;
+		let upx1Data: [number, number] = null;
+		for(let i: number = 0; i < sectionCount; ++i){
+			const sectionName: Buffer = raw.readBuffer(8);
+			const virtualSize: number = raw.readUInt32LE();
+			raw.readOffset += 4;
+			const diskSize: number = raw.readUInt32LE();
+			const diskAddress: number = raw.readUInt32LE();
+			raw.readOffset += 16;
+			void diskSize;
+			if(sectionName.compare(bytes([0x55,0x50,0x58,0x30,0x00,0x00,0x00,0x00])) == 0)
+				upx0VirtualLength = virtualSize;
+			if(sectionName.compare(bytes([0x55,0x50,0x58,0x31,0x00,0x00,0x00,0x00])) == 0)
+				upx1Data = [virtualSize, diskAddress];
+		}
+		if(upx0VirtualLength === null || upx1Data === null) return false;
+		const unpacked: SmartBuffer = SmartBuffer.fromBuffer(UpxUnpack(raw, upx0VirtualLength + upx1Data[0], upx1Data[1]));
+		const hit80: boolean = Antidec.check80(unpacked) !== null;
+		let hit81: boolean = false;
+		if(!hit80) hit81 = Antidec.check81(unpacked) !== null;
+		unpacked.destroy();
+		raw.destroy();
+		return hit80 || hit81;
+	} catch(_e) {
+		return false;
+	}
+}
+
+const isFishClassGame = function(gameName: string): boolean {
+	const normalizedName: string = gameName.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+	return normalizedName.includes("i wanna be the fish");
+}
+
 export const ConverterGM8 = async function(input: string, gameName: string, server: string, ports: Ports, forceExternalDll: boolean, customSlot: CustomSlotConfig | null = null): Promise<void> {
 	const configFilename: string = "__ONLINE_config.ini";
 	console.log("Reading executable...");
+	const fishClassGame: boolean = isFishClassGame(gameName);
+	let fishCjkRuntimeBlocked: boolean = false;
+	const head: Buffer = Buffer.alloc(0x400);
+	const fh = await fs.open(input, "r");
+	try { await fs.read(fh, head as unknown as Uint8Array, 0, head.length, 0); }
+	finally { await fs.close(fh); }
+	const isUpxPacked: boolean = head.includes(Buffer.from("UPX0")) || head.includes(Buffer.from("UPX1"));
+	if(fishClassGame && isUpxPacked){
+		const antidec: boolean = await isAntidecProtected(input);
+		if(antidec){
+			console.log("Fish-class UPX + Antidec runner detected; disabling native CJK plugins and using the safe stub fallback.");
+			fishCjkRuntimeBlocked = true;
+		}
+	}
+
 	let exe: SmartBuffer = SmartBuffer.fromBuffer(await fs.readFile(input));
 	const getExeBuffer = function(): Buffer {
 		return exe.internalBuffer.subarray(0, exe.length);
@@ -337,12 +398,53 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		replaceExeRange(pos, pos, extensionData);
 		extensions.push(null);
 	}
-	if(!hasWindowsDialogs)
+	// Extension-package injection policy.
+	//   IWPO_NO_EXTENSION_PACKAGES=1   -> skip all (legacy switch, kept for back-compat).
+	//   IWPO_EXT_PACKAGES=auto|all     -> inject everything (default).
+	//   IWPO_EXT_PACKAGES=fw_only      -> only ChineseChatSupport8 (Chinese rendering).
+	//   IWPO_EXT_PACKAGES=wd_only      -> only gm_windows_dialog8 (Windows dialogs).
+	//   IWPO_EXT_PACKAGES=gm_only      -> only gaseous_marble8 (GM8.1+ only).
+	//   IWPO_EXT_PACKAGES=none         -> skip all (same as IWPO_NO_EXTENSION_PACKAGES=1).
+	//   IWPO_DIAG_EXT="wd"|"fw"        -> legacy bisection alias for wd_only / fw_only.
+	const __extLegacyNo = process.env.IWPO_NO_EXTENSION_PACKAGES === "1";
+	let __extMode: string = (process.env.IWPO_EXT_PACKAGES || "").toLowerCase();
+	if(!__extMode){
+		const __diag = (process.env.IWPO_DIAG_EXT || "").toLowerCase();
+		if(__diag === "wd") __extMode = "wd_only";
+		else if(__diag === "fw") __extMode = "fw_only";
+		else if(__diag === "none") __extMode = "none";
+	}
+	if(__extLegacyNo) __extMode = "none";
+	if(!__extMode) __extMode = "auto";
+	const __extAll = __extMode === "auto" || __extMode === "all";
+	const wantWD = __extMode !== "none" && (__extAll || __extMode === "wd_only");
+	let wantFW = __extMode !== "none" && (__extAll || __extMode === "fw_only");
+	const wantGM = gameConfig.version !== GameVersion.GameMaker80 && __extMode !== "none" && (__extAll || __extMode === "gm_only");
+	if(fishCjkRuntimeBlocked && gameConfig.version === GameVersion.GameMaker80 && wantFW){
+		console.log("Fish-class host detected; disabling native FoxWriting injection and using the safe GM8.0 stub path.");
+		wantFW = false;
+	}
+	if(!hasWindowsDialogs && wantWD)
 		await addExtension(exe, extensions, "gm_windows_dialog8");
-	if (gameConfig.version !== GameVersion.GameMaker80)
+	if(wantGM)
 		await addExtension(exe, extensions, "gaseous_marble8");
-	if (!hasGm8FoxWriting && gameConfig.version === GameVersion.GameMaker80)
+	if(!hasGm8FoxWriting && gameConfig.version === GameVersion.GameMaker80 && wantFW)
 		await addExtension(exe, extensions, "ChineseChatSupport8");
+	// Final "is this extension's functions actually defined in the runtime?" flags,
+	// used below to decide which stub scripts must be synthesized.
+	const loadedWD: boolean = hasWindowsDialogs || wantWD;
+	const loadedFW: boolean = hasGm8FoxWriting || wantFW;
+	const loadedGM: boolean = wantGM;
+	// CJK rendering backend selection. Drives all downstream gating (preprocessor vars,
+	// stub generation, font asset deployment, gameName encoding, helper scripts).
+	//   'fw' — GM8.0 FoxWriting path (real or stubbed). GBK strings throughout.
+	//   'gm' — GaseousMarble path for GM8.1+.
+	//   'none' — neither available; CJK characters will render as garbage via plain draw_text.
+	const cjkBackend: 'none' | 'fw' | 'gm' =
+		gameConfig.version === GameVersion.GameMaker80 ? 'fw' :
+		(loadedGM ? 'gm' : 'none');
+	const useUtf8: boolean = gameConfig.version !== GameVersion.GameMaker80;
+	console.log(`CJK backend: ${cjkBackend} (loadedFW=${loadedFW}, loadedGM=${loadedGM}, useUtf8=${useUtf8})`);
 
 	exe.writeOffset = extensionCountPos;
 	exe.writeUInt32LE(extensions.length);
@@ -429,7 +531,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	if (gameConfig.version === GameVersion.GameMaker80) {
 		GMLCode.addVariables("GM80");
 	}
-	if (gameConfig.version !== GameVersion.GameMaker80) {
+	if (cjkBackend === 'gm') {
 		GMLCode.addVariables("CJKTEXT");
 	}
 	GMLCode.addVariables("TEMPFILE");
@@ -552,7 +654,11 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "udpsocket_receive", dllName: "udpsocket_receive", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_get_state", dllName: "udpsocket_get_state", ret: "ty_real", args: ["ty_real"] },
 		];
-		if (gameConfig.version !== GameVersion.GameMaker80) {
+		// UTF-8 helpers from http_dll are needed whenever the runtime string mode is UTF-8.
+		// This is true for GM 8.1+ by default, and also for GM 8.0 hosts routed through
+		// the GaseousMarble CJK backend (worldCreate.gml's `#if CJKTEXT` block calls
+		// `set_utf8_mode(1)` to switch http_dll into UTF-8 interpretation).
+		if (useUtf8) {
 			fns.push({ name: "ansi_to_utf8", dllName: "ansi_to_utf8", ret: "ty_string", args: ["ty_string"] });
 			fns.push({ name: "set_utf8_mode", dllName: "set_utf8_mode", ret: "ty_real", args: ["ty_real"] });
 		}
@@ -596,6 +702,51 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		utfModeWrapper.name = Buffer.from("set_utf8_mode", "ascii");
 		utfModeWrapper.source = Buffer.from("return external_call(global.__od_set_utf8_mode, argument0);", "ascii");
 		scripts.push(utfModeWrapper);
+	}
+	// Synthesize GML stub scripts for any IWPO-required extension function whose
+	// extension package wasn't injected. Without these, the converted game would
+	// fail to compile injected GML that references e.g. wd_input_box / fw_draw_text_ext.
+	{
+		const addStubScript = function(name: string, source: string): void {
+			const script: Script = new Script();
+			script.name = Buffer.from(name, "ascii");
+			script.source = Buffer.from(source, "ascii");
+			scripts.push(script);
+		};
+		if(!loadedWD){
+			addStubScript("wd_input_box", "return get_string(argument1, argument2);");
+			addStubScript("wd_message_simple", "show_message(argument0); return 0;");
+			addStubScript("wd_message_set_text", "global.__ONLINE_wdMessageText = argument0; return 0;");
+			addStubScript("wd_message_show", "if(variable_global_exists(\"__ONLINE_wdMessageText\")){ show_message(global.__ONLINE_wdMessageText); } return 0;");
+		}
+		// fw_* stubs are needed whenever the GML emits the fw_* branch (cjkBackend === 'fw'
+		// with no real FoxWriting). gm_* stubs are needed when the GML emits the gm_* branch
+		// (cjkBackend === 'gm' with no real GaseousMarble — rare; mostly defensive).
+		if(cjkBackend === 'fw' && !loadedFW){
+			addStubScript("fw_add_font_from_file", "return -1;");
+			addStubScript("fw_add_font", "return -1;");
+			addStubScript("fw_set_font_offset", "return 0;");
+			addStubScript("fw_draw_set_font", "return 0;");
+			addStubScript("fw_draw_set_halign", "draw_set_halign(argument0); return 0;");
+			addStubScript("fw_draw_set_valign", "draw_set_valign(argument0); return 0;");
+			addStubScript("fw_draw_set_line_spacing", "return 0;");
+			addStubScript("fw_draw_text_ext", "draw_text_ext(argument0, argument1, argument2, -1, argument3); return 0;");
+			addStubScript("fw_string_width", "return string_width(argument0);");
+			addStubScript("fw_string_width_ext", "return string_width_ext(argument0, argument1, argument2);");
+			addStubScript("fw_string_height_ext", "return string_height_ext(argument0, argument1, argument2);");
+		}
+		if(cjkBackend === 'gm' && !loadedGM){
+			addStubScript("gm_font", "return 0;");
+			addStubScript("gm_set_font", "return 0;");
+			addStubScript("gm_set_color", "draw_set_color(argument0); return 0;");
+			addStubScript("gm_set_alpha", "draw_set_alpha(argument0); return 0;");
+			addStubScript("gm_set_halign", "draw_set_halign(argument0 + 1); return 0;");
+			addStubScript("gm_set_valign", "draw_set_valign(argument0 + 1); return 0;");
+			addStubScript("gm_set_max_line_length", "global.__ONLINE_gmMaxLineLength = argument0; return 0;");
+			addStubScript("gm_draw", "if(!variable_global_exists(\"__ONLINE_gmMaxLineLength\")) global.__ONLINE_gmMaxLineLength = 0; if(global.__ONLINE_gmMaxLineLength > 0) draw_text_ext(argument0, argument1, argument2, -1, global.__ONLINE_gmMaxLineLength); else draw_text(argument0, argument1, argument2); return 0;");
+			addStubScript("gm_width", "if(!variable_global_exists(\"__ONLINE_gmMaxLineLength\")) global.__ONLINE_gmMaxLineLength = 0; if(global.__ONLINE_gmMaxLineLength > 0) return string_width_ext(argument0, -1, global.__ONLINE_gmMaxLineLength); return string_width(argument0);");
+			addStubScript("gm_height", "if(!variable_global_exists(\"__ONLINE_gmMaxLineLength\")) global.__ONLINE_gmMaxLineLength = 0; if(global.__ONLINE_gmMaxLineLength > 0) return string_height_ext(argument0, -1, global.__ONLINE_gmMaxLineLength); return string_height(argument0);");
+		}
 	}
 	const newIncludedfile = function(file: string): IncludedFile {
 		let includedfile = new IncludedFile();
@@ -683,8 +834,9 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			asciiFont.exportSettings = 2; // Export to game directory (working_directory)
 			includedfiles.push(asciiFont);
 		}
-		// GaseousMarble font files — only for GM8.1+ (GM8.0 uses FoxWriting)
-		if (gameConfig.version !== GameVersion.GameMaker80) {
+		// GaseousMarble font files — deployed whenever the GM backend is selected
+		// (works on both GM 8.0 and GM 8.1; the legacy version gate was overly restrictive).
+		if (cjkBackend === 'gm') {
 			const fontPng: IncludedFile = newIncludedfile("__ONLINE_font.png");
 			fontPng.exportSettings = 2; // Export to game directory (working_directory)
 			includedfiles.push(fontPng);
@@ -695,13 +847,14 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 
 		replaceChunk(exe, includedfilesOffsets, putAssetRefs(exe, includedfiles));
 	}
-	// GM8.0 has no string encoding awareness — its runtime, FoxWriting font atlas,
-	// and http_dll (when set_utf8_mode is not enabled, which is the case for GM8.0)
-	// all assume strings are GBK byte pairs. Embedding gameName as UTF-8 here would
-	// cause mojibake everywhere (display + network). Encode as GBK for GM8.0 only.
-	const gameNameBuf: Buffer = (gameConfig.version === GameVersion.GameMaker80)
-		? iconv.encode(gameName, "gbk")
-		: Buffer.from(gameName);
+	// gameName encoding: tied to the runtime string mode chosen by the CJK backend.
+	//   useUtf8 == true  (GM 8.1+ default, or GM 8.0+'gm' backend with set_utf8_mode(1)):
+	//     emit UTF-8 directly; http_dll, GaseousMarble and GM string ops all agree.
+	//   useUtf8 == false (GM 8.0 + 'fw'|'none'):
+	//     emit GBK byte pairs; FoxWriting and http_dll (no UTF-8 mode) both expect GBK.
+	const gameNameBuf: Buffer = useUtf8
+		? Buffer.from(gameName)
+		: iconv.encode(gameName, "gbk");
 	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), gameNameBuf, Buffer.from(Utils.getVersion(), 'ascii')));
 	world.addEndStepCode(await GMLCode.getGML("worldEndStep", player.name, player2 ? player2.name : Buffer.from("")));
 	world.addGameEndCode(await GMLCode.getGML("worldGameEnd"));
@@ -770,8 +923,8 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	{
 		const gbkTruncScript: Script = new Script();
 		gbkTruncScript.name = Buffer.from("__ONLINE_gbk_trunc", "ascii");
-		if (gameConfig.version === GameVersion.GameMaker81) {
-			// UTF-8 truncation for GM8.1
+		if (useUtf8) {
+			// UTF-8 truncation (GM 8.1, or GM 8.0 on the GaseousMarble backend)
 			gbkTruncScript.source = Buffer.from([
 				"// __ONLINE_gbk_trunc(str, maxBytes, suffix) — UTF-8 mode",
 				"var p, safe, b, charLen;",
@@ -810,23 +963,26 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		}
 		scripts.push(gbkTruncScript);
 	}
-	// CJK text rendering via GaseousMarble extension (GM8.1+ only; GM8.0 uses FoxWriting fallback).
+	// CJK text rendering via GaseousMarble extension (GM8.1+ only).
 	// After set_utf8_mode(1), all GM variable strings are UTF-8:
 	//   - buffer_read_string returns UTF-8 (http_dll in UTF-8 mode / gm82buf native)
 	//   - wd_input_box results converted at storage level via ansi_to_utf8
 	// So GaseousMarble receives UTF-8 directly — no conversion needed in draw functions.
-	if (gameConfig.version !== GameVersion.GameMaker80) {
-		const cjkInitScript: Script = new Script();
-		cjkInitScript.name = Buffer.from("__ONLINE_cjk_init", "ascii");
-		cjkInitScript.source = Buffer.from([
+	if (cjkBackend === 'gm') {
+		const cjkInitLines: Array<string> = [
 			"// __ONLINE_cjk_init() — load CJK font via GaseousMarble extension",
 			"var _ret;",
-			"_ret = gm_font(\"cjk\", \"__ONLINE_font.png\");",
-			"if(_ret < 0) { show_message(\"gm_font error: \" + string(_ret)); }",
-			"gm_set_font(\"cjk\");",
+		];
+		cjkInitLines.push("_ret = gm_font(\"cjk\", \"__ONLINE_font.png\");");
+		cjkInitLines.push("if(_ret < 0) { show_message(\"gm_font error: \" + string(_ret)); }");
+		cjkInitLines.push("gm_set_font(\"cjk\");");
+		cjkInitLines.push(
 			"global.__ONLINE_cjkHalign = 0;",
-			"global.__ONLINE_cjkValign = 0;",
-		].join("\r\n"), "ascii");
+			"global.__ONLINE_cjkValign = 0;"
+		);
+		const cjkInitScript: Script = new Script();
+		cjkInitScript.name = Buffer.from("__ONLINE_cjk_init", "ascii");
+		cjkInitScript.source = Buffer.from(cjkInitLines.join("\r\n"), "ascii");
 		scripts.push(cjkInitScript);
 
 		// __ONLINE_cjk_draw_text(x, y, str, maxW)
@@ -880,8 +1036,9 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		].join("\r\n"), "ascii");
 		scripts.push(cjkWidthExtScript);
 	}
-	// FoxWriting helper scripts for GM8.0 CJK text rendering
-	if (gameConfig.version === GameVersion.GameMaker80) {
+	// FoxWriting helper scripts (CJK detection + dynamic font selection).
+	// Needed whenever the fw_* code path is emitted — real or stubbed.
+	if (cjkBackend === 'fw') {
 		const hasCjkScript: Script = new Script();
 		hasCjkScript.name = Buffer.from("__ONLINE_has_cjk", "ascii");
 		hasCjkScript.source = Buffer.from([
@@ -927,5 +1084,4 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	}
 	await EnsureX86HttpDllBuilt();
 	await fs.copyFile(path.join(__dirname, "lib", HTTP_DLL_FILENAME), path.join(outputDir, HTTP_DLL_FILENAME));
-
 }

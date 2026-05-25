@@ -119,12 +119,6 @@ if(@saveHistDirty){
 		if(file_exists("tempOnlineChat")){
 			file_delete("tempOnlineChat");
 		}
-		if(file_exists("tempOnlinePassword")){
-			file_delete("tempOnlinePassword");
-		}
-		if(file_exists("tempOnlineSpectating")){
-			file_delete("tempOnlineSpectating");
-		}
 	}
 #endif
 ds_map_destroy(@teamMap);

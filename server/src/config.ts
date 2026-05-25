@@ -6,6 +6,7 @@ export const PORT_TCP = parseInt(process.env.PORT_SOCKETS || "8002");
 export const PORT_UDP = parseInt(process.env.PORT_SOCKETS_UDP || "8003");
 
 export const LAST_VERSION = "1.2.3_beta_4";
+export const MIN_CLIENT_VERSION = "1.1.9";
 export const PROTOCOL_VERSION = 2;
 export const MIN_PROTOCOL_VERSION = 1;
 export const MAX_PLAYERS_PER_IP = 8;

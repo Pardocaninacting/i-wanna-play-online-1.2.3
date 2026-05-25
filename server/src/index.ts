@@ -4,7 +4,7 @@ import { createSocket, RemoteInfo } from "node:dgram";
 import { SmartBuffer } from "smart-buffer";
 import { Logger } from "tslog";
 import {
-    PORT_HTTP, PORT_TCP, PORT_UDP, LAST_VERSION, PROTOCOL_VERSION, MIN_PROTOCOL_VERSION,
+    PORT_HTTP, PORT_TCP, PORT_UDP, MIN_CLIENT_VERSION, PROTOCOL_VERSION, MIN_PROTOCOL_VERSION,
     MAX_PLAYERS_PER_IP, HEARTBEAT_INTERVAL_SEC, HEARTBEAT_TIMEOUT_SEC,
     UDP_CLEANUP_INTERVAL_MIN, UDP_EXPIRY_MIN,
     MAX_TCP_MESSAGE, MAX_TCP_BUFFER, MAX_UDP_MESSAGE, MAX_CUSTOM_SLOTS, MAX_PER_ENTRY_SLOTS,
@@ -199,18 +199,26 @@ function removeById<T extends { id: string | null }>(list: T[], id: string): voi
     }
 }
 
+function parseLegacyVersion(version: string): [number, number, number] | null {
+    const parts = version.split(".");
+    if (parts.length < 3) return null;
+    const parsed = parts.slice(0, 3).map((part) => {
+        const match = part.match(/^\d+/);
+        return match ? Number(match[0]) : Number.NaN;
+    });
+    if (parsed.some(Number.isNaN)) return null;
+    return [parsed[0], parsed[1], parsed[2]];
+}
+
 function isVersionCompatible(version: string): boolean {
-    try {
-        const v = version.split(".").map(Number);
-        const min = LAST_VERSION.split(".").map(Number);
-        for (let i = 0; i < 3; i++) {
-            if (v[i] < min[i]) return false;
-            if (v[i] > min[i]) return true;
-        }
-        return true;
-    } catch {
-        return false;
+    const v = parseLegacyVersion(version);
+    const min = parseLegacyVersion(MIN_CLIENT_VERSION);
+    if (!v || !min) return false;
+    for (let i = 0; i < 3; i++) {
+        if (v[i] < min[i]) return false;
+        if (v[i] > min[i]) return true;
     }
+    return true;
 }
 
 /* ── TCP framing ───────────────────────────────────── */
@@ -395,7 +403,7 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 if (!compatible) {
                     reply = new SmartBuffer();
                     reply.writeUInt8(2); // Incompatible version (server→client)
-                    reply.writeStringNT(LAST_VERSION);
+                    reply.writeStringNT(MIN_CLIENT_VERSION);
                     sendTo(player, reply);
                     setTimeout(() => quitPlayer(player, `incompatible_version(${version})`), 1000);
                 } else {

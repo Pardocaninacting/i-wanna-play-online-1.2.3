@@ -48,6 +48,27 @@ sync1_count = 8
 
 `sync_enabled = 1` is optional because the game defaults it to on when omitted. Players need to restart the game after editing the entry names or counts.
 
+## GM8 Extension Package Selection
+
+Some GM8 games ship with non-vanilla runtime stubs (UPX-packed, Antidec-patched, etc.) where one or more of the IWPO extension packages fails to register, producing `Error defining an external function` at game start. For those games, choose which package(s) to inject in `iwpo-settings.ini`:
+
+```ini
+[settings]
+extension_packages=wd_only
+```
+
+Allowed values:
+
+- `auto` (default): inject every supported package for the target version (GM8.0: `ChineseChatSupport8` + `gm_windows_dialog8`; GM8.1+: `gaseous_marble8` + `gm_windows_dialog8`).
+- `wd_only`: only `gm_windows_dialog8` (Windows dialog boxes). Empirically the safest fallback — works on UPX/Antidec games where `ChineseChatSupport8` fails.
+- `fw_only`: only `ChineseChatSupport8` (Chinese text rendering via FoxWriting). GM8.0 only.
+- `gm_only`: only `gaseous_marble8`. GM8.1+ only.
+- `none`: skip all packages (equivalent to `no_extension_packages=1`).
+
+When a package is skipped, the converter injects vanilla-GML stub scripts (`wd_input_box` → `get_string`, `fw_draw_text_ext` → `draw_text_ext`, etc.) so the rest of the injected world GML still compiles. Functionality is reduced (no Windows dialogs / no Chinese rendering) but the game runs.
+
+Known case: `I wanna be the Fish ver1.1` now automatically falls back to the safe GM8.0 stub path instead of loading native CJK plugins. `wd_only` is still available if you want to force the minimal Windows-dialog-only package set manually.
+
 ## Edit the GML files
 The GML files contain the code that will be injected into the game.
 If you want to edit these files to contribute, first there are 3 things you should note:

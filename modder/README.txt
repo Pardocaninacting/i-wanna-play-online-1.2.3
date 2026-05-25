@@ -33,6 +33,26 @@ How to use:
   PLAYER_GUIDE.txt is the bilingual manual for players. Keep it in the tool package or distribute it separately if you want to provide player-facing instructions.
   Older online packs may also read __ONLINE_server.txt as a server override fallback.
 
+GM8 extension package selection:
+  Some GM8 games have a non-vanilla runtime stub (UPX-packed, Antidec-patched, ...) where one or more
+  IWPO extension packages fails to register, producing "Error defining an external function" at startup.
+  For those games, choose which package(s) to inject in iwpo-settings.ini:
+
+  [settings]
+  extension_packages=wd_only
+
+  Values:
+   auto      Inject every supported package (default).
+   wd_only   Only gm_windows_dialog8 (Windows dialog boxes). Empirically the safest fallback.
+   fw_only   Only ChineseChatSupport8 (Chinese rendering, GM8.0 only).
+   gm_only   Only gaseous_marble8 (GM8.1+ only).
+   none      Skip all (same as no_extension_packages=1).
+
+  Skipped packages fall back to vanilla GML stubs (e.g. wd_input_box -> get_string), so the rest
+  of the injected world GML still compiles. Functionality is reduced but the game runs.
+
+  Known case: "I wanna be the Fish ver1.1" now automatically falls back to the safe GM8.0 stub path instead of loading native CJK plugins. wd_only is still available if you want to force the minimal Windows-dialog-only package set manually.
+
 Files to keep with the converted game:
  - the converted exe or online folder
  - http_dll_2_3.dll
@@ -58,9 +78,6 @@ FAQ:
 
   Q: The tool I try to convert a GameMaker:Studio game even though it is GameMaker8
   A: Probably you have a data.win file in the same directory, I check its presence to detect GameMaker:Studio and unfortunately that can lead to this bug. To fix this, you can simply temporarily remove the data.win file from the directory.
-
-  Q: The tool ran successfully, but gave me a game that I can't run. When I open it nothing happens and no window is created at all
-  A: GameMaker8.1 checks the executable length to ensure the data is not corrupted. Since my mod require to change that length, I disable that check for the most common version of GameMaker8.1. Unfortunately, there are too many versions I should specifically cover. What you can do to fix this issue is to decompile the game and recompile it.
 
   Q: I tried to convert [some game] but the converter failed. Why?
   A: Sorry about that, I cannot convert every game. Some just won't work. I will try my best at covering the greatest majority of fangames. Feel free to contact me if there is a game you really want to play online, but be aware I have other priorities and will not do updates that often.

@@ -30,6 +30,7 @@
 				buffer_write_string(@buffer, @oPlayer.@name);
 				buffer_write_uint8(@buffer, @oPlayer.@team);
 			}
+			buffer_write_uint8(@buffer, @showPlayerList);
 			buffer_write_to_file(@buffer, "tempOnline");
 		#endif
 		#if GMNET
@@ -59,6 +60,7 @@
 				buffer_write_string(@buffer, @oPlayer.@name);
 				buffer_write_u8(@buffer, @oPlayer.@team);
 			}
+			buffer_write_u8(@buffer, @showPlayerList);
 			buffer_save(@buffer, "tempOnline");
 		#endif
 		// SAVE CHAT HISTORY

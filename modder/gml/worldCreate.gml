@@ -382,6 +382,7 @@ if file_exists(@savesPath) {
 					@oPlayer.@name = buffer_read_string(@buffer);
 					@oPlayer.@team = buffer_read_uint8(@buffer);
 				}
+				@showPlayerList = buffer_read_uint8(@buffer);
 			#endif
 			#if GMNET
 				for(@i = 0; @i < @n; @i += 1){
@@ -401,6 +402,7 @@ if file_exists(@savesPath) {
 					@oPlayer.@name = buffer_read_string(@buffer);
 					@oPlayer.@team = buffer_read_u8(@buffer);
 				}
+				@showPlayerList = buffer_read_u8(@buffer);
 			#endif
 			@restoredFromTemp = true;
 			@connected = true;
@@ -413,12 +415,6 @@ if file_exists(@savesPath) {
 			}
 			if(file_exists("tempOnlineChat")){
 				file_delete("tempOnlineChat");
-			}
-			if(file_exists("tempOnlinePassword")){
-				file_delete("tempOnlinePassword");
-			}
-			if(file_exists("tempOnlineSpectating")){
-				file_delete("tempOnlineSpectating");
 			}
 			socket_destroy(@socket);
 			@socket = socket_create();
@@ -460,7 +456,7 @@ if file_exists(@savesPath) {
 	if(!@restoredFromTemp){
 #endif
 	@socket = socket_create();
-	socket_connect(@socket, @server, @tcpPort);
+		@socketConnectResult = socket_connect(@socket, @server, @tcpPort);
 	#if STUDIO
 		@name = get_string("Enter your name:", "");
 	#endif

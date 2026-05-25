@@ -1,6 +1,18 @@
 /// ONLINE
 // %arg0: The name of the player object
 // %arg1: The name of the player2 object if it exists
+instance_activate_object(@userInterface);
+instance_activate_object(@onlinePlayer);
+instance_activate_object(@chatbox);
+instance_activate_object(@playerSaved);
+if(!instance_exists(@userInterface)){
+	#if GMS2
+		instance_create_depth(0, 0, -2147483648, @userInterface);
+	#endif
+	#if not GMS2
+		instance_create(0, 0, @userInterface);
+	#endif
+}
 // POSITION ROLLBACK
 if(@saveHistPending){
 	@_rp = %arg0;
@@ -569,7 +581,8 @@ if(@reconnecting){
 		}
 	}
 }
-switch(socket_get_state(@socket)){
+@socketState = socket_get_state(@socket);
+switch(@socketState){
 	case 2:
 		if(!@connected || @reconnecting){
 			if(@reconnecting){
