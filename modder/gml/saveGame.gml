@@ -11,7 +11,7 @@ if(instance_exists(%arg0)){
 				if(argument0){
 			#endif
 			#if GM8YY
-				if(argument0){
+				if(argument_count == 0 || argument0){
 			#endif
 			#if not STUDIO
 				#if not GM8YY

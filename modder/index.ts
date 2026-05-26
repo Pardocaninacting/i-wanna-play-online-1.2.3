@@ -29,6 +29,7 @@ interface ToolSettings {
 	forceExternalDll?: boolean;
 	noExtensionPackages?: boolean;
 	extensionPackages?: string;
+	injectIntoStep?: boolean;
 	customSlot?: CustomSlotConfig | null;
 }
 
@@ -62,6 +63,7 @@ const readToolSettings = async function(): Promise<ToolSettings> {
 				case "force_external_dll": result.forceExternalDll = val === "1" || val.toLowerCase() === "true"; break;
 				case "no_extension_packages": result.noExtensionPackages = val === "1" || val.toLowerCase() === "true"; break;
 				case "extension_packages": result.extensionPackages = val.toLowerCase(); break;
+				case "inject_into_step": result.injectIntoStep = val === "1" || val.toLowerCase() === "true"; break;
 			}
 		}else if(currentSection === "mod"){
 			modSection[key.toLowerCase()] = val;
@@ -73,7 +75,7 @@ const readToolSettings = async function(): Promise<ToolSettings> {
 	return result;
 }
 
-const getServer = async function(): Promise<{server: string, ports: Ports, forceExternalDll: boolean, noExtensionPackages: boolean, extensionPackages: string | null, customSlot: CustomSlotConfig | null}> {
+const getServer = async function(): Promise<{server: string, ports: Ports, forceExternalDll: boolean, noExtensionPackages: boolean, extensionPackages: string | null, injectIntoStep: boolean, customSlot: CustomSlotConfig | null}> {
 	let server: string = "localhost";
 	let ports: Ports = {
 		tcp: 8002,
@@ -82,6 +84,7 @@ const getServer = async function(): Promise<{server: string, ports: Ports, force
 	let forceExternalDll: boolean = false;
 	let noExtensionPackages: boolean = false;
 	let extensionPackages: string | null = null;
+	let injectIntoStep: boolean = false;
 	const toolSettings = await readToolSettings();
 	if(toolSettings.server) server = toolSettings.server;
 	if(toolSettings.tcpPort) ports.tcp = toolSettings.tcpPort;
@@ -89,6 +92,7 @@ const getServer = async function(): Promise<{server: string, ports: Ports, force
 	if(toolSettings.forceExternalDll) forceExternalDll = true;
 	if(toolSettings.noExtensionPackages) noExtensionPackages = true;
 	if(toolSettings.extensionPackages) extensionPackages = toolSettings.extensionPackages;
+	if(toolSettings.injectIntoStep) injectIntoStep = true;
 	const customSlot: CustomSlotConfig | null = toolSettings.customSlot ? toolSettings.customSlot : null;
 	const keyword: string = "server=";
 	for(const arg of process.argv){
@@ -102,13 +106,13 @@ const getServer = async function(): Promise<{server: string, ports: Ports, force
 			break;
 		}
 	}
-	return {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, customSlot};
+	return {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, injectIntoStep, customSlot};
 }
 
 const main = async function(): Promise<string> {
 	const input: string = await getInputGame();
 	const gameName: string = path.basename(input, ".exe");
-	const {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, customSlot} = await getServer();
+	const {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, injectIntoStep, customSlot} = await getServer();
 	console.log(`Server: ${server} (TCP ${ports.tcp}, UDP ${ports.udp})`);
 	if(customSlot){
 		const totalSlots = customSlot.entries.reduce((s, e) => s + Math.ceil(e.count / 32), 0);
@@ -121,6 +125,8 @@ const main = async function(): Promise<string> {
 		console.log("Target: Game Maker 8");
 		if(forceExternalDll)
 			console.log("HTTP DLL mode: external (force_external_dll)");
+		if(injectIntoStep)
+			console.log("Per-frame tick injection: Step (inject_into_step)");
 		if(noExtensionPackages){
 			process.env.IWPO_NO_EXTENSION_PACKAGES = "1";
 			console.log("GM8 extension packages: disabled (no_extension_packages)");
@@ -135,7 +141,7 @@ const main = async function(): Promise<string> {
 				console.log(`GM8 extension packages: ${mode}`);
 			}
 		}
-		await ConverterGM8(input, gameName, server, ports, forceExternalDll, customSlot);
+		await ConverterGM8(input, gameName, server, ports, forceExternalDll, customSlot, injectIntoStep);
 	}
 	return "Success!";
 }

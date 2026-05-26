@@ -53,6 +53,16 @@ GM8 extension package selection:
 
   Known case: "I wanna be the Fish ver1.1" now automatically falls back to the safe GM8.0 stub path instead of loading native CJK plugins. wd_only is still available if you want to force the minimal Windows-dialog-only package set manually.
 
+GM8.2 tick injection compatibility:
+  IWPO normally injects its per-frame GM8 tick into End Step. This remains the default for GM8, GM8.1 and ordinary GM8.2 games.
+
+  Some games made by compiling older yuuutu-engine source directly with the community GameMaker 8.2 runtime may ignore that injected End Step tick. For those games, enable Step injection before converting:
+
+  [settings]
+  inject_into_step=1
+
+  Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
+
 Files to keep with the converted game:
  - the converted exe or online folder
  - http_dll_2_3.dll

@@ -19,6 +19,7 @@ I Wanna Play Online - 玩家指南
 - I: 画面外指示箭头开/关
 - Y: 长按约 1 秒进入/退出观战
 - H: 长按打开标记轮盘，松开发送，右键取消
+- F: 读取最新一条历史存档
 - 1-8: 读取绑定到该数字的收藏存档
 - 所有按键都可以在 Settings -> Keys 中修改。
 
@@ -35,7 +36,7 @@ I Wanna Play Online - 玩家指南
 - Ping: 只对同房间玩家生效。默认 9 格含义是 `?`、Up、Safe、Left、Here、Right、Wait、Down、`!`。标记环和名字使用队伍颜色。
 - 隐藏细节: 远端 Ping 只有在 Visual = All 时才会显示；如果你切到 No Names 或 Hidden，就只会看到自己的 Ping。
 - Spectate: 长按 Y 进入/退出观战；Left/Right 切换目标；Up/Down 切换 Follow / Screen 相机；如果一段时间内没有可跟随目标，会自动退出观战。
-- Save History: Saves 页最多保留 500 条最近存档。`*` 是收藏，数字徽标是 1-8 快速读取键，Apply 会回滚到该位置，Clear 只会清掉非收藏存档。
+- Save History: Saves 页最多保留 500 条最近存档。Fast Load 快捷键默认 F，可快速读取最新一条历史存档；也可在 Settings 关闭。`*` 是收藏，数字徽标是 1-8 快速读取键，Apply 会回滚到该位置，Clear 只会清掉非收藏存档。
 - Save ON / OFF: ON 会向队伍内广播你的共享存档动作；OFF 只保留本地效果。
 - Rating: 可以提交 1-5 星评分；Cleared 是可选项。
 
@@ -61,6 +62,7 @@ sync1_count = 8
 - 标签页依次是 Settings、Saves、Rating、Keys、Sync。
 - 鼠标和键盘都可以操作。
 - 键盘规则: Left/Right 切换标签，Down 或 Enter 进入当前标签，Up 返回标签栏，Enter 执行当前操作。
+- Settings 页可以关闭 Fast Load；Keys 页可以修改 Fast Load 的键位。
 - Saves 页键盘附加操作: `F` 收藏/取消收藏，`Shift+F` 或 Backspace 切换“只看收藏”，`1-8` 绑定快速读取，`Delete` 删除当前非收藏存档，`Shift+Delete` 清空所有非收藏，Home/End/PageUp/PageDown 快速翻页。
 
 6. 常见问题
@@ -91,6 +93,7 @@ I Wanna Play Online - Player Guide
 - I: Toggle off-screen indicators
 - Y: Hold for about 1 second to enter or leave spectate
 - H: Hold to open the ping wheel, release to send, RMB to cancel
+- F: Load the latest save-history entry
 - 1-8: Load the favorite save bound to that number
 - All hotkeys can be changed in Settings -> Keys.
 
@@ -107,7 +110,7 @@ I Wanna Play Online - Player Guide
 - Ping: only works for players in the same room. The default 9 slots are `?`, Up, Safe, Left, Here, Right, Wait, Down, and `!`. Ping rings and sender names use team colors.
 - Hidden detail: remote pings are only visible when Visual = All. In No Names or Hidden, you only see your own pings.
 - Spectate: hold Y to enter or leave. Left/Right switches target. Up/Down changes Follow / Screen camera. If there is nobody valid to follow for a while, spectate closes automatically.
-- Save History: the Saves tab keeps up to 500 recent saves. `*` means favorite, the number badge is the 1-8 quick-load key, Apply rolls you back to that save, and Clear only removes non-favorites.
+- Save History: the Saves tab keeps up to 500 recent saves. Fast Load defaults to F and loads the latest save-history entry; it can also be disabled in Settings. `*` means favorite, the number badge is the 1-8 quick-load key, Apply rolls you back to that save, and Clear only removes non-favorites.
 - Save ON / OFF: ON sends your shared-save actions to teammates. OFF keeps them local.
 - Rating: you can submit 1-5 stars; Cleared is optional.
 
@@ -133,6 +136,7 @@ sync1_count = 8
 - The tabs are Settings, Saves, Rating, Keys, and Sync.
 - Both mouse and keyboard controls are supported.
 - Keyboard rules: Left/Right changes tabs, Down or Enter enters the current tab, Up returns to the tab bar, and Enter confirms the focused action.
+- The Settings tab can disable Fast Load; the Keys tab can rebind it.
 - Extra keyboard controls in Saves: `F` favorite/unfavorite, `Shift+F` or Backspace toggles favorites-only filter, `1-8` binds quick load, `Delete` removes the current non-favorite save, `Shift+Delete` clears all non-favorites, and Home/End/PageUp/PageDown jump around the list.
 
 6. Common Problems

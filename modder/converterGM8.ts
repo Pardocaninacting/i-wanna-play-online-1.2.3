@@ -80,6 +80,97 @@ const concatBuffers = function(buffers: Array<Buffer>): Buffer {
 	return Buffer.concat(buffers as unknown as Array<Uint8Array>);
 }
 
+const isIdentChar = function(ch: string): boolean {
+	return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
+}
+
+const skipQuotedString = function(source: string, start: number): number {
+	const quote: string = source[start];
+	for(let cursor: number = start + 1; cursor < source.length; ++cursor){
+		if(source[cursor] === "\\"){
+			cursor += 1;
+		}else if(source[cursor] === quote){
+			return cursor;
+		}
+	}
+	return source.length;
+}
+
+export const insertGMLScript = function(source: Buffer, code: Buffer): Buffer {
+	// GM8 quirk: if a script starts with `{`, only code inside that matching
+	// `{}` block executes. We insert our code before the closing `}` so it
+	// runs within the block. Depth-aware matching avoids nested brace mismatches
+	// (the old v1.1.9 code used lastIndexOf+regex with /m flag, which could
+	// pick a non-root `}` on scripts that didn't truly start with `{`).
+	const str: string = source.toString('ascii');
+	const openIdx: number = str.indexOf('{');
+	if(openIdx === -1 || str.substring(0, openIdx).trim().length > 0)
+		return concatBuffers([source, code]);
+	// Find matching closing brace, skipping strings and comments
+	let depth: number = 0;
+	let closeIdx: number = -1;
+	for(let cursor: number = openIdx; cursor < str.length; ++cursor){
+		const ch: string = str[cursor];
+		if(ch === '"' || ch === "'"){
+			cursor = skipQuotedString(str, cursor);
+			if(cursor >= str.length) break;
+		}else if(ch === '/' && str[cursor+1] === '/'){
+			cursor = str.indexOf('\n', cursor + 2);
+			if(cursor === -1) break;
+		}else if(ch === '/' && str[cursor+1] === '*'){
+			cursor = str.indexOf('*/', cursor + 2);
+			if(cursor === -1) break;
+			cursor++; // skip past '*/'
+		}else if(ch === '{'){
+			depth++;
+		}else if(ch === '}'){
+			depth--;
+			if(depth === 0){ closeIdx = cursor; break; }
+		}
+	}
+	if(closeIdx !== -1 && str.substring(closeIdx + 1).trim().length === 0)
+		return concatBuffers([source.slice(0, closeIdx), Buffer.from("\n", 'ascii'), code, Buffer.from("}", 'ascii')]);
+	return concatBuffers([source, code]);
+}
+
+export const insertGMLScriptBeforeSuccessfulReturn = function(source: Buffer, code: Buffer): Buffer {
+	const str: string = source.toString('ascii');
+	const pieces: Array<Buffer> = [];
+	let lastWritten: number = 0;
+	for(let cursor: number = 0; cursor < str.length; ++cursor){
+		const ch: string = str[cursor];
+		if(ch === '"' || ch === "'"){
+			cursor = skipQuotedString(str, cursor);
+			if(cursor >= str.length) break;
+		}else if(ch === '/' && str[cursor+1] === '/'){
+			cursor = str.indexOf('\n', cursor + 2);
+			if(cursor === -1) break;
+		}else if(ch === '/' && str[cursor+1] === '*'){
+			cursor = str.indexOf('*/', cursor + 2);
+			if(cursor === -1) break;
+			cursor++;
+		}else if(!isIdentChar(str[cursor-1]) && str.slice(cursor, cursor + 6).toLowerCase() === "return" && !isIdentChar(str[cursor+6])){
+			const match: RegExpExecArray = /^return[ \t]+(?:true(?![A-Za-z0-9_])|1(?![0-9.]))[ \t]*;?/i.exec(str.slice(cursor));
+			if(match){
+				const returnEnd: number = cursor + match[0].length;
+				pieces.push(source.slice(lastWritten, cursor));
+				pieces.push(Buffer.from("{\n", 'ascii'));
+				pieces.push(code);
+				pieces.push(Buffer.from("\n", 'ascii'));
+				pieces.push(source.slice(cursor, returnEnd));
+				pieces.push(Buffer.from("\n}", 'ascii'));
+				lastWritten = returnEnd;
+				cursor = returnEnd - 1;
+			}
+		}
+	}
+	if(pieces.length > 0){
+		pieces.push(source.slice(lastWritten));
+		return concatBuffers(pieces);
+	}
+	return insertGMLScript(source, code);
+}
+
 const isAntidecProtected = async function(input: string): Promise<boolean> {
 	try {
 		const raw: SmartBuffer = SmartBuffer.fromBuffer(await fs.readFile(input));
@@ -124,7 +215,7 @@ const isFishClassGame = function(gameName: string): boolean {
 	return normalizedName.includes("i wanna be the fish");
 }
 
-export const ConverterGM8 = async function(input: string, gameName: string, server: string, ports: Ports, forceExternalDll: boolean, customSlot: CustomSlotConfig | null = null): Promise<void> {
+export const ConverterGM8 = async function(input: string, gameName: string, server: string, ports: Ports, forceExternalDll: boolean, customSlot: CustomSlotConfig | null = null, injectIntoStep: boolean = false): Promise<void> {
 	const configFilename: string = "__ONLINE_config.ini";
 	console.log("Reading executable...");
 	const fishClassGame: boolean = isFishClassGame(gameName);
@@ -323,42 +414,6 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			}
 		}
 		throw new Error(`No ${typeName} found`);
-	}
-	const insertGMLScript = function(source: Buffer, code: Buffer) {
-		// GM8 quirk: if a script starts with `{`, only code inside that matching
-		// `{}` block executes. We insert our code before the closing `}` so it
-		// runs within the block. Depth-aware matching avoids nested brace mismatches
-		// (the old v1.1.9 code used lastIndexOf+regex with /m flag, which could
-		// pick a non-root `}` on scripts that didn't truly start with `{`).
-		const str: string = source.toString('ascii');
-		const openIdx: number = str.indexOf('{');
-		if(openIdx === -1 || str.substring(0, openIdx).trim().length > 0)
-			return concatBuffers([source, code]);
-		// Find matching closing brace, skipping strings and comments
-		let depth: number = 0;
-		let closeIdx: number = -1;
-		for(let i: number = openIdx; i < str.length; ++i){
-			const ch: string = str[i];
-			if(ch === '"' || ch === "'"){
-				i = str.indexOf(ch, i + 1);
-				if(i === -1) break;
-			}else if(ch === '/' && str[i+1] === '/'){
-				i = str.indexOf('\n', i + 2);
-				if(i === -1) break;
-			}else if(ch === '/' && str[i+1] === '*'){
-				i = str.indexOf('*/', i + 2);
-				if(i === -1) break;
-				i++; // skip past '*/'
-			}else if(ch === '{'){
-				depth++;
-			}else if(ch === '}'){
-				depth--;
-				if(depth === 0){ closeIdx = i; break; }
-			}
-		}
-		if(closeIdx !== -1 && str.substring(closeIdx + 1).trim().length === 0)
-			return concatBuffers([source.slice(0, closeIdx), Buffer.from("\n", 'ascii'), code, Buffer.from("}", 'ascii')]);
-		return concatBuffers([source, code]);
 	}
 	console.log("Reading game data...");
 	if(exe.readUInt32LE() != 700)
@@ -856,7 +911,13 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		? Buffer.from(gameName)
 		: iconv.encode(gameName, "gbk");
 	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), gameNameBuf, Buffer.from(Utils.getVersion(), 'ascii')));
-	world.addEndStepCode(await GMLCode.getGML("worldEndStep", player.name, player2 ? player2.name : Buffer.from("")));
+	// Opt-in compatibility path: keep EndStep as the default, but allow Step
+	// injection for GM8.2-mod edge cases where the default tick does not run.
+	const addTick = function(obj: GMObject, gml: Buffer): void {
+		if(injectIntoStep) obj.addStepCode(gml);
+		else obj.addEndStepCode(gml);
+	};
+	addTick(world, await GMLCode.getGML("worldEndStep", player.name, player2 ? player2.name : Buffer.from("")));
 	world.addGameEndCode(await GMLCode.getGML("worldGameEnd"));
 	const newObject = function(name: Buffer, visible: boolean, depth: number, persistent: boolean): GMObject {
 		const obj: GMObject = new GMObject();
@@ -874,17 +935,17 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const onlinePlayer: GMObject = newObject(Buffer.from("__ONLINE_onlinePlayer", 'ascii'), false, -10, true);
 	onlinePlayer.addCreateCode(await GMLCode.getGML("onlinePlayerCreate"));
 	const onlinePlayerTick: Buffer = await GMLCode.getGML("onlinePlayerEndStep", player.name, player2 ? player2.name : Buffer.from(""), world.name);
-	onlinePlayer.addEndStepCode(onlinePlayerTick);
+	addTick(onlinePlayer, onlinePlayerTick);
 	onlinePlayer.addDrawCode(await GMLCode.getGML("onlinePlayerDraw", world.name));
 	const chatbox: GMObject = newObject(Buffer.from("__ONLINE_chatbox",'ascii'), true, -11, true);
 	chatbox.addCreateCode(await GMLCode.getGML("chatboxCreate"));
 	const chatboxTick: Buffer = await GMLCode.getGML("chatboxEndStep", player.name, player2 ? player2.name : Buffer.from(""), world.name);
-	chatbox.addEndStepCode(chatboxTick);
+	addTick(chatbox, chatboxTick);
 	chatbox.addDrawCode(await GMLCode.getGML("chatboxDraw"));
 	const playerSaved: GMObject = newObject(Buffer.from("__ONLINE_playerSaved",'ascii'), true, -10, false);
 	playerSaved.addCreateCode(await GMLCode.getGML("playerSavedCreate"));
 	const playerSavedTick: Buffer = await GMLCode.getGML("playerSavedEndStep");
-	playerSaved.addEndStepCode(playerSavedTick);
+	addTick(playerSaved, playerSavedTick);
 	playerSaved.addDrawCode(await GMLCode.getGML("playerSavedDraw"));
 	const ui: GMObject = newObject(Buffer.from("__ONLINE_userInterface",'ascii'), true, -2147483648, true);
 	const drawGml: Buffer = await GMLCode.getGML("worldDraw");
@@ -905,13 +966,12 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const loadGame: Script = await findAssetInteractive(scripts, ["save_load", "loadgame", "loadGame", "savedata_load", "scrLoadGame", "LoadGame"], "script loadGame") as Script;
 	const saveExe: Script = findAsset(scripts, ["saveExe", "scrSaveExe"]) as Script;
 	const tempExe: Script = findAsset(scripts, ["tempExe", "scrTempExe"]) as Script;
-	saveGame.source = insertGMLScript(saveGame.source, await GMLCode.getGML("saveGame", world.name, player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(roomGuard, 'ascii')));
+	saveGame.source = insertGMLScriptBeforeSuccessfulReturn(saveGame.source, await GMLCode.getGML("saveGame", world.name, player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(roomGuard, 'ascii')));
 	// v2 (§11): runtime sync is fully driven by `__ONLINE_config.ini [sync]`; no GML codegen here.
 	loadGame.source = insertGMLScript(loadGame.source, await GMLCode.getGML("saveGame2", world.name, player.name, player2 ? player2.name : Buffer.from("")));
 	const loadGameContent: Buffer = await GMLCode.getGML("loadGame", world.name, player.name, player2 ? player2.name : Buffer.from(""));
-	if(saveExe == undefined && tempExe == undefined){
-		loadGame.source = insertGMLScript(loadGame.source, loadGameContent);
-	}else{
+	loadGame.source = insertGMLScript(loadGame.source, loadGameContent);
+	if(saveExe !== undefined || tempExe !== undefined){
 		if(tempExe !== undefined)
 			tempExe.source = insertGMLScript(tempExe.source, loadGameContent);
 		else
@@ -1074,7 +1134,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const outputDir: string = path.dirname(input);
 	await fs.writeFile(path.join(outputDir, `${gameName}_online.exe`), getExeBuffer());
 	const runtimeConfigPath: string = path.join(outputDir, configFilename);
-	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_rating=85\nteam=0\nlerp=1`;
+	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_rating=85\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1`;
 	await fs.writeFile(runtimeConfigPath, configContent, "utf8");
 	if(customSlot){
 		// Write/merge the runtime `[sync]` section into `__ONLINE_config.ini` next to the produced EXE.

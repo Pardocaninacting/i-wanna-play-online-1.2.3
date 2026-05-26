@@ -755,6 +755,7 @@ if(!@spectating){
 @exists = instance_exists(@p);
 @X = @pX;
 @Y = @pY;
+@loadHotkeyConsumed = false;
 if(@exists){
 	@p = instance_find(@p, 0);
 	if(@exists != @pExists){
@@ -881,9 +882,8 @@ if(@exists){
 		}
 	}
 	@t += 1;
-	@loadHotkeyConsumed = false;
-	if(!@settingsOpen && @saveHistCount > 0){
-		if(keyboard_check(vk_shift) && keyboard_check_pressed(82)){
+	if(!@loadHotkeyConsumed && !@settingsOpen && @saveHistCount > 0){
+		if(@fastLoadEnabled && keyboard_check_pressed(@keyFastLoad)){
 			@saveHistApply = @saveHistCount - 1;
 			@loadHotkeyConsumed = true;
 		}else{
@@ -1696,6 +1696,24 @@ if(@saveChanged){
 	@a.@name = "";
 	@a.@state = @save_enabled + 3;
 }
+if(@fastLoadChanged){
+	@fastLoadChanged = false;
+	#if GMS2
+		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
+	#endif
+	#if not GMS2
+		@a = instance_create(0, 0, @playerSaved);
+	#endif
+	if(@fastLoadEnabled){
+		@a.@name = "Fast: on";
+	}else{
+		@a.@name = "Fast: off";
+	}
+	@a.@state = -2;
+	ini_open("@config.ini");
+	ini_write_real("config", "fast_load", @fastLoadEnabled);
+	ini_close();
+}
 if(@lerpChanged){
 	@lerpChanged = false;
 	#if GMS2
@@ -1984,7 +2002,7 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_down)){
-			@kbRow[0] += 1; if(@kbRow[0] > 5) @kbRow[0] = 5;
+			@kbRow[0] += 1; if(@kbRow[0] > 6) @kbRow[0] = 6;
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
@@ -2001,13 +2019,16 @@ if(@settingsOpen && @keybindEditing < 0){
 				@save_enabled = 1 - @save_enabled;
 				@saveChanged = true;
 			}else if(@kbRow[0] == 3){
+				@fastLoadEnabled = !@fastLoadEnabled;
+				@fastLoadChanged = true;
+			}else if(@kbRow[0] == 4){
 				@vis += @kbDir;
 				if(@vis < 0) @vis = 2;
 				if(@vis > 2) @vis = 0;
 				@visChanged = true;
-			}else if(@kbRow[0] == 4){
-				@showArrows = !@showArrows;
 			}else if(@kbRow[0] == 5){
+				@showArrows = !@showArrows;
+			}else if(@kbRow[0] == 6){
 				@specCamMode += @kbDir;
 				if(@specCamMode < 0) @specCamMode = 1;
 				if(@specCamMode > 1) @specCamMode = 0;
@@ -2201,11 +2222,11 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_down)){
-			@kbRow[3] += 1; if(@kbRow[3] > 9) @kbRow[3] = 9;
+			@kbRow[3] += 1; if(@kbRow[3] > 10) @kbRow[3] = 10;
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_enter)){
-			if(@kbRow[3] < 9){
+			if(@kbRow[3] < 10){
 				@keybindEditing = @kbRow[3];
 				@keybindArmTimer = 6;
 			}else{
@@ -2218,6 +2239,7 @@ if(@settingsOpen && @keybindEditing < 0){
 				@keyPlayerList = 76;
 				@keyChat = 32;
 				@keyPing = 72;
+				@keyFastLoad = 70;
 				@keybindEditing = -1;
 				@keybindSave = true;
 			}
@@ -2255,6 +2277,7 @@ if(@keybindEditing >= 0 && @settingsOpen && @settingsTab == 3 && @keybindArmTime
 			if(@keybindEditing == 6) @keyPlayerList = @kbPressed;
 			if(@keybindEditing == 7) @keyChat = @kbPressed;
 			if(@keybindEditing == 8) @keyPing = @kbPressed;
+			if(@keybindEditing == 9) @keyFastLoad = @kbPressed;
 			@keybindSave = true;
 		}
 		@keybindEditing = -1;
@@ -2274,7 +2297,9 @@ if(@keybindSave){
 	ini_write_real("config", "key_spectate", @keySpectate);
 	ini_write_real("config", "key_arrows", @keyArrows);
 	ini_write_real("config", "key_ping", @keyPing);
+	ini_write_real("config", "key_fastload", @keyFastLoad);
 	ini_write_real("config", "team", @team);
 	ini_write_real("config", "lerp", @lerpEnabled);
+	ini_write_real("config", "fast_load", @fastLoadEnabled);
 	ini_close();
 }

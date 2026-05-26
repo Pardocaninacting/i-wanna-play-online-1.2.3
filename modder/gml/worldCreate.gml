@@ -58,15 +58,18 @@ else{
 @keyVis = 86;
 @keySave = 84;
 @keyPlayerList = 76;
+@keyFastLoad = 70;
 @showPlayerList = false;
 @loadHotkeyConsumed = false;
 @settingsOpen = false;
 @keySettings = 79;
 @lerpEnabled = true;
+@fastLoadEnabled = true;
 @teamChanged = false;
 @visChanged = false;
 @saveChanged = false;
 @lerpChanged = false;
+@fastLoadChanged = false;
 @syncEnabledChanged = false;
 @saveHistCount = 0;
 @saveHistMax = 500;
@@ -194,6 +197,7 @@ if file_exists(@cfgPath) {
 	@keySpectate = ini_read_real("config", "key_spectate", @keySpectate);
 	@keyArrows = ini_read_real("config", "key_arrows", @keyArrows);
 	@keyPing = ini_read_real("config", "key_ping", @keyPing);
+	@keyFastLoad = ini_read_real("config", "key_fastload", @keyFastLoad);
 	@pingLabels[0] = ini_read_string("ping", "label_0", @pingLabels[0]);
 	@pingLabels[1] = ini_read_string("ping", "label_1", @pingLabels[1]);
 	@pingLabels[2] = ini_read_string("ping", "label_2", @pingLabels[2]);
@@ -204,6 +208,7 @@ if file_exists(@cfgPath) {
 	@pingLabels[7] = ini_read_string("ping", "label_7", @pingLabels[7]);
 	@pingLabels[8] = ini_read_string("ping", "label_8", @pingLabels[8]);
 	@lerpEnabled = ini_read_real("config", "lerp", 1);
+	@fastLoadEnabled = ini_read_real("config", "fast_load", 1);
 	@team = ini_read_real("config", "team", @team);
 	if(@team < 0 || @team > 7) @team = 0;
 	@team = floor(@team);

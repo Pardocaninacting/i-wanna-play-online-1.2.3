@@ -451,6 +451,27 @@ if(@settingsOpen){
 		@rowY = @contentY + 88;
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
+		draw_text(@spX + 16, @rowY, "Fast:");
+		@btnFastX = @spX + 252;
+		@btnFastY = @rowY;
+		@btnFastW = 56;
+		@btnFastH = 18;
+		if(@fastLoadEnabled){
+			draw_set_color(make_color_rgb(40, 160, 40));
+		}else{
+			draw_set_color(c_gray);
+		}
+		draw_rectangle(@btnFastX, @btnFastY, @btnFastX + @btnFastW, @btnFastY + @btnFastH, false);
+		draw_set_color(c_white);
+		draw_set_halign(fa_center);
+		if(@fastLoadEnabled){
+			draw_text(@btnFastX + @btnFastW/2, @rowY, "ON");
+		}else{
+			draw_text(@btnFastX + @btnFastW/2, @rowY, "OFF");
+		}
+		@rowY = @contentY + 116;
+		draw_set_halign(fa_left);
+		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Visual:");
 		@btnVLX = @spX + 190;
 		@btnVLY = @rowY;
@@ -474,7 +495,7 @@ if(@settingsOpen){
 		draw_rectangle(@btnVRX, @btnVRY, @btnVRX + @btnVRW, @btnVRY + @btnVRH, false);
 		draw_set_color(c_white);
 		draw_text(@btnVRX + @btnVRW/2, @rowY, ">");
-		@rowY = @contentY + 116;
+		@rowY = @contentY + 144;
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Indicator:");
@@ -495,7 +516,7 @@ if(@settingsOpen){
 		}else{
 			draw_text(@btnIndX + @btnIndW/2, @rowY, "OFF");
 		}
-		@rowY = @contentY + 144;
+		@rowY = @contentY + 172;
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
 		draw_text(@spX + 16, @rowY, "Spec Cam:");
@@ -836,7 +857,7 @@ if(@settingsOpen){
 	// TAB 3: KEYS
 	if(@settingsTab == 3){
 		@rowY = @contentY + 4;
-		if(@kbFocus == 1 && @kbRow[3] < 9){
+		if(@kbFocus == 1 && @kbRow[3] < 10){
 			@kbHi = @rowY - 4 + @kbRow[3] * 28;
 			draw_set_color(make_color_rgb(220, 200, 60));
 			draw_rectangle(@spX + 4, @kbHi, @spX + @spW - 4, @kbHi + 27, true);
@@ -851,6 +872,7 @@ if(@settingsOpen){
 		@kbLabels[6] = "Player List";
 		@kbLabels[7] = "Chat";
 		@kbLabels[8] = "Here";
+		@kbLabels[9] = "Fast Load";
 		@kbKeys[0] = @keyVis;
 		@kbKeys[1] = @keySave;
 		@kbKeys[2] = @keySpectate;
@@ -860,7 +882,8 @@ if(@settingsOpen){
 		@kbKeys[6] = @keyPlayerList;
 		@kbKeys[7] = @keyChat;
 		@kbKeys[8] = @keyPing;
-		for(@kI = 0; @kI < 9; @kI += 1){
+		@kbKeys[9] = @keyFastLoad;
+		for(@kI = 0; @kI < 10; @kI += 1){
 			@kbY = @rowY + @kI * 28;
 			draw_set_color(c_white);
 			draw_text(@spX + 16, @kbY, @kbLabels[@kI]);
@@ -890,10 +913,10 @@ if(@settingsOpen){
 			draw_set_halign(fa_left);
 		}
 		@btnRstX = @spX + @spW/2 - 55;
-		@btnRstY = @rowY + 9 * 28 + 10;
+		@btnRstY = @rowY + 10 * 28 + 10;
 		@btnRstW = 110;
 		@btnRstH = 22;
-		if(@kbFocus == 1 && @kbRow[3] == 9){
+		if(@kbFocus == 1 && @kbRow[3] == 10){
 			draw_set_color(make_color_rgb(220, 200, 60));
 			draw_rectangle(@spX + 4, @btnRstY - 3, @spX + @spW - 4, @btnRstY + @btnRstH + 3, true);
 		}
@@ -1001,6 +1024,10 @@ if(@settingsOpen){
 			if(@mx >= @btnSaveX && @mx <= @btnSaveX + @btnSaveW && @my >= @btnSaveY && @my <= @btnSaveY + @btnSaveH){
 				@save_enabled = 1 - @save_enabled;
 				@saveChanged = true;
+			}
+			if(@mx >= @btnFastX && @mx <= @btnFastX + @btnFastW && @my >= @btnFastY && @my <= @btnFastY + @btnFastH){
+				@fastLoadEnabled = !@fastLoadEnabled;
+				@fastLoadChanged = true;
 			}
 			if(@mx >= @btnVLX && @mx <= @btnVLX + @btnVLW && @my >= @btnVLY && @my <= @btnVLY + @btnVLH){
 				@vis -= 1;
@@ -1143,7 +1170,7 @@ if(@settingsOpen){
 		}
 		if(!@tabClicked && @settingsTab == 3){
 			@kbFocus = 1;
-			for(@kI = 0; @kI < 9; @kI += 1){
+			for(@kI = 0; @kI < 10; @kI += 1){
 				@kbY = @rowY + @kI * 28;
 				@btnKX = @spX + 140;
 				@btnKY = @kbY - 2;
@@ -1168,6 +1195,7 @@ if(@settingsOpen){
 				@keyPlayerList = 76;
 				@keyChat = 32;
 				@keyPing = 72;
+				@keyFastLoad = 70;
 				@keybindEditing = -1;
 				@keybindSave = true;
 			}

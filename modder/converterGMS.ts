@@ -198,7 +198,7 @@ export const ConverterGMS = async function(input: string, gameName: string, serv
 		await Utils.rimraf(onlineDir);
 		await Utils.copyDir(GMS_WORK_FOLDER, onlineDir);
 		await CopyHttpDll(onlineDir, useX64NativeHttpDll);
-		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_rating=85\nteam=0\nlerp=1`;
+		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_rating=85\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1`;
 		await fs.writeFile(path.join(onlineDir, CONFIG_FILENAME), configContent, "utf8");
 		if(customSlot) await WriteRuntimeSyncDefaults(onlineDir, customSlot);
 	}else{
@@ -206,7 +206,7 @@ export const ConverterGMS = async function(input: string, gameName: string, serv
 		await fs.rename(tmpDataWin, path.join(path.dirname(input), "data_backup.win"));
 		await fs.copyFile(newDataWin, tmpDataWin);
 		await CopyHttpDll(path.dirname(input), useX64NativeHttpDll);
-		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_rating=85\nteam=0\nlerp=1`;
+		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_rating=85\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1`;
 		await fs.writeFile(path.join(path.dirname(input), CONFIG_FILENAME), configContent, "utf8");
 		if(customSlot) await WriteRuntimeSyncDefaults(path.dirname(input), customSlot);
 	}

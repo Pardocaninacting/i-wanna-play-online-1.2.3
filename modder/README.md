@@ -69,6 +69,19 @@ When a package is skipped, the converter injects vanilla-GML stub scripts (`wd_i
 
 Known case: `I wanna be the Fish ver1.1` now automatically falls back to the safe GM8.0 stub path instead of loading native CJK plugins. `wd_only` is still available if you want to force the minimal Windows-dialog-only package set manually.
 
+## GM8.2 Tick Injection Compatibility
+
+The converter normally injects its per-frame GM8 tick into End Step. This matches the existing architecture and remains the default for GM8/GM8.1/GM8.2 games.
+
+A small number of games built by compiling older yuuutu-engine source directly with the community GameMaker 8.2 runtime have been observed to ignore that injected End Step tick. For those cases, opt into Step injection in `iwpo-settings.ini` before converting:
+
+```ini
+[settings]
+inject_into_step=1
+```
+
+Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
+
 ## Edit the GML files
 The GML files contain the code that will be injected into the game.
 If you want to edit these files to contribute, first there are 3 things you should note:
