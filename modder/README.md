@@ -23,7 +23,7 @@ Then run
 ```
 npm run build
 ```
-The output will be in `build/iwpo 1.2.3_beta_4.zip`.
+The output will be in `build/iwpo <version>.zip`.
 
 ## Shipping a Converted Game
 
@@ -73,14 +73,14 @@ Known case: `I wanna be the Fish ver1.1` now automatically falls back to the saf
 
 The converter normally injects its per-frame GM8 tick into End Step. This matches the existing architecture and remains the default for GM8/GM8.1/GM8.2 games.
 
-A small number of games built by compiling older yuuutu-engine source directly with the community GameMaker 8.2 runtime have been observed to ignore that injected End Step tick. For those cases, opt into Step injection in `iwpo-settings.ini` before converting:
+A small number of games built by compiling older yuuutu-engine source directly with the community GameMaker 8.2 runtime have been observed to ignore some injected helper Step / End Step ticks. For those cases, opt into the Step compatibility scheduler in `iwpo-settings.ini` before converting:
 
 ```ini
 [settings]
 inject_into_step=1
 ```
 
-Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
+When enabled, IWPO runs the main `world` tick from Step and schedules helper ticks from that reliable world tick, while helper Draw events remain draw-only. Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
 
 ## Edit the GML files
 The GML files contain the code that will be injected into the game.
@@ -98,6 +98,20 @@ If you want to edit these files to contribute, first there are 3 things you shou
     ```
 
 ## Changelog
+
+### 1.2.3 beta 5
+
+#### User feedback and usability
+
+- **Fast Load shortcut**: adds a default `F` shortcut to load the latest save-history entry, keeps the Saves-tab `F` favorite action intact, and lets players rebind or disable Fast Load from the in-game Settings / Keys tabs.
+- **Shared-save hook reliability**: injects GM8 save hooks before successful early returns (`return true` / `return 1`) so games with custom save wrappers still broadcast saves and record history correctly.
+
+#### Compatibility and stability
+
+- **GM8 load fallback hardening**: always injects the `loadGame.gml` restore path into `loadGame()` as a fallback, while keeping the original `tempExe` / `saveExe` path for games that still restart through the usual init flow.
+- **GM8.2 compatibility toggle**: adds `inject_into_step=1` as an opt-in world-Step scheduler workaround for a small set of community-GM8.2 / old-yuuutu builds that ignore injected helper ticks.
+- **Fish-class runner fallback**: auto-detects the known UPX + Antidec fish-class host case and falls back to the safe GM8.0-style CJK stub path instead of trying to force native text plugins.
+- **Legacy client compatibility**: server-side legacy version checks now use an explicit minimum client version, and malformed legacy `CUSTOM_DATA` frames are ignored instead of kicking old clients on first sync traffic.
 
 ### 1.2.3 beta 4
 

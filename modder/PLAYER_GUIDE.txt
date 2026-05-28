@@ -24,7 +24,7 @@ I Wanna Play Online - 玩家指南
 - 所有按键都可以在 Settings -> Keys 中修改。
 
 3. 功能说明
-- Team: 0 = None，1-7 = 彩色队伍。想共享队伍功能时，请使用相同队伍。
+- Team: 0 = 默认队伍（无颜色），1-7 = 彩色队伍。想共享队伍功能时，请使用相同队伍。
 - Lerp: 平滑远端玩家移动；如果你更喜欢硬切位置，可以关闭。
 - Visual:
   All = 正常显示。
@@ -98,7 +98,7 @@ I Wanna Play Online - Player Guide
 - All hotkeys can be changed in Settings -> Keys.
 
 3. Feature Guide
-- Team: 0 = None, 1-7 = colored teams. Use the same team when you want team-based features together.
+- Team: 0 = the default team (no color), 1-7 = colored teams. Use the same team value when you want team-based features together.
 - Lerp: smooths remote-player movement; turn it off if you prefer snap updates.
 - Visual:
   All = normal view.

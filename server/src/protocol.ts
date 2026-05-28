@@ -11,7 +11,7 @@ export enum TcpMsg {
     RATING      = 9,
     LIST        = 10, // C→S: request roster (no payload); S→C: u16 count, [stringNT id, stringNT name, u8 team] × count
     PING        = 11, // C→S: [i32 room?] f32 x, f32 y, u8 type;  S→C: stringNT senderId, [i32 room?] f32 x, f32 y, u8 type
-                      // beta.4 client sends 9 bytes (no room); beta.5+ client sends 13 bytes (room first).
+                      // Legacy clients send 9 bytes (no room); current clients send 13 bytes (room first).
 }
 
 export enum UdpMsg {

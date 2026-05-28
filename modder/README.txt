@@ -56,12 +56,12 @@ GM8 extension package selection:
 GM8.2 tick injection compatibility:
   IWPO normally injects its per-frame GM8 tick into End Step. This remains the default for GM8, GM8.1 and ordinary GM8.2 games.
 
-  Some games made by compiling older yuuutu-engine source directly with the community GameMaker 8.2 runtime may ignore that injected End Step tick. For those games, enable Step injection before converting:
+  Some games made by compiling older yuuutu-engine source directly with the community GameMaker 8.2 runtime may ignore some injected helper Step / End Step ticks. For those games, enable the Step compatibility scheduler before converting:
 
   [settings]
   inject_into_step=1
 
-  Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
+  When enabled, IWPO runs the main world tick from Step and schedules helper ticks from that reliable world tick, while helper Draw events remain draw-only. Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
 
 Files to keep with the converted game:
  - the converted exe or online folder
@@ -100,6 +100,14 @@ Thank you so much for downloading, I really hope you will have a lot of fun!
 
 
 CHANGE LOGS:
+
+1.2.3 beta 5:
+ - Default F Fast Load for the latest save-history entry; Fast Load can now be rebound or disabled in Settings
+ - GM8 save hooks now run before successful early returns in custom save wrappers
+ - GM8 load restore code is always injected into loadGame as a fallback, while keeping tempExe/saveExe for restart-based games
+ - Optional inject_into_step=1 world-Step scheduler workaround for affected community-GM8.2 / old-yuuutu builds
+ - Fish-class UPX + Antidec runners automatically fall back to the safe GM8.0 CJK stub path
+ - Server legacy compatibility now uses an explicit minimum client version and tolerates old CUSTOM_DATA frames
 
 1.2.3 beta 4:
  - Shared progress sync with a dedicated Sync tab

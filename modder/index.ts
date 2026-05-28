@@ -116,7 +116,7 @@ const main = async function(): Promise<string> {
 	console.log(`Server: ${server} (TCP ${ports.tcp}, UDP ${ports.udp})`);
 	if(customSlot){
 		const totalSlots = customSlot.entries.reduce((s, e) => s + Math.ceil(e.count / 32), 0);
-		console.log(`Progress sync: ${customSlot.entries.length} entries, ${totalSlots} uint32 slots -> default [sync] in __ONLINE_config.ini`);
+		console.log(`Sync defaults: ${customSlot.entries.length} entries, ${totalSlots} slots`);
 	}
 	if(await IsGMS(input)){
 		console.log("Target: GameMaker Studio");
@@ -124,12 +124,12 @@ const main = async function(): Promise<string> {
 	}else{
 		console.log("Target: Game Maker 8");
 		if(forceExternalDll)
-			console.log("HTTP DLL mode: external (force_external_dll)");
+			console.log("HTTP DLL: external");
 		if(injectIntoStep)
-			console.log("Per-frame tick injection: Step (inject_into_step)");
+			console.log("Tick injection: Step + world helper scheduler");
 		if(noExtensionPackages){
 			process.env.IWPO_NO_EXTENSION_PACKAGES = "1";
-			console.log("GM8 extension packages: disabled (no_extension_packages)");
+			console.log("GM8 extension packages: disabled");
 		}
 		if(extensionPackages){
 			const mode: string = extensionPackages;

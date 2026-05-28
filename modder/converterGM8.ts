@@ -80,6 +80,26 @@ const concatBuffers = function(buffers: Array<Buffer>): Buffer {
 	return Buffer.concat(buffers as unknown as Array<Uint8Array>);
 }
 
+type TickEventName = "step" | "endstep";
+
+const withGMLObject = function(objectName: Buffer, code: Buffer): Buffer {
+	return concatBuffers([
+		Buffer.from(`with(${objectName.toString('ascii')}){\r\n`, 'ascii'),
+		code,
+		Buffer.from("\r\n}\r\n", 'ascii'),
+	]);
+}
+
+const localizeExitForWith = function(code: Buffer): Buffer {
+	const source: string = code.toString('latin1');
+	if(!/\bexit\s*;/.test(source)) return code;
+	return Buffer.from([
+		"for(__ONLINE_iwpo_scheduler_exit = 0; __ONLINE_iwpo_scheduler_exit < 1; __ONLINE_iwpo_scheduler_exit += 1){",
+		source.replace(/\bexit\s*;/g, "break;"),
+		"}",
+	].join("\r\n"), 'latin1');
+}
+
 const isIdentChar = function(ch: string): boolean {
 	return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
 }
@@ -228,7 +248,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	if(fishClassGame && isUpxPacked){
 		const antidec: boolean = await isAntidecProtected(input);
 		if(antidec){
-			console.log("Fish-class UPX + Antidec runner detected; disabling native CJK plugins and using the safe stub fallback.");
+			console.log("Fish-class UPX + Antidec detected; using safe CJK stub fallback.");
 			fishCjkRuntimeBlocked = true;
 		}
 	}
@@ -476,7 +496,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	let wantFW = __extMode !== "none" && (__extAll || __extMode === "fw_only");
 	const wantGM = gameConfig.version !== GameVersion.GameMaker80 && __extMode !== "none" && (__extAll || __extMode === "gm_only");
 	if(fishCjkRuntimeBlocked && gameConfig.version === GameVersion.GameMaker80 && wantFW){
-		console.log("Fish-class host detected; disabling native FoxWriting injection and using the safe GM8.0 stub path.");
+		console.log("Fish-class host detected; using safe GM8.0 stub path.");
 		wantFW = false;
 	}
 	if(!hasWindowsDialogs && wantWD)
@@ -499,7 +519,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		gameConfig.version === GameVersion.GameMaker80 ? 'fw' :
 		(loadedGM ? 'gm' : 'none');
 	const useUtf8: boolean = gameConfig.version !== GameVersion.GameMaker80;
-	console.log(`CJK backend: ${cjkBackend} (loadedFW=${loadedFW}, loadedGM=${loadedGM}, useUtf8=${useUtf8})`);
+	console.log(`CJK backend: ${cjkBackend}`);
 
 	exe.writeOffset = extensionCountPos;
 	exe.writeUInt32LE(extensions.length);
@@ -912,13 +932,15 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		: iconv.encode(gameName, "gbk");
 	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), gameNameBuf, Buffer.from(Utils.getVersion(), 'ascii')));
 	// Opt-in compatibility path: keep EndStep as the default, but allow Step
-	// injection for GM8.2-mod edge cases where the default tick does not run.
-	const addTick = function(obj: GMObject, gml: Buffer): void {
-		if(injectIntoStep) obj.addStepCode(gml);
+	// injection plus world-driven helper ticks for GM8.2/yuuutu edge cases.
+	const addTickRaw = function(obj: GMObject, gml: Buffer, tickEventName: TickEventName): void {
+		if(tickEventName === "step") obj.addStepCode(gml);
 		else obj.addEndStepCode(gml);
 	};
-	addTick(world, await GMLCode.getGML("worldEndStep", player.name, player2 ? player2.name : Buffer.from("")));
-	world.addGameEndCode(await GMLCode.getGML("worldGameEnd"));
+	const addTick = function(obj: GMObject, gml: Buffer, tickEventName: TickEventName): void {
+		addTickRaw(obj, gml, tickEventName);
+	};
+	const worldTickEventName: TickEventName = injectIntoStep ? "step" : "endstep";
 	const newObject = function(name: Buffer, visible: boolean, depth: number, persistent: boolean): GMObject {
 		const obj: GMObject = new GMObject();
 		obj.name = name;
@@ -935,18 +957,30 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const onlinePlayer: GMObject = newObject(Buffer.from("__ONLINE_onlinePlayer", 'ascii'), false, -10, true);
 	onlinePlayer.addCreateCode(await GMLCode.getGML("onlinePlayerCreate"));
 	const onlinePlayerTick: Buffer = await GMLCode.getGML("onlinePlayerEndStep", player.name, player2 ? player2.name : Buffer.from(""), world.name);
-	addTick(onlinePlayer, onlinePlayerTick);
 	onlinePlayer.addDrawCode(await GMLCode.getGML("onlinePlayerDraw", world.name));
 	const chatbox: GMObject = newObject(Buffer.from("__ONLINE_chatbox",'ascii'), true, -11, true);
 	chatbox.addCreateCode(await GMLCode.getGML("chatboxCreate"));
 	const chatboxTick: Buffer = await GMLCode.getGML("chatboxEndStep", player.name, player2 ? player2.name : Buffer.from(""), world.name);
-	addTick(chatbox, chatboxTick);
 	chatbox.addDrawCode(await GMLCode.getGML("chatboxDraw"));
 	const playerSaved: GMObject = newObject(Buffer.from("__ONLINE_playerSaved",'ascii'), true, -10, false);
 	playerSaved.addCreateCode(await GMLCode.getGML("playerSavedCreate"));
 	const playerSavedTick: Buffer = await GMLCode.getGML("playerSavedEndStep");
-	addTick(playerSaved, playerSavedTick);
 	playerSaved.addDrawCode(await GMLCode.getGML("playerSavedDraw"));
+	addTick(world, await GMLCode.getGML("worldEndStep", player.name, player2 ? player2.name : Buffer.from("")), worldTickEventName);
+	if(injectIntoStep){
+		const helperScheduler: Buffer = concatBuffers([
+			Buffer.from(`instance_activate_object(${onlinePlayer.name.toString('ascii')});\r\ninstance_activate_object(${chatbox.name.toString('ascii')});\r\ninstance_activate_object(${playerSaved.name.toString('ascii')});\r\n`, 'ascii'),
+			withGMLObject(onlinePlayer.name, localizeExitForWith(onlinePlayerTick)),
+			withGMLObject(chatbox.name, localizeExitForWith(chatboxTick)),
+			withGMLObject(playerSaved.name, localizeExitForWith(playerSavedTick)),
+		]);
+		addTickRaw(world, helperScheduler, worldTickEventName);
+	}else{
+		addTick(onlinePlayer, onlinePlayerTick, "endstep");
+		addTick(chatbox, chatboxTick, "endstep");
+		addTick(playerSaved, playerSavedTick, "endstep");
+	}
+	world.addGameEndCode(await GMLCode.getGML("worldGameEnd"));
 	const ui: GMObject = newObject(Buffer.from("__ONLINE_userInterface",'ascii'), true, -2147483648, true);
 	const drawGml: Buffer = await GMLCode.getGML("worldDraw");
 	const worldName: string = world.name.toString('ascii');

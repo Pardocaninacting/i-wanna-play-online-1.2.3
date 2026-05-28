@@ -552,8 +552,8 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
 
         case TcpMsg.PING:
             // Map ping. Whole-game broadcast (not team-restricted).
-            // beta.4 client: 9 bytes [f32 x][f32 y][u8 type] — no room id, peers may render off-screen.
-            // beta.5+ client: 13 bytes [i32 room][f32 x][f32 y][u8 type] — receivers filter by room.
+            // Legacy client: 9 bytes [f32 x][f32 y][u8 type] — no room id, peers may render off-screen.
+            // Current client: 13 bytes [i32 room][f32 x][f32 y][u8 type] — receivers filter by room.
             if (msg.remaining() !== 9 && msg.remaining() !== 13) { quitPlayer(player, "ping_bad_size"); return; }
             if (player.game === "" || player.name === "") { log.info(`PING dropped from ${player.id}: game=${JSON.stringify(player.game)} name=${JSON.stringify(player.name)}`); break; }
             {

@@ -1,4 +1,4 @@
-// Custom-variable progress sync — runtime configuration (v1.2.3-beta.4 §11 v2)
+// Custom-variable progress sync — runtime configuration (sync v2)
 //
 // At BUILD time the publisher may pre-fill default sync entries via the
 // [mod] section of iwpo-settings.ini:

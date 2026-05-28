@@ -60,6 +60,7 @@ const build = async function(): Promise<string> {
 	await fs.writeFile(path.join(unpackedDir, "iwpo-settings.ini"), [
 		"[settings]",
 		"server=212.64.24.80",
+		"; inject_into_step=1",
 		"; no_extension_packages=1",
 	].join("\n") + "\n", "utf8");
 	console.log("Packing release archive...");
