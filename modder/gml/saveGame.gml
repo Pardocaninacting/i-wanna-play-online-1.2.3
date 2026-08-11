@@ -18,7 +18,17 @@ if(instance_exists(%arg0)){
 					%arg3
 				#endif
 			#endif
+				// A successful local save invalidates any pending online save.
+				#if TEMPFILE
+					if(file_exists("tempOnline2")){
+						file_delete("tempOnline2");
+					}
+				#endif
+				@sSaved = false;
 				var @p;
+				// Save data always comes from the real player object(s) - never a
+				// PLAYER_LIST alt/display object (C1). An alt object carries no player
+				// vars and would broadcast a bogus position/gravity packet.
 				@p = %arg1;
 				#if PLAYER2
 					if(!instance_exists(@p)){
@@ -29,55 +39,65 @@ if(instance_exists(%arg0)){
 					@p = instance_find(@p, 0);
 					// NETWORK BROADCAST
 					if(!@race){
-						buffer_clear(@buffer);
+						__ONLINE_buffer_clear(@buffer);
 						#if not GMNET
-							buffer_write_uint8(@buffer, 5);
+							__ONLINE_buffer_write_uint8(@buffer, 5);
 							#if STUDIO
-								buffer_write_uint8(@buffer, global.grav);
+								#if GRAVITY
+									__ONLINE_buffer_write_uint8(@buffer, global.grav);
+								#endif
+								#if not GRAVITY
+									__ONLINE_buffer_write_uint8(@buffer, 1);
+								#endif
 							#endif
 							#if GM8YY
-								buffer_write_uint8(@buffer, (global.grav+1)/2);
+								__ONLINE_buffer_write_uint8(@buffer, (global.grav+1)/2);
 							#endif
 							#if not STUDIO
 								#if not GM8YY
 									if(@p == instance_find(%arg1, 0)){
-										buffer_write_uint8(@buffer, 0);
+										__ONLINE_buffer_write_uint8(@buffer, 0);
 									}else{
-										buffer_write_uint8(@buffer, 1);
+										__ONLINE_buffer_write_uint8(@buffer, 1);
 									}
 								#endif
 							#endif
-							buffer_write_int32(@buffer, @p.x);
-							buffer_write_float64(@buffer, @p.y);
-							buffer_write_int16(@buffer, room);
+							__ONLINE_buffer_write_int32(@buffer, @p.x);
+							__ONLINE_buffer_write_float64(@buffer, @p.y);
+							__ONLINE_buffer_write_int16(@buffer, room);
 						#endif
 						#if GMNET
-							buffer_write_u8(@buffer, 5);
+							__ONLINE_buffer_write_u8(@buffer, 5);
 							#if RENEX
-								buffer_write_u8(@buffer, (global.grav+1)/2);
+								__ONLINE_buffer_write_u8(@buffer, (global.grav+1)/2);
 							#endif
 							#if not RENEX
 								#if STUDIO
-									buffer_write_u8(@buffer, global.grav);
+									#if GRAVITY
+										__ONLINE_buffer_write_u8(@buffer, global.grav);
+									#endif
+									#if not GRAVITY
+										__ONLINE_buffer_write_u8(@buffer, 1);
+									#endif
 								#endif
 								#if GM8YY
-									buffer_write_u8(@buffer, (global.grav+1)/2);
+									__ONLINE_buffer_write_u8(@buffer, (global.grav+1)/2);
 								#endif
 								#if not STUDIO
 									#if not GM8YY
 										if(@p == instance_find(%arg1, 0)){
-											buffer_write_u8(@buffer, 0);
+											__ONLINE_buffer_write_u8(@buffer, 0);
 										}else{
-											buffer_write_u8(@buffer, 1);
+											__ONLINE_buffer_write_u8(@buffer, 1);
 										}
 									#endif
 								#endif
 							#endif
-							buffer_write_i32(@buffer, @p.x);
-							buffer_write_double(@buffer, @p.y);
-							buffer_write_i16(@buffer, room);
+							__ONLINE_buffer_write_i32(@buffer, @p.x);
+							__ONLINE_buffer_write_double(@buffer, @p.y);
+							__ONLINE_buffer_write_i16(@buffer, room);
 						#endif
-						socket_write_message(@socket, @buffer);
+						__ONLINE_socket_write_message(@socket, @buffer);
 					}
 					// SAVE HISTORY
 					var @selfGrav, @shIdx, @shNow;
@@ -86,7 +106,12 @@ if(instance_exists(%arg0)){
 					} else {
 					@saveHistLastTime = @shNow;
 					#if STUDIO
-						@selfGrav = global.grav;
+						#if GRAVITY
+							@selfGrav = global.grav;
+						#endif
+						#if not GRAVITY
+							@selfGrav = 1;
+						#endif
 					#endif
 					#if GM8YY
 						@selfGrav = (global.grav+1)/2;
@@ -150,36 +175,36 @@ if(instance_exists(%arg0)){
 					@scSendCount += 1;
 				}
 				if(@scSendCount > 0){
-					buffer_clear(@buffer);
+					__ONLINE_buffer_clear(@buffer);
 					#if not GMNET
-						buffer_write_uint8(@buffer, 7);
-						buffer_write_uint8(@buffer, 1);
-						buffer_write_uint8(@buffer, @scSendCount);
+						__ONLINE_buffer_write_uint8(@buffer, 7);
+						__ONLINE_buffer_write_uint8(@buffer, 1);
+						__ONLINE_buffer_write_uint8(@buffer, @scSendCount);
 						for(@scK = 0; @scK < @scSendCount; @scK += 1){
 							@scI = @scSendIdx[@scK];
-							buffer_write_string(@buffer, @syncName[@scI]);
-							buffer_write_uint16(@buffer, @syncCount[@scI]);
-							buffer_write_uint16(@buffer, @syncSlotCount[@scI]);
+							__ONLINE_buffer_write_string(@buffer, @syncName[@scI]);
+							__ONLINE_buffer_write_uint16(@buffer, @syncCount[@scI]);
+							__ONLINE_buffer_write_uint16(@buffer, @syncSlotCount[@scI]);
 							for(@scS = 0; @scS < @syncSlotCount[@scI]; @scS += 1){
-								buffer_write_uint32(@buffer, @scSlotVal[@scI, @scS]);
+								__ONLINE_buffer_write_uint32(@buffer, @scSlotVal[@scI, @scS]);
 							}
 						}
 					#endif
 					#if GMNET
-						buffer_write_u8(@buffer, 7);
-						buffer_write_u8(@buffer, 1);
-						buffer_write_u8(@buffer, @scSendCount);
+						__ONLINE_buffer_write_u8(@buffer, 7);
+						__ONLINE_buffer_write_u8(@buffer, 1);
+						__ONLINE_buffer_write_u8(@buffer, @scSendCount);
 						for(@scK = 0; @scK < @scSendCount; @scK += 1){
 							@scI = @scSendIdx[@scK];
-							buffer_write_string(@buffer, @syncName[@scI]);
-							buffer_write_u16(@buffer, @syncCount[@scI]);
-							buffer_write_u16(@buffer, @syncSlotCount[@scI]);
+							__ONLINE_buffer_write_string(@buffer, @syncName[@scI]);
+							__ONLINE_buffer_write_u16(@buffer, @syncCount[@scI]);
+							__ONLINE_buffer_write_u16(@buffer, @syncSlotCount[@scI]);
 							for(@scS = 0; @scS < @syncSlotCount[@scI]; @scS += 1){
-								buffer_write_u32(@buffer, @scSlotVal[@scI, @scS]);
+								__ONLINE_buffer_write_u32(@buffer, @scSlotVal[@scI, @scS]);
 							}
 						}
 					#endif
-					socket_write_message(@socket, @buffer);
+					__ONLINE_socket_write_message(@socket, @buffer);
 				}
 			}
 		}

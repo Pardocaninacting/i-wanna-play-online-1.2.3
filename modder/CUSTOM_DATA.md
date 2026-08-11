@@ -1,178 +1,93 @@
-# Custom Data Sync — GML 修改指南
+# Custom Data Sync (v2) — GML 修改指南
 
-本文档说明如何通过 TCP case 7 自定义数据通道，将游戏内的自定义变量同步给所有在线玩家。
+本文档说明如何通过 TCP case 7 自定义数据通道（v2 命名条目格式），将游戏内的 `global.*` 布尔数组同步给所有在线玩家。
+
+> 本文档描述 **v2 格式**（v2flag=1，命名条目）。v1 单 slot 格式已废弃。
 
 ---
 
 ## 原理
 
-系统预留了 **TCP 消息 ID 7** 用于自定义变量同步。每帧将目标变量打包为 **UINT32 位域**，仅在值发生变化时发送。服务端原样转发给同队玩家，接收方对收到的值执行 **OR 合并**，即任意玩家将某位设为 1 后，所有同队玩家都会获得该状态。
+系统预留 **TCP 消息 ID 7** 用于自定义数据同步。数据按**命名条目（entry）**组织：每个条目对应游戏中的一个 `global.<name>[1..count]` 布尔数组，打包为若干 UINT32 位域 slot。仅在值发生变化时发送。服务端按条目名存储并转发给同队玩家，接收方对收到的位执行 **OR 合并**——任意玩家将某位设为 1 后，所有同队玩家都会获得该状态。
 
-默认实现中 `@customSlot` 硬编码为 0，不发送任何有意义的数据。你只需要修改打包和解包逻辑即可同步任意 `global.*` 布尔变量。
+新玩家加入或进入房间时，服务端会将该队伍当前已知的完整快照回放给他（`encodeSyncSnapshot` / `replaySyncTo`），因此后加入的玩家也能同步到历史状态。
 
 ### 协议格式
 
 ```
-客户端→服务端:  u8(7) + u16(slotCount) + [i32 × slotCount]
-服务端→客户端:  u8(7) + string(playerID) + u16(slotCount) + [i32 × slotCount]
+客户端→服务端:  u8(7) + u8(v2flag=1) + u8(entryCount)
+                + [ stringNT(name) + u16(count) + u16(slotCount) + u32 × slotCount ] × entryCount
+服务端→客户端:  u8(7) + u8(v2flag=1) + stringNT(ownerID) + u8(entryCount)
+                + [ stringNT(name) + u16(count) + u16(slotCount) + u32 × slotCount ] × entryCount
 ```
 
-- 每个 slot 为一个 32 位整数，可容纳 32 个布尔位
-- `slotCount` 上限 256，由服务端 `MAX_CUSTOM_SLOTS` 限制
-- 服务端在转发时附加发送者的 `playerID`，并仅广播给同队玩家
+- `name`：条目名，即 `global.` 后的数组名（如 `boss`），上限 32 字节
+- `count`：该条目同步的数组元素个数（下标 1..count），上限 512
+- `slotCount`：`ceil(count / 32)`，每 slot 32 个布尔位，单条目上限 16 slot
+- `ownerID`：服务端附加的发送者 playerID；快照回放时为空字符串
+
+### 服务端限制（`server/src/config.ts`）
+
+| 常量 | 值 | 含义 |
+|------|----|------|
+| `MAX_SYNC_ENTRIES` | 16 | 每队伍不同条目名上限 |
+| `MAX_PER_ENTRY_SLOTS` | 16 | 单条目 slot 上限（= 512 位） |
+| `MAX_CUSTOM_SLOTS` | 128 | 每队伍所有条目 slot 总数上限 |
+| `MAX_SYNC_NAME_LEN` | 32 | 条目名字节数上限 |
+
+超出限制的条目/数据会被服务端拒绝或截断。
 
 ---
 
-## 需要编辑的文件
+## 配置方式（推荐）
 
-所有文件位于 `modder/gml/` 目录。编辑后需重新运行 `npm run build` 构建。
+v2 的条目通过配置文件声明，**无需修改 GML 代码**。在游戏目录下的 `__ONLINE_config.ini` 中添加 `[sync]` 段：
 
-> **重要**：源码中所有 `@` 前缀在构建时会被替换为 `__ONLINE_`，避免与游戏原有变量冲突。下文示例中直接使用 `@` 前缀。
+```ini
+[sync]
+sync_enabled=1
+entryCount=2
+sync0_name=boss
+sync0_count=8
+sync1_name=item
+sync1_count=8
+```
+
+- `sync_enabled`：总开关，0 时接收端忽略所有自定义数据
+- `entryCount`：条目数量（0–16）
+- `syncN_name` / `syncN_count`：第 N 个条目的数组名与元素个数
+
+加载逻辑见 `worldCreate.gml` / `worldCreateGMS.gml` 的 SYNC 段（支持分层配置：exe 旁默认层 + 工作目录用户层，用户层覆盖同名字段）。
+
+配置后，**存档时**（`saveGame.gml`）客户端自动读取各条目对应的 `global.<name>[1..count]`，打包为位域，仅在相对上次发送有变化时发出。
 
 ---
 
-## 示例：同步 `global.boss[1-8]` 和 `global.item[1-8]`
+## 发送端行为（`saveGame.gml`，无需修改）
 
-16 个布尔变量打包到 1 个 UINT32 slot：
+1. 遍历所有已配置条目，按位读取 `global.<name>[idx]`（GM8 用 `execute_string`，GMS 用 `variable_global_get`），打包为 slot 位域
+2. 对每个条目计算签名，与 `@syncLastSig` 比较，无变化且非脏标记则跳过
+3. 有变化的条目合并为一个 case 7 消息发出
 
-| 位 | 变量 |
-|----|------|
-| bit 0–7 | `global.item[1]` – `global.item[8]` |
-| bit 8–15 | `global.boss[1]` – `global.boss[8]` |
+## 接收端行为（`worldEndStep.gml` case 7，无需修改）
 
----
-
-### 第一步：修改发送端 — `worldEndStep.gml`
-
-找到文件末尾的 CUSTOM DATA SYNC 段：
-
-```gml
-// CUSTOM DATA SYNC
-@customSlot = 0;
-if (@customSlot != @customSlotPrev) {
-```
-
-将 `@customSlot = 0;` 替换为位域打包代码：
-
-```gml
-// CUSTOM DATA SYNC
-@customSlot = 0;
-var @bi;
-@bi = 0;
-while (@bi < 8) {
-    if (global.item[@bi + 1])
-        @customSlot = @customSlot | (1 << @bi);
-    if (global.boss[@bi + 1])
-        @customSlot = @customSlot | (1 << (@bi + 8));
-    @bi += 1;
-}
-if (@customSlot != @customSlotPrev) {
-```
-
-后续的变化检测、buffer 写入和发送代码已由模板提供，无需修改。
+1. 校验 `v2flag == 1`，读取 `ownerID` 与条目列表
+2. 逐条目在本地配置中按名字匹配；未配置 / `sync_enabled=0` / 游戏中不存在该 global 数组的条目被忽略
+3. 对匹配的条目逐位 OR 合并：仅把为 1 的位写入 `global.<name>[idx] = 1`（GM8 用 `execute_string`，GMS 用 `variable_global_get`/`variable_global_set`）
 
 ---
 
-### 第二步：修改接收端 — `worldEndStep.gml`
+## 手动代码方式（备选）
 
-找到 TCP 消息循环中的 case 7 分支：
-
-```gml
-case 7:
-    // CUSTOM DATA
-    @ID = buffer_read_string(@buffer);
-    #if not GMNET
-        @customSlotCount = buffer_read_uint16(@buffer);
-        if (@customSlotCount >= 1)
-            @receivedSlot = buffer_read_int32(@buffer);
-    #endif
-    #if GMNET
-        @customSlotCount = buffer_read_u16(@buffer);
-        if (@customSlotCount >= 1)
-            @receivedSlot = buffer_read_i32(@buffer);
-    #endif
-    break;
-```
-
-在 `break;` 前添加 OR 合并和解包代码：
-
-```gml
-case 7:
-    // CUSTOM DATA
-    @ID = buffer_read_string(@buffer);
-    #if not GMNET
-        @customSlotCount = buffer_read_uint16(@buffer);
-        if (@customSlotCount >= 1)
-            @receivedSlot = buffer_read_int32(@buffer);
-    #endif
-    #if GMNET
-        @customSlotCount = buffer_read_u16(@buffer);
-        if (@customSlotCount >= 1)
-            @receivedSlot = buffer_read_i32(@buffer);
-    #endif
-    if (@customSlotCount >= 1) {
-        @receivedSlot = @receivedSlot | @customSlot;
-        var @bi;
-        @bi = 0;
-        while (@bi < 8) {
-            global.item[@bi + 1] = (@receivedSlot >> @bi) & 1;
-            global.boss[@bi + 1] = (@receivedSlot >> (@bi + 8)) & 1;
-            @bi += 1;
-        }
-        @customSlot = @receivedSlot;
-        @customSlotPrev = @receivedSlot;
-    }
-    break;
-```
-
-关键点：
-
-- `@receivedSlot | @customSlot` — OR 合并，确保本地已有的状态不被覆盖
-- 解包后同步更新 `@customSlot` 和 `@customSlotPrev`，避免下一帧误判为变化而重复发送
-
----
-
-### 初始化
-
-`worldCreate.gml` 和 `worldCreateGMS.gml` 中已有以下初始化代码，无需修改：
-
-```gml
-@customSlot = 0;
-@customSlotPrev = -1;
-```
-
----
-
-## 扩展到更多变量
-
-### 使用多个 slot
-
-如果需要同步超过 32 个布尔值，增加 slot 数量。例如同步 64 个变量需要 2 个 slot。
-
-发送端将 `slotCount` 从 1 改为 2，写入两个 i32：
-
-```gml
-buffer_write_uint16(@buffer, 2);
-buffer_write_int32(@buffer, @customSlot0);
-buffer_write_int32(@buffer, @customSlot1);
-```
-
-接收端对应读取 2 个 slot。服务端无需任何改动，它会透明转发任意数量的 slot。
-
-### 关于变量不存在的游戏
-
-并非所有游戏都定义了 `global.boss` 或 `global.item`：
-
-- **GM8**：转换器默认强制开启 `zeroUninitializedVars`，未初始化的 `global.boss[n]` 会返回 0 而不是报错
-- **GMS**：GMS 默认对未初始化全局变量返回 0
+如果需要同步的不是简单的 `global` 布尔数组（例如需要打包自定义位布局），可以在 `saveGame.gml` 的 CUSTOM DATA SYNC 段自行填充 `@scSlotVal` 并设置 `@syncDirty`，接收端对应在 case 7 分支的匹配条目处理中自行解包。注意保持 wire 格式与上述协议一致。
 
 ---
 
 ## 注意事项
 
 1. **OR-only 语义**：位一旦被设为 1 就无法被远程重置为 0。适用于 Boss 击败、道具拾取等不可逆事件
-2. **同队广播**：数据使用 `broadcastFromSameTeam` 转发，team=0 的玩家相互广播，不同非零队伍之间不传递
-3. **按需发送**：系统每帧检查变量是否变化，仅在有变更时发送。高频变化的数据不适合此系统
-4. **`@` 前缀**：所有自定义变量必须使用 `@` 前缀
-5. **`#if GMNET`**：GM8.2 游戏使用不同的 buffer 函数名，所有 buffer 读写操作都需要提供两个分支
-6. **服务端无需修改**：服务端原样转发 slot 数组，不关心其含义
+2. **同队广播**：数据按队伍隔离转发，team=0 的玩家相互广播，不同非零队伍之间不传递
+3. **按需发送**：仅在存档时检查并发送有变化的条目，高频变化的数据不适合此系统
+4. **`@` 前缀**：GML 源码中所有 `@` 前缀在构建时会被替换为 `__ONLINE_`，避免与游戏原有变量冲突
+5. **`#if GMNET` / `#if STUDIO`**：GM8.2（GMNET）使用不同的 buffer 函数名，GMS（STUDIO）使用不同的 global 访问方式，相关代码均需提供对应分支
+6. **变量不存在的游戏**：GM8 转换器默认强制开启 `zeroUninitializedVars`，未初始化的数组元素返回 0；GMS 接收端在写入前会检查 `variable_global_exists`

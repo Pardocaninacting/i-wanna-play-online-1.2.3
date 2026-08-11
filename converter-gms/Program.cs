@@ -146,11 +146,31 @@ static class Program
         if (Data.Variables.Any(v => v?.Name?.Content == "player_xscale"))
             activeFlags.Add("GLOBAL_PLAYER_XSCALE");
 
-        if (Data.Variables.Any(v => v?.Name?.Content == "xScale"))
+        // C4: GMS errors at runtime when reading a variable that was never
+        // defined (unlike GM8, where the modder treats undefined vars as 0), so
+        // templates must only reference global.grav when it provably exists.
+        if (Data.Variables.Any(v => v?.Name?.Content == "grav" && v.InstanceType == UndertaleInstruction.InstanceType.Global))
+            activeFlags.Add("GRAVITY");
+
+        // Facing variable: only trust a variable the player's own Create event
+        // actually references; anything else would crash at broadcast time.
+        var createVars = FindEventCode(player, EventType.Create)?.FindReferencedVars();
+        bool CreateRefs(string name) => createVars != null && createVars.Any(v => v?.Name?.Content == name);
+
+        if (CreateRefs("xScale"))
             activeFlags.Add("PLAYER_XSCALE");
 
-        if (Data.Variables.Any(v => v?.Name?.Content == "xscale"))
+        if (CreateRefs("xscale"))
             activeFlags.Add("PLAYER_XSCALE_LOWER");
+
+        if (CreateRefs("facing"))
+            activeFlags.Add("PLAYER_FACING");
+
+        Console.WriteLine($"Gravity flag: {activeFlags.Contains("GRAVITY")}; facing: " +
+            (activeFlags.Contains("PLAYER_XSCALE") ? "xScale" :
+             activeFlags.Contains("PLAYER_XSCALE_LOWER") ? "xscale" :
+             activeFlags.Contains("PLAYER_FACING") ? "facing" :
+             activeFlags.Contains("GLOBAL_PLAYER_XSCALE") ? "global.player_xscale" : "none (bare image_xscale)"));
 
         if (Data.Scripts.ByName("scrFlipGrav") != null)
             activeFlags.Add("SCR_FLIP_GRAV");
@@ -269,6 +289,18 @@ static class Program
     static UndertaleGameObject FindObject(params string[] names)
     {
         return Data.GameObjects.FirstOrDefault(obj => NameMatches(obj?.Name?.Content, names));
+    }
+
+    // Finds an existing event's code entry without creating one (unlike EventHandlerFor).
+    static UndertaleCode FindEventCode(UndertaleGameObject obj, EventType type, uint subtype = 0)
+    {
+        foreach (var ev in obj.Events[(int)type])
+        {
+            if (ev.EventSubtype != subtype) continue;
+            var action = ev.Actions.FirstOrDefault();
+            if (action?.CodeId is UndertaleCode code) return code;
+        }
+        return null;
     }
 
     static UndertaleScript FindScript(params string[] names)
@@ -407,6 +439,7 @@ static class Program
         DefineNative(file, ref functionId, "hbuffer_read_uint16", "buffer_read_uint16", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_read_int16", "buffer_read_int16", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_read_int32", "buffer_read_int32", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
+        DefineNative(file, ref functionId, "hbuffer_read_uint32", "buffer_read_uint32", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_read_uint64", "buffer_read_uint64", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_read_float32", "buffer_read_float32", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_read_float64", "buffer_read_float64", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
@@ -415,6 +448,7 @@ static class Program
         DefineNative(file, ref functionId, "hbuffer_write_uint16", "buffer_write_uint16", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_int16", "buffer_write_int16", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_int32", "buffer_write_int32", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
+        DefineNative(file, ref functionId, "hbuffer_write_uint32", "buffer_write_uint32", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_uint64", "buffer_write_uint64", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_float32", "buffer_write_float32", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_float64", "buffer_write_float64", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
@@ -945,6 +979,13 @@ static class Program
         for (var i = 0; i < args.Length; i++)
             gml = gml.Replace($"%arg{i}", args[i] ?? string.Empty);
 
+        // The shared templates call the native DLL functions through __ONLINE_-prefixed
+        // wrapper scripts (the GM8 converter generates those wrappers to avoid shadowing
+        // gm82-style extension functions). GMS has no wrappers - its natives are
+        // registered under their plain export names - so map the calls back here.
+        gml = gml.Replace(Prefix + "udpsocket_", "udpsocket_");
+        gml = gml.Replace(Prefix + "socket_", "socket_");
+        gml = gml.Replace(Prefix + "buffer_", "hbuffer_");
         gml = Regex.Replace(gml, @"\bbuffer_", "hbuffer_");
         if (templateName == "worldEndStep")
         {

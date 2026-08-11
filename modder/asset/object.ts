@@ -102,4 +102,38 @@ export class GMObject extends Asset {
 	public addGameEndCode(GML: Buffer): void {
 		this.addCode(GML, 7, 3);
 	}
+	// C4 (TheBiob object.ts heritage): checks whether any code action of the
+	// given event contains searchStr. Category/subtype are raw GM8 numbers
+	// (Create = 0/0, Draw = 8/0). Matches require an identifier boundary on the
+	// left (so "xscale=1" does not match inside "image_xscale=1") and no digit/
+	// dot on the right (so "facing=1" does not match "facing=10").
+	public hasStringInEvent(event: number, type: number, searchStr: string, ignoreWhitespace: boolean = false): boolean {
+		if (ignoreWhitespace)
+			searchStr = searchStr.replace(/\s/g, '');
+		const isIdentChar = function(ch: string): boolean {
+			return ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' || ch == '_';
+		}
+		const search = function(input: Buffer): boolean {
+			let eventCode: string = input.toString();
+			if (ignoreWhitespace)
+				eventCode = eventCode.replace(/\s/g, '');
+			let idx: number = eventCode.indexOf(searchStr);
+			while (idx >= 0) {
+				const leftOk: boolean = idx == 0 || !isIdentChar(eventCode[idx-1]);
+				const rightIdx: number = idx + searchStr.length;
+				const rightCh: string = rightIdx < eventCode.length ? eventCode[rightIdx] : "";
+				const rightOk: boolean = rightCh == "" || !(rightCh >= '0' && rightCh <= '9' || rightCh == '.');
+				if (leftOk && rightOk)
+					return true;
+				idx = eventCode.indexOf(searchStr, idx + 1);
+			}
+			return false;
+		}
+		return this.events[event].findIndex(element =>
+			element[0] == type
+			&& element[1].findIndex(action =>
+				action.actionKind == 7
+				&& typeof(action.paramStrings[0]) !== 'undefined'
+				&& search(action.paramStrings[0])) >= 0) >= 0;
+	}
 }

@@ -170,7 +170,7 @@ export const insertGMLScriptBeforeSuccessfulReturn = function(source: Buffer, co
 			if(cursor === -1) break;
 			cursor++;
 		}else if(!isIdentChar(str[cursor-1]) && str.slice(cursor, cursor + 6).toLowerCase() === "return" && !isIdentChar(str[cursor+6])){
-			const match: RegExpExecArray = /^return[ \t]+(?:true(?![A-Za-z0-9_])|1(?![0-9.]))[ \t]*;?/i.exec(str.slice(cursor));
+			const match: RegExpExecArray = /^return[ \t\r\n]*(?:\([ \t]*)?(?:true(?![A-Za-z0-9_])|1(?:\.0+)?(?![0-9.]))[ \t]*\)?[ \t]*;?/i.exec(str.slice(cursor));
 			if(match){
 				const returnEnd: number = cursor + match[0].length;
 				pieces.push(source.slice(lastWritten, cursor));
@@ -235,7 +235,7 @@ const isFishClassGame = function(gameName: string): boolean {
 	return normalizedName.includes("i wanna be the fish");
 }
 
-export const ConverterGM8 = async function(input: string, gameName: string, server: string, ports: Ports, forceExternalDll: boolean, customSlot: CustomSlotConfig | null = null, injectIntoStep: boolean = false): Promise<void> {
+export const ConverterGM8 = async function(input: string, gameName: string, server: string, ports: Ports, forceExternalDll: boolean, customSlot: CustomSlotConfig | null = null, injectIntoStep: boolean = false, defines: Map<string, string> = new Map<string, string>()): Promise<void> {
 	const configFilename: string = "__ONLINE_config.ini";
 	console.log("Reading executable...");
 	const fishClassGame: boolean = isFishClassGame(gameName);
@@ -401,7 +401,13 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const replaceChunk = function(exe: SmartBuffer, offsets: [number, number], newData: Buffer): void {
 		replaceExeRange(offsets[0], offsets[1], newData);
 	}
-	const findAsset = function(assets: Array<Asset>, names: Array<string>): Asset {
+	const findAsset = function(assets: Array<Asset>, names: Array<string>, defineKey?: string): Asset {
+		if(defineKey !== undefined && defines.has(defineKey)){
+			const defineValue: string = defines.get(defineKey) as string;
+			if(defineValue === "-") return undefined; // explicitly disabled via per-game ini / --define
+			const defineTarget: string = defineValue.toLowerCase();
+			return assets.filter(asset => asset && asset["name"].toString('ascii').toLowerCase() === defineTarget)[0];
+		}
 		let result: Asset;
 		for(let i: number = 0; i < names.length; ++i){
 			const target: string = names[i].toLowerCase();
@@ -411,9 +417,11 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		}
 		return result;
 	}
-	const findAssetInteractive = async function(assets: Array<Asset>, names: Array<string>, typeName: string, required: boolean = true): Promise<Asset | undefined> {
-		let result: Asset = findAsset(assets, names);
+	const findAssetInteractive = async function(assets: Array<Asset>, names: Array<string>, typeName: string, required: boolean = true, defineKey?: string): Promise<Asset | undefined> {
+		let result: Asset = findAsset(assets, names, defineKey);
 		if(result !== undefined) return result;
+		if(defineKey !== undefined && defines.has(defineKey))
+			throw new Error(`No ${typeName} named '${defines.get(defineKey)}' (from ${defineKey}) found`);
 		if(!required) return undefined;
 		const validAssets: Array<{index: number, name: string}> = [];
 		for(let i = 0; i < assets.length; i++){
@@ -467,9 +475,60 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		if(extNameIs(extensions[i], "Http Dll 2.3") && extensions[i].folderName.toString('ascii').toLowerCase() === "http_dll_2_3")
 			throw new Error("This game is already an online version");
 	}
+	// Extension function IDs live in one global table and must be unique, or the
+	// runner aborts at load with "COMPILATION ERROR in extension package". Our
+	// injected blobs carry hardcoded IDs (e.g. GaseousMarble 418-457), so any game
+	// whose own extensions occupy that range would collide. Renumber every injected
+	// blob to start above the highest ID already in use.
+	let nextExtFuncId: number = 17; // GM's IDE starts extension function IDs at 17 (0-16 reserved)
+	for(const ext of extensions)
+		for(const file of ext.files)
+			for(const fn of file.functions)
+				if(fn.id >= nextExtFuncId) nextExtFuncId = fn.id + 1;
+	// Rewrite all function IDs in an extension blob to a fresh sequential range
+	// starting at nextExtFuncId, and advance nextExtFuncId past the used range.
+	// Throws on unexpected structure so a malformed blob can never pass through
+	// with colliding IDs.
+	const renumberExtensionBlob = function(data: Buffer): Buffer {
+		let off: number = 0;
+		const rd32 = function(): number { const v: number = data.readUInt32LE(off); off += 4; return v; };
+		const skipPascal = function(): void { const len: number = rd32(); off += len; };
+		const checkVersion = function(what: string): void {
+			if(rd32() != 700) throw new Error(`Extension blob ${what} version is incorrect`);
+		};
+		checkVersion("header");
+		skipPascal(); // extension name
+		skipPascal(); // folder name
+		const fileCount: number = rd32();
+		for(let i: number = 0; i < fileCount; ++i){
+			checkVersion("file");
+			skipPascal(); // file name
+			rd32(); // kind
+			skipPascal(); // initializer
+			skipPascal(); // finalizer
+			const functionCount: number = rd32();
+			for(let j: number = 0; j < functionCount; ++j){
+				checkVersion("function");
+				skipPascal(); // function name
+				skipPascal(); // external name
+				rd32(); // convention
+				data.writeUInt32LE(nextExtFuncId, off);
+				off += 4; // id
+				nextExtFuncId += 1;
+				off += 4 + 17 * 4 + 4; // argCount, argTypes, returnType
+			}
+			const constCount: number = rd32();
+			for(let j: number = 0; j < constCount; ++j){
+				checkVersion("constant");
+				skipPascal(); // constant name
+				skipPascal(); // constant value
+			}
+		}
+		return data;
+	}
 	const addExtension = async function(exe: SmartBuffer, extensions: Array<Extension>, file: string): Promise<void> {
 		const pos: number = exe.readOffset;
-		const extensionData: Buffer = await fs.readFile(path.join(__dirname, "lib", file));
+		const extensionData: Buffer = renumberExtensionBlob(await fs.readFile(path.join(__dirname, "lib", file)));
 		replaceExeRange(pos, pos, extensionData);
 		extensions.push(null);
 	}
@@ -599,7 +658,35 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	objectsOffsets[1] = exe.readOffset;
 	if(objects.some(obj => obj && obj.name.toString('ascii').startsWith("__ONLINE_")))
 		throw new Error("This game is already an online version");
-	const world: GMObject = await findAssetInteractive(objects, ["world", "World", "objWorld", "oWorld"], "object world") as GMObject;
+	const gameWorld: GMObject = await findAssetInteractive(objects, ["world", "World", "objWorld", "oWorld"], "object world") as GMObject;
+	// C2 custom world object (TheBiob converterGM8.ts:497-519 heritage, default on).
+	// Instead of piggybacking on the game's world object we inject our own invisible
+	// persistent object and place it as the first instance of the first room.
+	// iwpo.insert_custom_world=false/0 restores the legacy behaviour.
+	const customWorldRaw: string = defines.has("iwpo.insert_custom_world") ? (defines.get("iwpo.insert_custom_world") as string).toLowerCase() : "";
+	const customWorld: boolean = customWorldRaw !== "false" && customWorldRaw !== "0";
+	let world: GMObject = gameWorld;
+	if(customWorld){
+		GMLCode.addVariables("CUSTOM_WORLD_OBJ");
+		world = new GMObject();
+		world.name = Buffer.from("__ONLINE_world", 'ascii');
+		world.spriteIndex = -1;
+		world.solid = false;
+		world.visible = false;
+		world.depth = -999999999;
+		world.persistent = true;
+		world.parentIndex = -1;
+		world.maskIndex = -1;
+		world.events = [[], [], [], [], [], [], [], [], [], [], [], []];
+		// ActiveParent parenting (TheBiob heritage): engines that deactivate instances
+		// wholesale tend to spare ActiveParent children.
+		const activeParent: GMObject = findAsset(objects, ["ActiveParent"]) as GMObject;
+		if(activeParent !== undefined)
+			world.parentIndex = objects.indexOf(activeParent);
+	}
+	// Object index the custom world will occupy once pushed (it is pushed first among
+	// the new objects at the objects.push site below). Only meaningful when customWorld.
+	const customWorldObjectId: number = objects.length;
 	const player: GMObject = await findAssetInteractive(objects, ["player", "Player", "objPlayer", "oPlayer", "objplayer"], "object player") as GMObject;
 	const player2: GMObject = findAsset(objects, ["player2", "objPlayer2", "oPlayer2"]) as GMObject;
 	GMLCode.addVariables("GM8");
@@ -609,35 +696,127 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	if (cjkBackend === 'gm') {
 		GMLCode.addVariables("CJKTEXT");
 	}
-	GMLCode.addVariables("TEMPFILE");
+	// Engines known not to use the game_restart+tempfile save flow (TheBiob heritage:
+	// scrRestartGame = NANEGM8, saveByte = "I wanna enjoy a Merry Christmas!").
+	// For everything else the temp-file online save path stays enabled.
+	// iwpo.temp_file (true/false) overrides the heuristic entirely.
+	const tempFileDefine: string = defines.has("iwpo.temp_file") ? (defines.get("iwpo.temp_file") as string).toLowerCase() : "";
+	if(tempFileDefine === "true" || tempFileDefine === "1"){
+		GMLCode.addVariables("TEMPFILE");
+	}else if(tempFileDefine !== "false" && tempFileDefine !== "0"){
+		if(findAsset(scripts, ["scrRestartGame", "saveByte"]) === undefined)
+			GMLCode.addVariables("TEMPFILE");
+	}
 	if (hasGm82net || hasGm82buf){
 		GMLCode.addVariables("GMNET");
 	}
 	if (hasGm82net){
 		GMLCode.addVariables("GM82NET");
+		// NOTE: GM82NET is an engine-variant marker introduced with the GM8.2 network
+		// path (beta5). No GML currently consumes it (#if GM82NET has zero hits) —
+		// kept for future GM8.2-specific branches. Same for the base "GM8" flag above.
 	}
 	if (scripts.some(script => script && (
 		script.name.equals(ascii("save_save")) ||
 		script.name.equals(ascii("player_air_jump")))))
 		GMLCode.addVariables("RENEX");
-	if (world.name.equals(ascii("objWorld")))
+	if (gameWorld.name.equals(ascii("objWorld")))
 		GMLCode.addVariables("GM8YY");
+	// C4 facing detection (TheBiob converterGM8.ts:690-698 heritage): register the
+	// facing variable the player's Create event initializes, so the broadcast
+	// templates can multiply image_xscale by it instead of falling back to a bare
+	// image_xscale. Skipped for GM8YY (objWorld) games — that template branch
+	// already hardcodes xScale.
+	if (!gameWorld.name.equals(ascii("objWorld"))) {
+		let facingVar: string = "";
+		if (player.hasStringInEvent(0, 0, "xScale = 1", true)) {
+			GMLCode.addVariables("PLAYER_XSCALE");
+			facingVar = "xScale";
+		} else if (player.hasStringInEvent(0, 0, "xscale = 1", true)) {
+			GMLCode.addVariables("PLAYER_XSCALE_LOWER");
+			facingVar = "xscale";
+		} else if (player.hasStringInEvent(0, 0, "facing=1", true)) {
+			GMLCode.addVariables("PLAYER_FACING");
+			facingVar = "facing";
+		}
+		console.log("Facing variable: " + (facingVar || "none (bare image_xscale)"));
+	}
 	if (hasGm82snd)
 		GMLCode.addVariables("GMSND");
 	if(player2 != undefined)
 		GMLCode.addVariables("PLAYER2");
+	// C1 multi-player object list (TheBiob converterGM8.ts:563-589 heritage, adapted).
+	// Default on; iwpo.no_player_list=true restores the legacy player/player2-only path.
+	// iwpo.alt_player_objects appends comma-separated object names after player/player2.
+	// Unlike TheBiob we validate alt names against the object list: GM8 compiles the
+	// baked names as constants, so an unknown name would be a hard compile error.
+	let playerListInitCode: string = "";
+	const noPlayerList: string = defines.has("iwpo.no_player_list") ? (defines.get("iwpo.no_player_list") as string).toLowerCase() : "";
+	if (noPlayerList !== "true" && noPlayerList !== "1") {
+		GMLCode.addVariables("PLAYER_LIST");
+		const playerListNames: Array<string> = [player.name.toString('ascii')];
+		if (player2 != undefined)
+			playerListNames.push(player2.name.toString('ascii'));
+		const altPlayerObjects: string = defines.has("iwpo.alt_player_objects") ? (defines.get("iwpo.alt_player_objects") as string) : "";
+		for (const altRaw of altPlayerObjects.split(',')) {
+			const altName: string = altRaw.trim();
+			if (altName === "")
+				continue;
+			const altObj: GMObject = findAsset(objects, [altName]) as GMObject;
+			if (altObj === undefined) {
+				console.warn(`[iwpo] alt_player_objects: object "${altName}" not found in this game, skipped`);
+				continue;
+			}
+			const canonicalAlt: string = altObj.name.toString('ascii');
+			if (playerListNames.indexOf(canonicalAlt) < 0)
+				playerListNames.push(canonicalAlt);
+		}
+		for (const listName of playerListNames)
+			playerListInitCode += `ds_list_add(__ONLINE_obj_list, ${listName});\r\n`;
+		// Active-player resolver: first listed object with a live instance (object index,
+		// noone when none exist). This Buffer is injected verbatim (via %arg6 / script
+		// push), so it must use final __ONLINE_ names - the @ prefix substitution in
+		// GMLCode.getGML runs before %argN replacement and does not apply here.
+		const worldNameStr: string = world.name.toString('ascii');
+		const activePlayerScript: Script = new Script();
+		activePlayerScript.name = Buffer.from("__ONLINE_get_active_player", "ascii");
+		activePlayerScript.source = Buffer.from(
+			"var __gap_i, __gap_obj;\r\n" +
+			`for (__gap_i = 0; __gap_i < ds_list_size(${worldNameStr}.__ONLINE_obj_list); __gap_i += 1) {\r\n` +
+			`__gap_obj = ds_list_find_value(${worldNameStr}.__ONLINE_obj_list, __gap_i);\r\n` +
+			"if (instance_exists(__gap_obj)) return __gap_obj;\r\n" +
+			"}\r\n" +
+			"return noone;", "ascii");
+		scripts.push(activePlayerScript);
+	}
 	// Use a specific script name to detect Nikaple's Engine
 	if(scripts.some(script => script && script.name.equals(ascii("audio_togglesoundmuted"))))
 		GMLCode.addVariables("NIKAPLE");
+	// NOTE: NIKAPLE is upstream heritage; no GML consumes it, but README.md documents
+	// it in a usage example. Kept as an observation item (zero cost).
 	// Use external_define/external_call for the NativeAOT x86 DLL.
 	// This DLL performs ANSI↔UTF-8 conversion needed for Chinese text support.
-	// GM82NET games use aliased function names; others use standard DLL export names.
-	if (!hasGm82buf) {
+	// GM82NET/GM82BUF games use aliased (gm82-style) wrapper names; others use
+	// standard DLL export names.
+	// IMPORTANT: wrapper scripts MUST be named with the __ONLINE_ prefix. Naming a
+	// wrapper buffer_create/socket_create/etc. shadows the game's own gm82net
+	// extension function of the same name. http_dll and gm82net share the same
+	// buffer code but keep SEPARATE static buffer tables, so a buffer created
+	// through a shadowing wrapper (http_dll table) is invisible to unwrapped
+	// gm82net functions like buffer_save_temp/buffer_get_size/buffer_inflate.
+	// This broke RENEX-engine games (e.g. I wanna Land on a Cloud): sound_add_pack
+	// mixes buffer_create with buffer_save_temp, and the pack extraction temp file
+	// was never written ("File does not exist trying to add a sound: ...wasd.ogg").
+	// TheBiob avoids this by only ever adding __ONLINE_*-named wrappers.
+	// All buffers/sockets used by IWPO's own protocol therefore live exclusively in
+	// http_dll's table; the game's extension functions stay untouched. This also
+	// means gm82buf-only games get full socket support from http_dll for free.
+	{
 		GMLCode.addVariables("HTTPDLL_INIT");
 		const HTTP_DLL_NAME: string = "http_dll_2_3.dll";
 		interface DllFunc { name: string; dllName: string; ret: string; args: Array<string>; }
 		// Map GML-visible function names to http_dll DLL export names + signatures
-		const fns: Array<DllFunc> = hasGm82net ? [
+		const fns: Array<DllFunc> = (hasGm82net || hasGm82buf) ? [
 			{ name: "buffer_create", dllName: "buffer_create", ret: "ty_real", args: [] },
 			{ name: "buffer_destroy", dllName: "buffer_destroy", ret: "ty_real", args: ["ty_real"] },
 			{ name: "buffer_clear", dllName: "buffer_clear", ret: "ty_real", args: ["ty_real"] },
@@ -729,10 +908,10 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "udpsocket_receive", dllName: "udpsocket_receive", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_get_state", dllName: "udpsocket_get_state", ret: "ty_real", args: ["ty_real"] },
 		];
-		// UTF-8 helpers from http_dll are needed whenever the runtime string mode is UTF-8.
-		// This is true for GM 8.1+ by default, and also for GM 8.0 hosts routed through
-		// the GaseousMarble CJK backend (worldCreate.gml's `#if CJKTEXT` block calls
-		// `set_utf8_mode(1)` to switch http_dll into UTF-8 interpretation).
+		// UTF-8 helpers from http_dll are needed whenever the runtime string mode is UTF-8,
+		// i.e. GM 8.1+ hosts (worldCreate.gml's `#if CJKTEXT` block calls `set_utf8_mode(1)`
+		// to switch http_dll into UTF-8 interpretation). GM 8.0 always uses the FoxWriting
+		// backend with useUtf8=false, so these wrappers are never needed there.
 		if (useUtf8) {
 			fns.push({ name: "ansi_to_utf8", dllName: "ansi_to_utf8", ret: "ty_string", args: ["ty_string"] });
 			fns.push({ name: "set_utf8_mode", dllName: "set_utf8_mode", ret: "ty_real", args: ["ty_real"] });
@@ -750,33 +929,12 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		// Generate wrapper scripts for each function
 		for (const fn of fns) {
 			const wrapper: Script = new Script();
-			wrapper.name = Buffer.from(fn.name, "ascii");
+			wrapper.name = Buffer.from("__ONLINE_" + fn.name, "ascii");
 			const argList: string = fn.args.map((_, i) => `argument${i}`).join(",");
 			const callArgs: string = fn.args.length > 0 ? "," + argList : "";
 			wrapper.source = Buffer.from(`return external_call(global.__od_${fn.dllName}${callArgs});`, "ascii");
 			scripts.push(wrapper);
 		}
-	} else if (gameConfig.version !== GameVersion.GameMaker80) {
-		// GM8.2 with gm82buf: load http_dll only for ansi_to_utf8 + set_utf8_mode
-		GMLCode.addVariables("HTTPDLL_INIT");
-		const HTTP_DLL_NAME: string = "http_dll_2_3.dll";
-		const miniInitLines: Array<string> = [
-			`var dll; dll = "${HTTP_DLL_NAME}";`,
-			`global.__od_ansi_to_utf8 = external_define(dll,'ansi_to_utf8',dll_cdecl,ty_string,1,ty_string);`,
-			`global.__od_set_utf8_mode = external_define(dll,'set_utf8_mode',dll_cdecl,ty_real,1,ty_real);`,
-		];
-		const miniInitScript: Script = new Script();
-		miniInitScript.name = Buffer.from("__ONLINE_httpdll_init", "ascii");
-		miniInitScript.source = Buffer.from(miniInitLines.join("\r\n"), "ascii");
-		scripts.push(miniInitScript);
-		const ansiWrapper: Script = new Script();
-		ansiWrapper.name = Buffer.from("ansi_to_utf8", "ascii");
-		ansiWrapper.source = Buffer.from("return external_call(global.__od_ansi_to_utf8, argument0);", "ascii");
-		scripts.push(ansiWrapper);
-		const utfModeWrapper: Script = new Script();
-		utfModeWrapper.name = Buffer.from("set_utf8_mode", "ascii");
-		utfModeWrapper.source = Buffer.from("return external_call(global.__od_set_utf8_mode, argument0);", "ascii");
-		scripts.push(utfModeWrapper);
 	}
 	// Synthesize GML stub scripts for any IWPO-required extension function whose
 	// extension package wasn't injected. Without these, the converted game would
@@ -869,7 +1027,9 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// Parse room names for dynamic save room guards (rooms section follows objects in GM8 format)
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Rooms header");
+	const roomOffsets: [number, number] = [exe.readOffset, 0];
 	const roomRefs: Array<Buffer> = getAssetRefs(exe);
+	roomOffsets[1] = exe.readOffset;
 	const roomNames: Set<string> = new Set<string>();
 	for(const ref of roomRefs){
 		const inflated: Buffer = inflateBuffer(ref);
@@ -885,13 +1045,20 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	];
 	const existingMenuRooms: Array<string> = menuRoomPatterns.filter(name => roomNames.has(name));
 	const roomGuard: string = existingMenuRooms.length > 0
-		? "if(" + existingMenuRooms.map(r => `room != ${r}`).join(" && ") + "){"
-		: "if(true){";
+		? existingMenuRooms.map(r => `room != ${r}`).join(" && ")
+		: "true";
 	// Included files: always read through the section. Inject sound files for gm82snd,
 	// and inject GaseousMarble font files for CJK text rendering.
+	let lastInstanceId: number = -1;
 	{
-		exe.readInt32LE(); //last_instance_id
+		const lastInstanceIdPos: number = exe.readOffset;
+		lastInstanceId = exe.readInt32LE(); //last_instance_id
 		exe.readInt32LE(); //last_tile_id
+		if(customWorld){
+			// Reserve an instance id for the custom world instance inserted below.
+			exe.writeOffset = lastInstanceIdPos;
+			exe.writeInt32LE(lastInstanceId + 1);
+		}
 		if(exe.readUInt32LE() != 800)
 			throw new Error("Included files header");
 		const includedfilesOffsets: [number, number] = [exe.readOffset, 0];
@@ -922,6 +1089,87 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 
 		replaceChunk(exe, includedfilesOffsets, putAssetRefs(exe, includedfiles));
 	}
+	// C2: place the custom world object as the first instance of the first room
+	// (room_order[0]). asset/room.ts has no serialize path, so this is a byte-level
+	// splice: locate the instance count inside the inflated room chunk and insert a
+	// raw instance record there; every other byte is preserved verbatim.
+	if(customWorld){
+		if(exe.readUInt32LE() != 800)
+			throw new Error("Help dialog header");
+		const helpDialogLength: number = exe.readUInt32LE();
+		exe.readOffset += helpDialogLength; // help dialog buffer
+		if(exe.readUInt32LE() != 500)
+			throw new Error("Action library initialization code header");
+		getAssetRefs(exe); // not technically asset references but stored in the same <count> [<len> <buffer>] format
+		if(exe.readUInt32LE() != 700)
+			throw new Error("Room order lookup header");
+		const roomOrderCount: number = exe.readUInt32LE();
+		if(roomOrderCount == 0)
+			throw new Error("No rooms in exe");
+		const firstRoomIndex: number = exe.readInt32LE(); // room_order[0]
+		if(firstRoomIndex < 0 || firstRoomIndex >= roomRefs.length)
+			throw new Error("First room index out of range");
+		const insertWorldInstance = function(chunk: Buffer): Buffer {
+			const raw: Buffer = inflateBuffer(chunk);
+			if(raw.length < 4 || raw.readUInt32LE(0) === 0)
+				throw new Error("First room is null");
+			const data: SmartBuffer = SmartBuffer.fromBuffer(raw);
+			data.readOffset = 4; // exists flag
+			const roomNameLength: number = data.readUInt32LE();
+			data.readOffset += roomNameLength; // name
+			const entryVersion: number = data.readUInt32LE();
+			const captionLength: number = data.readUInt32LE();
+			data.readOffset += captionLength; // caption
+			const roomWidth: number = data.readUInt32LE();
+			const roomHeight: number = data.readUInt32LE();
+			data.readOffset += 8; // speed, persistent
+			data.readOffset += 4; // bgColour (4 bytes)
+			data.readOffset += 4; // clearScreen/clearRegion flags
+			const creationCodeLength: number = data.readUInt32LE();
+			data.readOffset += creationCodeLength; // room creation code
+			const backgroundCount: number = data.readUInt32LE();
+			data.readOffset += backgroundCount * 40; // 10 dwords each
+			data.readOffset += 4; // viewsEnabled
+			const viewCount: number = data.readUInt32LE();
+			data.readOffset += viewCount * 56; // 14 dwords each
+			const instanceCountPos: number = data.readOffset;
+			const instanceCount: number = data.readUInt32LE();
+			const inst: SmartBuffer = new SmartBuffer();
+			inst.writeInt32LE(Math.floor(roomWidth / 2));
+			inst.writeInt32LE(Math.floor(roomHeight / 2));
+			inst.writeInt32LE(customWorldObjectId);
+			inst.writeInt32LE(lastInstanceId + 1);
+			inst.writeUInt32LE(0); // empty creation code
+			if(entryVersion >= 810){
+				inst.writeDoubleLE(1.0); // xscale
+				inst.writeDoubleLE(1.0); // yscale
+				inst.writeUInt32LE(0xFFFFFFFF); // blend
+			}
+			if(entryVersion >= 811){
+				inst.writeDoubleLE(0.0); // angle
+			}
+			const newCount: Buffer = Buffer.alloc(4);
+			newCount.writeUInt32LE(instanceCount + 1, 0);
+			const updated: Buffer = concatBuffers([
+				raw.subarray(0, instanceCountPos),
+				newCount,
+				inst.internalBuffer.subarray(0, inst.length),
+				raw.subarray(instanceCountPos + 4),
+			]);
+			inst.destroy();
+			data.destroy();
+			return deflateBuffer(updated);
+		}
+		roomRefs[firstRoomIndex] = insertWorldInstance(roomRefs[firstRoomIndex]);
+		const roomsData: SmartBuffer = new SmartBuffer();
+		roomsData.writeUInt32LE(roomRefs.length);
+		for(const roomRef of roomRefs){
+			roomsData.writeUInt32LE(roomRef.length);
+			roomsData.writeBuffer(roomRef);
+		}
+		replaceChunk(exe, roomOffsets, roomsData.internalBuffer.subarray(0, roomsData.length));
+		roomsData.destroy();
+	}
 	// gameName encoding: tied to the runtime string mode chosen by the CJK backend.
 	//   useUtf8 == true  (GM 8.1+ default, or GM 8.0+'gm' backend with set_utf8_mode(1)):
 	//     emit UTF-8 directly; http_dll, GaseousMarble and GM string ops all agree.
@@ -930,7 +1178,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const gameNameBuf: Buffer = useUtf8
 		? Buffer.from(gameName)
 		: iconv.encode(gameName, "gbk");
-	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), gameNameBuf, Buffer.from(Utils.getVersion(), 'ascii')));
+	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), gameNameBuf, Buffer.from(Utils.getVersion(), 'ascii'), Buffer.from(playerListInitCode, 'ascii')));
 	// Opt-in compatibility path: keep EndStep as the default, but allow Step
 	// injection plus world-driven helper ticks for GM8.2/yuuutu edge cases.
 	const addTickRaw = function(obj: GMObject, gml: Buffer, tickEventName: TickEventName): void {
@@ -990,17 +1238,44 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		Buffer.from(`\r\n}\r\n}\r\n`, 'utf8')
 	]);
 	ui.addDrawCode(wrappedDraw);
+	if(customWorld)
+		objects.push(world); // must stay the first of the new objects; its index was reserved as customWorldObjectId
 	objects.push(onlinePlayer);
 	objects.push(chatbox);
 	objects.push(playerSaved);
 	objects.push(ui);
 	replaceChunk(exe, objectsOffsets, putAssets(exe, objects));
 	objects = null;
-	const saveGame: Script = await findAssetInteractive(scripts, ["save_save", "savegame", "saveGame", "savedata_save", "scrSaveGame", "SaveGame"], "script saveGame") as Script;
-	const loadGame: Script = await findAssetInteractive(scripts, ["save_load", "loadgame", "loadGame", "savedata_load", "scrLoadGame", "LoadGame"], "script loadGame") as Script;
-	const saveExe: Script = findAsset(scripts, ["saveExe", "scrSaveExe"]) as Script;
-	const tempExe: Script = findAsset(scripts, ["tempExe", "scrTempExe"]) as Script;
-	saveGame.source = insertGMLScriptBeforeSuccessfulReturn(saveGame.source, await GMLCode.getGML("saveGame", world.name, player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(roomGuard, 'ascii')));
+	const saveGame: Script = await findAssetInteractive(scripts, ["save_save", "savegame", "saveGame", "SaveGame", "savedata_save", "scrSaveGame", "SaveFile", "ScsaveGame", "SCR_savegame", "saveSaveData"], "script saveGame", true, "iwpo.saveGame") as Script;
+	const loadGame: Script = await findAssetInteractive(scripts, ["save_load", "loadgame", "loadGame", "LoadGame", "savedata_load", "scrLoadGame", "LoadFile", "ScloadGame", "SCR_loadgame", "loadSaveData"], "script loadGame", true, "iwpo.loadGame") as Script;
+	const saveExe: Script = findAsset(scripts, ["saveExe", "scrSaveExe", "SCR_saveexe"], "iwpo.saveExe") as Script;
+	const tempExe: Script = findAsset(scripts, ["tempExe", "scrTempExe", "SCR_tempexe"], "iwpo.tempExe") as Script;
+	// B1 (TheBiob converterGM8.ts:761-781): runtime condition telling real saves apart from
+	// fake/auto saves, evaluated inside the injected save block (GM8 path only, via %arg3).
+	// iwpo.savePositionVariable overrides the heuristic.
+	let savePositionVariable: string = defines.has("iwpo.savePositionVariable") ? (defines.get("iwpo.savePositionVariable") as string) : "";
+	if(savePositionVariable === ""){
+		const saveGameContent: string = saveGame.source.toString('ascii');
+		if(saveGameContent.indexOf("var savePosition") >= 0){
+			savePositionVariable = "savePosition";
+		}else if(saveGameContent.indexOf("// saveGame(x, y)") >= 0){ // I wanna go shopping
+			savePositionVariable = "true";
+		}else if(saveGameContent.indexOf("dyingSave = argument0") >= 0 // I wanna Moti Trap
+			|| saveGameContent.indexOf("saveByte(f,d,room);") >= 0){ // I wanna enjoy a Merry Christmas!
+			savePositionVariable = "!argument0";
+		}else if(saveGameContent.indexOf("i = argument0;") >= 0){ // I wanna clear only one stage: argument0 is the save slot, not a save/don't-save flag
+			savePositionVariable = "true";
+		}else if(saveGameContent.indexOf("argument0") >= 0){
+			savePositionVariable = "argument0";
+		}else if(gameConfig.version === GameVersion.GameMaker80 || saveGameContent.indexOf("///savedata_save(force)") >= 0){ // renex engine saves (WannaFest22)
+			savePositionVariable = "true";
+		}else{
+			// GM8-safe spelling of TheBiob's "(argument_count == 0 || argument[0] == true)".
+			savePositionVariable = "(argument_count == 0 || argument0)";
+		}
+	}
+	const saveGuard: string = "if((" + roomGuard + ") && (" + savePositionVariable + ")){";
+	saveGame.source = insertGMLScriptBeforeSuccessfulReturn(saveGame.source, await GMLCode.getGML("saveGame", world.name, player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(saveGuard, 'ascii')));
 	// v2 (§11): runtime sync is fully driven by `__ONLINE_config.ini [sync]`; no GML codegen here.
 	loadGame.source = insertGMLScript(loadGame.source, await GMLCode.getGML("saveGame2", world.name, player.name, player2 ? player2.name : Buffer.from("")));
 	const loadGameContent: Buffer = await GMLCode.getGML("loadGame", world.name, player.name, player2 ? player2.name : Buffer.from(""));
@@ -1168,7 +1443,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const outputDir: string = path.dirname(input);
 	await fs.writeFile(path.join(outputDir, `${gameName}_online.exe`), getExeBuffer());
 	const runtimeConfigPath: string = path.join(outputDir, configFilename);
-	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_rating=85\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1`;
+	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1`;
 	await fs.writeFile(runtimeConfigPath, configContent, "utf8");
 	if(customSlot){
 		// Write/merge the runtime `[sync]` section into `__ONLINE_config.ini` next to the produced EXE.

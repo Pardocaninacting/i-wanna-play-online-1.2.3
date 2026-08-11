@@ -17,11 +17,16 @@ if(@avatarAlive && @lerpInit){
 		y = @targetY;
 	}
 }
+#if PLAYER_LIST
+@p = @get_active_player();
+#endif
+#if not PLAYER_LIST
 @p = %arg0;
 #if PLAYER2
 	if(!instance_exists(@p)){
 		@p = %arg1;
 	}
+#endif
 #endif
 if(@avatarAlive && instance_exists(@p)){
 	@dist = distance_to_object(@p);

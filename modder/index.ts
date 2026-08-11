@@ -31,6 +31,7 @@ interface ToolSettings {
 	extensionPackages?: string;
 	injectIntoStep?: boolean;
 	customSlot?: CustomSlotConfig | null;
+	defines?: Map<string, string>;
 }
 
 const readToolSettings = async function(): Promise<ToolSettings> {
@@ -41,6 +42,7 @@ const readToolSettings = async function(): Promise<ToolSettings> {
 	const result: ToolSettings = {};
 	let currentSection: string = "";
 	const modSection: Record<string, string> = {};
+	const defines: Map<string, string> = new Map<string, string>();
 	let hasModSection: boolean = false;
 	for(const line of content.split(/\r?\n/)){
 		const trimmed: string = line.trim();
@@ -67,15 +69,44 @@ const readToolSettings = async function(): Promise<ToolSettings> {
 			}
 		}else if(currentSection === "mod"){
 			modSection[key.toLowerCase()] = val;
+		}else if(currentSection === "iwpo"){
+			// TheBiob-style iwpo.* defines (case-sensitive keys, e.g. saveGame=mySaveScript).
+			if(val) defines.set(`iwpo.${key}`, val);
 		}
 	}
 	if(hasModSection){
 		result.customSlot = parseCustomSlotConfig(modSection);
 	}
+	result.defines = defines;
 	return result;
 }
 
-const getServer = async function(): Promise<{server: string, ports: Ports, forceExternalDll: boolean, noExtensionPackages: boolean, extensionPackages: string | null, injectIntoStep: boolean, customSlot: CustomSlotConfig | null}> {
+// Per-game define overrides, loaded from games/<gameName>.ini next to iwpo-settings.ini.
+// Only the [iwpo] section is honored; values override the global settings file.
+const readGameDefines = async function(gameName: string, defines: Map<string, string>): Promise<void> {
+	const gameIniPath: string = path.join(__dirname, "..", "games", gameName + ".ini");
+	if(!await fs.exists(gameIniPath))
+		return;
+	console.log(`Reading per-game config 'games/${gameName}.ini'`);
+	const content: string = await fs.readFile(gameIniPath, "utf8");
+	let currentSection: string = "";
+	for(const line of content.split(/\r?\n/)){
+		const trimmed: string = line.trim();
+		if(trimmed.startsWith("[") && trimmed.endsWith("]")){
+			currentSection = trimmed.slice(1, -1).toLowerCase();
+			continue;
+		}
+		if(!trimmed || trimmed.startsWith(";") || trimmed.startsWith("#")) continue;
+		const eq: number = trimmed.indexOf("=");
+		if(eq < 0) continue;
+		if(currentSection !== "iwpo") continue;
+		const key: string = trimmed.slice(0, eq).trim();
+		const val: string = trimmed.slice(eq + 1).trim();
+		if(val) defines.set(`iwpo.${key}`, val);
+	}
+}
+
+const getServer = async function(): Promise<{server: string, ports: Ports, forceExternalDll: boolean, noExtensionPackages: boolean, extensionPackages: string | null, injectIntoStep: boolean, customSlot: CustomSlotConfig | null, defines: Map<string, string>}> {
 	let server: string = "localhost";
 	let ports: Ports = {
 		tcp: 8002,
@@ -94,6 +125,7 @@ const getServer = async function(): Promise<{server: string, ports: Ports, force
 	if(toolSettings.extensionPackages) extensionPackages = toolSettings.extensionPackages;
 	if(toolSettings.injectIntoStep) injectIntoStep = true;
 	const customSlot: CustomSlotConfig | null = toolSettings.customSlot ? toolSettings.customSlot : null;
+	const defines: Map<string, string> = toolSettings.defines ? toolSettings.defines : new Map<string, string>();
 	const keyword: string = "server=";
 	for(const arg of process.argv){
 		if(arg.slice(0, keyword.length) == keyword){
@@ -106,17 +138,35 @@ const getServer = async function(): Promise<{server: string, ports: Ports, force
 			break;
 		}
 	}
-	return {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, injectIntoStep, customSlot};
+	return {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, injectIntoStep, customSlot, defines};
 }
 
 const main = async function(): Promise<string> {
 	const input: string = await getInputGame();
 	const gameName: string = path.basename(input, ".exe");
-	const {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, injectIntoStep, customSlot} = await getServer();
+	const {server, ports, forceExternalDll, noExtensionPackages, extensionPackages, injectIntoStep, customSlot, defines} = await getServer();
+	// Define overrides: per-game ini overrides global settings, --define wins over both.
+	await readGameDefines(gameName, defines);
+	for(const arg of process.argv){
+		if(arg.startsWith("--define:")){
+			const pair: Array<string> = arg.substring("--define:".length).split("=");
+			if(pair.length >= 2){
+				// CLI keys get the same iwpo. prefix the ini sections apply implicitly.
+				const key: string = pair[0].startsWith("iwpo.") ? pair[0] : `iwpo.${pair[0]}`;
+				defines.set(key, pair.slice(1).join("="));
+			}
+		}
+	}
 	console.log(`Server: ${server} (TCP ${ports.tcp}, UDP ${ports.udp})`);
 	if(customSlot){
 		const totalSlots = customSlot.entries.reduce((s, e) => s + Math.ceil(e.count / 32), 0);
 		console.log(`Sync defaults: ${customSlot.entries.length} entries, ${totalSlots} slots`);
+	}
+	// Unity games are not supported: their architecture differs fundamentally from
+	// GameMaker, and conversion would silently produce a broken result (TheBiob b22
+	// implemented full Unity support; we deliberately only detect and refuse).
+	if(await fs.exists(path.join(path.dirname(input), "UnityPlayer.dll"))){
+		throw new Error("Unity engine detected (UnityPlayer.dll found next to the game). Unity games are not supported by IWPO.");
 	}
 	if(await IsGMS(input)){
 		console.log("Target: GameMaker Studio");
@@ -141,7 +191,7 @@ const main = async function(): Promise<string> {
 				console.log(`GM8 extension packages: ${mode}`);
 			}
 		}
-		await ConverterGM8(input, gameName, server, ports, forceExternalDll, customSlot, injectIntoStep);
+		await ConverterGM8(input, gameName, server, ports, forceExternalDll, customSlot, injectIntoStep, defines);
 	}
 	return "Success!";
 }

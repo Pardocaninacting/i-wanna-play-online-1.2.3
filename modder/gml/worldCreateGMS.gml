@@ -37,10 +37,10 @@ set_utf8_mode(1);
 @udpRetryCount = 0;
 @udpGraceFrames = room_speed*3;
 @reconnecting = false;
+@manualReconnect = false;
 @reconnectDelay = 0;
 @reconnectTimer = 0;
 @reconnectAttempts = 0;
-@customSlot = 0;
 @hbCounter = 0;
 @listCounter = 0;
 @lastRoom = room;
@@ -53,7 +53,6 @@ set_utf8_mode(1);
 @kbRow[4] = 0;
 @kbFocus = 1;
 @kbDelay = 0;
-@customSlotPrev = -1;
 @gameName = "%arg4";
 @keyChat = 32;
 @keyVis = 86;
@@ -99,7 +98,6 @@ set_utf8_mode(1);
 @rStars = 0;
 @rCleared = 0;
 @rClearWarn = 0;
-@rClearAutoSet = false;
 @keybindEditing = -1;
 @keybindArmTimer = 0;
 @keybindSave = false;
@@ -182,53 +180,71 @@ for(@i = 0; @i < @pingMax; @i += 1){
 // SYNC
 @syncEnabled = 1;
 @syncEntryCount = 0;
+for(@scI = 0; @scI < 16; @scI += 1){
+	@syncName[@scI] = "";
+	@syncCount[@scI] = 0;
+}
 @cfgDir = program_directory;
+if (string_char_at(@cfgDir, string_length(@cfgDir)) != chr(92)) @cfgDir += chr(92);
 @cfgPath = @cfgDir + "@config.ini";
 @serverPath = @cfgDir + "@server.txt";
 @savesPath = "@saves";
-if(file_exists(@cfgPath)){
-	ini_open("@config.ini");
-	@cfgVal = ini_read_string("config", "server", "");
-	if(@cfgVal != "") @server = @cfgVal;
-	@keyChat = ini_read_real("config", "key_chat", @keyChat);
-	@keyVis = ini_read_real("config", "key_visibility", @keyVis);
-	@keySave = ini_read_real("config", "key_save", @keySave);
-	@keyPlayerList = ini_read_real("config", "key_playerlist", @keyPlayerList);
-	@keySettings = ini_read_real("config", "key_settings", @keySettings);
-	@keyChatLog = ini_read_real("config", "key_chatlog", @keyChatLog);
-	@keySpectate = ini_read_real("config", "key_spectate", @keySpectate);
-	@keyArrows = ini_read_real("config", "key_arrows", @keyArrows);
-	@keyPing = ini_read_real("config", "key_ping", @keyPing);
-	@keyFastLoad = ini_read_real("config", "key_fastload", @keyFastLoad);
-	@pingLabels[0] = ini_read_string("ping", "label_0", @pingLabels[0]);
-	@pingLabels[1] = ini_read_string("ping", "label_1", @pingLabels[1]);
-	@pingLabels[2] = ini_read_string("ping", "label_2", @pingLabels[2]);
-	@pingLabels[3] = ini_read_string("ping", "label_3", @pingLabels[3]);
-	@pingLabels[4] = ini_read_string("ping", "label_4", @pingLabels[4]);
-	@pingLabels[5] = ini_read_string("ping", "label_5", @pingLabels[5]);
-	@pingLabels[6] = ini_read_string("ping", "label_6", @pingLabels[6]);
-	@pingLabels[7] = ini_read_string("ping", "label_7", @pingLabels[7]);
-	@pingLabels[8] = ini_read_string("ping", "label_8", @pingLabels[8]);
-	@lerpEnabled = ini_read_real("config", "lerp", 1);
-	@fastLoadEnabled = ini_read_real("config", "fast_load", 1);
-	@team = ini_read_real("config", "team", @team);
-	if(@team < 0 || @team > 7) @team = 0;
-	@team = floor(@team);
-	@syncEnabled = ini_read_real("sync", "sync_enabled", 1);
-	@syncEntryCount = ini_read_real("sync", "entryCount", 0);
-	if(@syncEntryCount < 0) @syncEntryCount = 0;
-	if(@syncEntryCount > 16) @syncEntryCount = 16;
-	for(@scI = 0; @scI < @syncEntryCount; @scI += 1){
-		@syncName[@scI]      = ini_read_string("sync", "sync"+string(@scI)+"_name", "");
-		@syncCount[@scI]     = ini_read_real  ("sync", "sync"+string(@scI)+"_count", 0);
-		if(@syncCount[@scI] < 1) @syncCount[@scI] = 0;
-		if(@syncCount[@scI] > 512) @syncCount[@scI] = 512;
-		@syncSlotCount[@scI] = ceil(@syncCount[@scI] / 32);
-		@syncDirty[@scI]     = true;
-		@syncLastSig[@scI]   = "";
+// LAYERED CONFIG: layer 0 = default ini shipped beside the exe (read-only),
+// layer 1 = user ini in the working directory (read-write). User keys override.
+@cfgRead = false;
+for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
+	@cfgFile = "";
+	if (@cfgLayer == 0) {
+		if (file_exists(@cfgPath)) @cfgFile = @cfgPath;
+	} else {
+		if (file_exists("@config.ini")) @cfgFile = "@config.ini";
 	}
-	ini_close();
-}else if(file_exists(@serverPath)){
+	if (@cfgFile != "") {
+		@cfgRead = true;
+		ini_open(@cfgFile);
+		@cfgVal = ini_read_string("config", "server", "");
+		if(@cfgVal != "") @server = @cfgVal;
+		@keyChat = ini_read_real("config", "key_chat", @keyChat);
+		@keyVis = ini_read_real("config", "key_visibility", @keyVis);
+		@keySave = ini_read_real("config", "key_save", @keySave);
+		@keyPlayerList = ini_read_real("config", "key_playerlist", @keyPlayerList);
+		@keySettings = ini_read_real("config", "key_settings", @keySettings);
+		@keyChatLog = ini_read_real("config", "key_chatlog", @keyChatLog);
+		@keySpectate = ini_read_real("config", "key_spectate", @keySpectate);
+		@keyArrows = ini_read_real("config", "key_arrows", @keyArrows);
+		@keyPing = ini_read_real("config", "key_ping", @keyPing);
+		@keyFastLoad = ini_read_real("config", "key_fastload", @keyFastLoad);
+		@pingLabels[0] = ini_read_string("ping", "label_0", @pingLabels[0]);
+		@pingLabels[1] = ini_read_string("ping", "label_1", @pingLabels[1]);
+		@pingLabels[2] = ini_read_string("ping", "label_2", @pingLabels[2]);
+		@pingLabels[3] = ini_read_string("ping", "label_3", @pingLabels[3]);
+		@pingLabels[4] = ini_read_string("ping", "label_4", @pingLabels[4]);
+		@pingLabels[5] = ini_read_string("ping", "label_5", @pingLabels[5]);
+		@pingLabels[6] = ini_read_string("ping", "label_6", @pingLabels[6]);
+		@pingLabels[7] = ini_read_string("ping", "label_7", @pingLabels[7]);
+		@pingLabels[8] = ini_read_string("ping", "label_8", @pingLabels[8]);
+		@lerpEnabled = ini_read_real("config", "lerp", @lerpEnabled);
+		@fastLoadEnabled = ini_read_real("config", "fast_load", @fastLoadEnabled);
+		@team = ini_read_real("config", "team", @team);
+		if(@team < 0 || @team > 7) @team = 0;
+		@team = floor(@team);
+		@syncEnabled = ini_read_real("sync", "sync_enabled", @syncEnabled);
+		@syncEntryCount = ini_read_real("sync", "entryCount", @syncEntryCount);
+		if(@syncEntryCount < 0) @syncEntryCount = 0;
+		if(@syncEntryCount > 16) @syncEntryCount = 16;
+		for(@scI = 0; @scI < @syncEntryCount; @scI += 1){
+			@syncName[@scI]      = ini_read_string("sync", "sync"+string(@scI)+"_name", @syncName[@scI]);
+			@syncCount[@scI]     = ini_read_real  ("sync", "sync"+string(@scI)+"_count", @syncCount[@scI]);
+			if(@syncCount[@scI] < 1) @syncCount[@scI] = 0;
+			if(@syncCount[@scI] > 512) @syncCount[@scI] = 512;
+			@syncSlotCount[@scI] = ceil(@syncCount[@scI] / 32);
+			@syncDirty[@scI]     = true;
+			@syncLastSig[@scI]   = "";
+		}
+		ini_close();
+	}
+}
+if (!@cfgRead && file_exists(@serverPath)) {
 	@file = file_text_open_read(@serverPath);
 	@line = file_text_read_string(@file);
 	file_text_close(@file);
@@ -236,6 +252,8 @@ if(file_exists(@cfgPath)){
 		@server = @line;
 	}
 }
+@lastTeamSent = @team;
+@lastSpecSent = @spectating;
 // LOAD SAVE HISTORY
 if file_exists(@savesPath) {
 	buffer_clear(@buffer);
@@ -368,6 +386,12 @@ if file_exists(@savesPath) {
 			@team = buffer_read_u8(@buffer);
 			@lerpEnabled = buffer_read_u8(@buffer);
 		#endif
+		if(!@save_enabled){
+			// Restored with online saves disabled: discard any pending online save.
+			if(file_exists("tempOnline2")){
+				file_delete("tempOnline2");
+			}
+		}
 		@tcpState = socket_get_state(@socket);
 		if(@tcpState == 2){
 			#if not GMNET
@@ -548,7 +572,6 @@ if file_exists(@savesPath) {
 @pX = 0;
 @pY = 0;
 @t = 0;
-@heartbeat = 0;
 @stoppedFrames = 0;
 @sGravity = 0;
 @sX = 0;

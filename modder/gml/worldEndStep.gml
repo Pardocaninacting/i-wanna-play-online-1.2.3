@@ -40,6 +40,7 @@ if(@saveHistPending){
 	#endif
 	if(instance_exists(@_rp) && room == @saveHistPendingRoom){
 		#if STUDIO
+			#if GRAVITY
 			if(global.grav != @saveHistPendingGrav){
 				#if SCR_FLIP_GRAV
 					scrFlipGrav();
@@ -50,6 +51,7 @@ if(@saveHistPending){
 					}
 				#endif
 			}
+			#endif
 		#endif
 		#if not STUDIO
 			global.grav = @saveHistPendingGrav;
@@ -106,6 +108,7 @@ if(@specPending){
 			#endif
 		}
 		#if STUDIO
+			#if GRAVITY
 			if(global.grav != @specGrav){
 				#if SCR_FLIP_GRAV
 					scrFlipGrav();
@@ -116,6 +119,7 @@ if(@specPending){
 					}
 				#endif
 			}
+			#endif
 		#endif
 		#if not STUDIO
 			global.grav = @specGrav;
@@ -129,23 +133,23 @@ if(@specPending){
 }
 // TCP SOCKETS
 #if not GMNET
-socket_update_read(@socket);
+__ONLINE_socket_update_read(@socket);
 #endif
 #if GMNET
-socket_receive(@socket);
+__ONLINE_socket_receive(@socket);
 #endif
-while(socket_read_message(@socket, @buffer)){
+while(__ONLINE_socket_read_message(@socket, @buffer)){
 	#if not GMNET
-		@opcode = buffer_read_uint8(@buffer);
+		@opcode = __ONLINE_buffer_read_uint8(@buffer);
 	#endif
 	#if GMNET
-		@opcode = buffer_read_u8(@buffer);
+		@opcode = __ONLINE_buffer_read_u8(@buffer);
 	#endif
 	switch(@opcode){
 		case 0:
 			// CREATED
-			@ID = buffer_read_string(@buffer);
-			@createdName = buffer_read_string(@buffer);
+			@ID = __ONLINE_buffer_read_string(@buffer);
+			@createdName = __ONLINE_buffer_read_string(@buffer);
 			@found = false;
 			@oPlayer = noone;
 			for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
@@ -170,7 +174,7 @@ while(socket_read_message(@socket, @buffer)){
 			break;
 		case 1:
 			// DESTROYED
-			@ID = buffer_read_string(@buffer);
+			@ID = __ONLINE_buffer_read_string(@buffer);
 			@found = false;
 			for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
 				@oPlayer = instance_find(@onlinePlayer, @i);
@@ -185,7 +189,7 @@ while(socket_read_message(@socket, @buffer)){
 			break;
 		case 2:
 			// INCOMPATIBLE VERSION
-			@lastVersion = buffer_read_string(@buffer);
+			@lastVersion = __ONLINE_buffer_read_string(@buffer);
 			@errorMessage = "Your tool uses the version "+@version+" but the oldest compatible version is "+@lastVersion+". Please update your tool.";
 			#if STUDIO
 				show_message(@errorMessage);
@@ -198,7 +202,7 @@ while(socket_read_message(@socket, @buffer)){
 			break;
 		case 4:
 			// CHAT MESSAGE
-			@ID = buffer_read_string(@buffer);
+			@ID = __ONLINE_buffer_read_string(@buffer);
 			@found = false;
 			@oPlayer = 0;
 			for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
@@ -208,7 +212,7 @@ while(socket_read_message(@socket, @buffer)){
 				}
 			}
 			if(@found){
-				@message = buffer_read_string(@buffer);
+				@message = __ONLINE_buffer_read_string(@buffer);
 				#if STUDIO
 				@message = strip_non_bmp(@message);
 				#endif
@@ -263,18 +267,18 @@ while(socket_read_message(@socket, @buffer)){
 			// SOMEONE SAVED
 			if(!@race){
 				#if not GMNET
-					@sGravity = buffer_read_uint8(@buffer);
-					@sName = buffer_read_string(@buffer);
-					@sX = buffer_read_int32(@buffer);
-					@sY = buffer_read_float64(@buffer);
-					@sRoom = buffer_read_int16(@buffer);
+					@sGravity = __ONLINE_buffer_read_uint8(@buffer);
+					@sName = __ONLINE_buffer_read_string(@buffer);
+					@sX = __ONLINE_buffer_read_int32(@buffer);
+					@sY = __ONLINE_buffer_read_float64(@buffer);
+					@sRoom = __ONLINE_buffer_read_int16(@buffer);
 				#endif
 				#if GMNET
-					@sGravity = buffer_read_u8(@buffer);
-					@sName = buffer_read_string(@buffer);
-					@sX = buffer_read_i32(@buffer);
-					@sY = buffer_read_double(@buffer);
-					@sRoom = buffer_read_i16(@buffer);
+					@sGravity = __ONLINE_buffer_read_u8(@buffer);
+					@sName = __ONLINE_buffer_read_string(@buffer);
+					@sX = __ONLINE_buffer_read_i32(@buffer);
+					@sY = __ONLINE_buffer_read_double(@buffer);
+					@sRoom = __ONLINE_buffer_read_i16(@buffer);
 				#endif
 				#if GMS2
 					@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
@@ -284,6 +288,7 @@ while(socket_read_message(@socket, @buffer)){
 				#endif
 				@a.@name = @sName;
 				@a.@state = -1;
+				if(@save_enabled){
 				@shIdx = @saveHistCount;
 				@saveHistCount += 1;
 				@saveHistFav[@shIdx] = 0;
@@ -299,23 +304,24 @@ while(socket_read_message(@socket, @buffer)){
 					@saveHistDirtyTimer = room_speed * 3;
 				}
 				@saveHistDirty = true;
+				}
 				if(@save_enabled){
 					@sSaved = true;
 					#if TEMPFILE
-						buffer_clear(@buffer);
+						__ONLINE_buffer_clear(@buffer);
 						#if not GMNET
-							buffer_write_uint8(@buffer, @sGravity);
-							buffer_write_int32(@buffer, @sX);
-							buffer_write_float64(@buffer, @sY);
-							buffer_write_int16(@buffer, @sRoom);
-							buffer_write_to_file(@buffer, "tempOnline2");
+							__ONLINE_buffer_write_uint8(@buffer, @sGravity);
+							__ONLINE_buffer_write_int32(@buffer, @sX);
+							__ONLINE_buffer_write_float64(@buffer, @sY);
+							__ONLINE_buffer_write_int16(@buffer, @sRoom);
+							__ONLINE_buffer_write_to_file(@buffer, "tempOnline2");
 						#endif
 						#if GMNET
-							buffer_write_u8(@buffer, @sGravity);
-							buffer_write_i32(@buffer, @sX);
-							buffer_write_double(@buffer, @sY);
-							buffer_write_i16(@buffer, @sRoom);
-							buffer_save(@buffer, "tempOnline2");
+							__ONLINE_buffer_write_u8(@buffer, @sGravity);
+							__ONLINE_buffer_write_i32(@buffer, @sX);
+							__ONLINE_buffer_write_double(@buffer, @sY);
+							__ONLINE_buffer_write_i16(@buffer, @sRoom);
+							__ONLINE_buffer_save(@buffer, "tempOnline2");
 						#endif
 					#endif
 				}
@@ -329,45 +335,45 @@ while(socket_read_message(@socket, @buffer)){
 			break;
 		case 6:
 			// SELF ID
-			@selfID = buffer_read_string(@buffer);
+			@selfID = __ONLINE_buffer_read_string(@buffer);
 			@listCounter = room_speed * 15;
 			break;
 		case 7:
 			// CUSTOM DATA
 			#if not GMNET
-				@cs_v2flag = buffer_read_uint8(@buffer);
+				@cs_v2flag = __ONLINE_buffer_read_uint8(@buffer);
 			#endif
 			#if GMNET
-				@cs_v2flag = buffer_read_u8(@buffer);
+				@cs_v2flag = __ONLINE_buffer_read_u8(@buffer);
 			#endif
 			if(@cs_v2flag != 1){
 				break;
 			}
-			@cs_owner = buffer_read_string(@buffer);
+			@cs_owner = __ONLINE_buffer_read_string(@buffer);
 			#if not GMNET
-				@cs_entryN = buffer_read_uint8(@buffer);
+				@cs_entryN = __ONLINE_buffer_read_uint8(@buffer);
 			#endif
 			#if GMNET
-				@cs_entryN = buffer_read_u8(@buffer);
+				@cs_entryN = __ONLINE_buffer_read_u8(@buffer);
 			#endif
 			if(@cs_entryN > 16){ break; }
 			for(@cs_k = 0; @cs_k < @cs_entryN; @cs_k += 1){
-				@cs_rname = buffer_read_string(@buffer);
+				@cs_rname = __ONLINE_buffer_read_string(@buffer);
 				#if not GMNET
-					@cs_rcount    = buffer_read_uint16(@buffer);
-					@cs_rslotCnt  = buffer_read_uint16(@buffer);
+					@cs_rcount    = __ONLINE_buffer_read_uint16(@buffer);
+					@cs_rslotCnt  = __ONLINE_buffer_read_uint16(@buffer);
 				#endif
 				#if GMNET
-					@cs_rcount    = buffer_read_u16(@buffer);
-					@cs_rslotCnt  = buffer_read_u16(@buffer);
+					@cs_rcount    = __ONLINE_buffer_read_u16(@buffer);
+					@cs_rslotCnt  = __ONLINE_buffer_read_u16(@buffer);
 				#endif
 				if(@cs_rcount > 512 || @cs_rslotCnt > 16){ break; }
 				for(@cs_s = 0; @cs_s < @cs_rslotCnt; @cs_s += 1){
 					#if not GMNET
-						@cs_recvSlot[@cs_s] = buffer_read_uint32(@buffer);
+						@cs_recvSlot[@cs_s] = __ONLINE_buffer_read_uint32(@buffer);
 					#endif
 					#if GMNET
-						@cs_recvSlot[@cs_s] = buffer_read_u32(@buffer);
+						@cs_recvSlot[@cs_s] = __ONLINE_buffer_read_u32(@buffer);
 					#endif
 				}
 				@cs_matchIdx = -1;
@@ -402,12 +408,12 @@ while(socket_read_message(@socket, @buffer)){
 			break;
 		case 8:
 			// TEAM
-			@ID = buffer_read_string(@buffer);
+			@ID = __ONLINE_buffer_read_string(@buffer);
 			#if not GMNET
-				@receivedTeam = buffer_read_uint8(@buffer);
+				@receivedTeam = __ONLINE_buffer_read_uint8(@buffer);
 			#endif
 			#if GMNET
-				@receivedTeam = buffer_read_u8(@buffer);
+				@receivedTeam = __ONLINE_buffer_read_u8(@buffer);
 			#endif
 			@found = false;
 			for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
@@ -429,10 +435,10 @@ while(socket_read_message(@socket, @buffer)){
 		case 9:
 			// RATING
 			#if not GMNET
-				@ratingReply = buffer_read_uint8(@buffer);
+				@ratingReply = __ONLINE_buffer_read_uint8(@buffer);
 			#endif
 			#if GMNET
-				@ratingReply = buffer_read_u8(@buffer);
+				@ratingReply = __ONLINE_buffer_read_u8(@buffer);
 			#endif
 			@ratingSubmitting = false;
 			if(@ratingReply == 1){
@@ -446,20 +452,20 @@ while(socket_read_message(@socket, @buffer)){
 		case 10:
 			// LIST RECONCILE
 			#if not GMNET
-				@listCount = buffer_read_uint16(@buffer);
+				@listCount = __ONLINE_buffer_read_uint16(@buffer);
 			#endif
 			#if GMNET
-				@listCount = buffer_read_u16(@buffer);
+				@listCount = __ONLINE_buffer_read_u16(@buffer);
 			#endif
 			@listSeen = ds_map_create();
 			for(@li = 0; @li < @listCount; @li += 1){
-				@listID = buffer_read_string(@buffer);
-				@listName = buffer_read_string(@buffer);
+				@listID = __ONLINE_buffer_read_string(@buffer);
+				@listName = __ONLINE_buffer_read_string(@buffer);
 				#if not GMNET
-					@listTeam = buffer_read_uint8(@buffer);
+					@listTeam = __ONLINE_buffer_read_uint8(@buffer);
 				#endif
 				#if GMNET
-					@listTeam = buffer_read_u8(@buffer);
+					@listTeam = __ONLINE_buffer_read_u8(@buffer);
 				#endif
 				ds_map_add(@listSeen, @listID, 1);
 				if(@listTeam < 8){
@@ -508,18 +514,18 @@ while(socket_read_message(@socket, @buffer)){
 			break;
 		case 11:
 			// PING
-			@pingSenderID = buffer_read_string(@buffer);
+			@pingSenderID = __ONLINE_buffer_read_string(@buffer);
 			#if not GMNET
-				@pingPRoom = buffer_read_int32(@buffer);
-				@pingPx = buffer_read_float32(@buffer);
-				@pingPy = buffer_read_float32(@buffer);
-				@pingPtype = buffer_read_uint8(@buffer);
+				@pingPRoom = __ONLINE_buffer_read_int32(@buffer);
+				@pingPx = __ONLINE_buffer_read_float32(@buffer);
+				@pingPy = __ONLINE_buffer_read_float32(@buffer);
+				@pingPtype = __ONLINE_buffer_read_uint8(@buffer);
 			#endif
 			#if GMNET
-				@pingPRoom = buffer_read_i32(@buffer);
-				@pingPx = buffer_read_float(@buffer);
-				@pingPy = buffer_read_float(@buffer);
-				@pingPtype = buffer_read_u8(@buffer);
+				@pingPRoom = __ONLINE_buffer_read_i32(@buffer);
+				@pingPx = __ONLINE_buffer_read_float(@buffer);
+				@pingPy = __ONLINE_buffer_read_float(@buffer);
+				@pingPtype = __ONLINE_buffer_read_u8(@buffer);
 			#endif
 			if(@pingPRoom != room) break;
 			@pingSenderName = "?";
@@ -560,6 +566,26 @@ while(socket_read_message(@socket, @buffer)){
 	}
 }
 @mustQuit = false;
+if(@manualReconnect){
+	@manualReconnect = false;
+	// MANUAL RECONNECT (settings menu "Reconnect: Now"): reset the socket and let the
+	// reconnect state machine below do the rest. Resetting the attempt counter also
+	// escapes the max-attempts quit path.
+	__ONLINE_socket_destroy(@socket);
+	@socket = __ONLINE_socket_create();
+	@reconnecting = true;
+	@connected = false;
+	@reconnectTimer = room_speed;
+	@reconnectAttempts = 0;
+	#if GMS2
+		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
+	#endif
+	#if not GMS2
+		@a = instance_create(0, 0, @playerSaved);
+	#endif
+	@a.@name = "Reconnecting...";
+	@a.@state = -2;
+}
 if(@reconnecting){
 	@reconnectTimer -= 1;
 	if(@reconnectTimer <= 0){
@@ -573,15 +599,15 @@ if(@reconnecting){
 			#endif
 			@mustQuit = true;
 		}else{
-			socket_destroy(@socket);
-			@socket = socket_create();
-			socket_connect(@socket, @server, @tcpPort);
+			__ONLINE_socket_destroy(@socket);
+			@socket = __ONLINE_socket_create();
+			__ONLINE_socket_connect(@socket, @server, @tcpPort);
 			@reconnectDelay = min(@reconnectAttempts * 2, 10) * room_speed;
 			@reconnectTimer = @reconnectDelay;
 		}
 	}
 }
-@socketState = socket_get_state(@socket);
+@socketState = __ONLINE_socket_get_state(@socket);
 switch(@socketState){
 	case 2:
 		if(!@connected || @reconnecting){
@@ -590,69 +616,69 @@ switch(@socketState){
 				@reconnecting = false;
 				@reconnectAttempts = 0;
 				@listCounter = room_speed * 15;
-				buffer_clear(@buffer);
+				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
-					buffer_write_uint8(@buffer, 3);
-					buffer_write_string(@buffer, @name);
-					buffer_write_string(@buffer, @selfGameID);
-					buffer_write_string(@buffer, @gameName);
-					buffer_write_string(@buffer, @version);
+					__ONLINE_buffer_write_uint8(@buffer, 3);
+					__ONLINE_buffer_write_string(@buffer, @name);
+					__ONLINE_buffer_write_string(@buffer, @selfGameID);
+					__ONLINE_buffer_write_string(@buffer, @gameName);
+					__ONLINE_buffer_write_string(@buffer, @version);
 					@hasPassword = 0;
 					if(string_length(string(@password)) > 0) @hasPassword = 1;
-					buffer_write_uint8(@buffer, @hasPassword);
-					buffer_write_uint8(@buffer, @protocolVersion);
-					socket_write_message(@socket, @buffer);
+					__ONLINE_buffer_write_uint8(@buffer, @hasPassword);
+					__ONLINE_buffer_write_uint8(@buffer, @protocolVersion);
+					__ONLINE_socket_write_message(@socket, @buffer);
 				#endif
 				#if GMNET
-					buffer_write_u8(@buffer, 3);
-					buffer_write_string(@buffer, @name);
-					buffer_write_string(@buffer, @selfGameID);
-					buffer_write_string(@buffer, @gameName);
-					buffer_write_string(@buffer, @version);
+					__ONLINE_buffer_write_u8(@buffer, 3);
+					__ONLINE_buffer_write_string(@buffer, @name);
+					__ONLINE_buffer_write_string(@buffer, @selfGameID);
+					__ONLINE_buffer_write_string(@buffer, @gameName);
+					__ONLINE_buffer_write_string(@buffer, @version);
 					@hasPassword = 0;
 					if(string_length(string(@password)) > 0) @hasPassword = 1;
-					buffer_write_u8(@buffer, @hasPassword);
-					buffer_write_u8(@buffer, @protocolVersion);
-					socket_write_message(@socket, @buffer);
+					__ONLINE_buffer_write_u8(@buffer, @hasPassword);
+					__ONLINE_buffer_write_u8(@buffer, @protocolVersion);
+					__ONLINE_socket_write_message(@socket, @buffer);
 				#endif
-				buffer_clear(@buffer);
+				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
-					buffer_write_uint8(@buffer, 8);
-					buffer_write_uint8(@buffer, @team);
+					__ONLINE_buffer_write_uint8(@buffer, 8);
+					__ONLINE_buffer_write_uint8(@buffer, @team);
 				#endif
 				#if GMNET
-					buffer_write_u8(@buffer, 8);
-					buffer_write_u8(@buffer, @team);
+					__ONLINE_buffer_write_u8(@buffer, 8);
+					__ONLINE_buffer_write_u8(@buffer, @team);
 				#endif
-				socket_write_message(@socket, @buffer);
+				__ONLINE_socket_write_message(@socket, @buffer);
 				@spectatingPrev = false;
 				if(@spectating){
-					buffer_clear(@buffer);
+					__ONLINE_buffer_clear(@buffer);
 					#if not GMNET
-						buffer_write_uint8(@buffer, 8);
-						buffer_write_uint8(@buffer, 254);
+						__ONLINE_buffer_write_uint8(@buffer, 8);
+						__ONLINE_buffer_write_uint8(@buffer, 254);
 					#endif
 					#if GMNET
-						buffer_write_u8(@buffer, 8);
-						buffer_write_u8(@buffer, 254);
+						__ONLINE_buffer_write_u8(@buffer, 8);
+						__ONLINE_buffer_write_u8(@buffer, 254);
 					#endif
-					socket_write_message(@socket, @buffer);
+					__ONLINE_socket_write_message(@socket, @buffer);
 					@spectatingPrev = true;
 				}
-				if(udpsocket_exists(@udpsocket)){
-					udpsocket_destroy(@udpsocket);
+				if(__ONLINE_udpsocket_exists(@udpsocket)){
+					__ONLINE_udpsocket_destroy(@udpsocket);
 				}
-				@udpsocket = udpsocket_create();
-				udpsocket_start(@udpsocket, false, 0);
-				udpsocket_set_destination(@udpsocket, @server, @udpPort);
-				buffer_clear(@buffer);
+				@udpsocket = __ONLINE_udpsocket_create();
+				__ONLINE_udpsocket_start(@udpsocket, false, 0);
+				__ONLINE_udpsocket_set_destination(@udpsocket, @server, @udpPort);
+				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
-					buffer_write_uint8(@buffer, 0);
+					__ONLINE_buffer_write_uint8(@buffer, 0);
 				#endif
 				#if GMNET
-					buffer_write_u8(@buffer, 0);
+					__ONLINE_buffer_write_u8(@buffer, 0);
 				#endif
-				udpsocket_send(@udpsocket, @buffer);
+				__ONLINE_udpsocket_send(@udpsocket, @buffer);
 				@udpReady = false;
 				@udpRetryCount = 0;
 				@udpGraceFrames = room_speed*3;
@@ -694,33 +720,38 @@ if(@reconnecting){
 @hbCounter += 1;
 if(@hbCounter >= room_speed * 5){
 	@hbCounter = 0;
-	if(@connected && socket_get_state(@socket) == 2){
-		buffer_clear(@buffer);
+	if(@connected && __ONLINE_socket_get_state(@socket) == 2){
+		__ONLINE_buffer_clear(@buffer);
 		#if not GMNET
-			buffer_write_uint8(@buffer, 2);
+			__ONLINE_buffer_write_uint8(@buffer, 2);
 		#endif
 		#if GMNET
-			buffer_write_u8(@buffer, 2);
+			__ONLINE_buffer_write_u8(@buffer, 2);
 		#endif
-		socket_write_message(@socket, @buffer);
-		buffer_clear(@buffer);
-		#if not GMNET
-			buffer_write_uint8(@buffer, 8);
-			if(@spectating){
-				buffer_write_uint8(@buffer, 254);
-			}else{
-				buffer_write_uint8(@buffer, @team);
-			}
-		#endif
-		#if GMNET
-			buffer_write_u8(@buffer, 8);
-			if(@spectating){
-				buffer_write_u8(@buffer, 254);
-			}else{
-				buffer_write_u8(@buffer, @team);
-			}
-		#endif
-		socket_write_message(@socket, @buffer);
+		__ONLINE_socket_write_message(@socket, @buffer);
+		// TEAM resend only on change since last sent (reconnect path sends separately)
+		if(@team != @lastTeamSent || @spectating != @lastSpecSent){
+			@lastTeamSent = @team;
+			@lastSpecSent = @spectating;
+			__ONLINE_buffer_clear(@buffer);
+			#if not GMNET
+				__ONLINE_buffer_write_uint8(@buffer, 8);
+				if(@spectating){
+					__ONLINE_buffer_write_uint8(@buffer, 254);
+				}else{
+					__ONLINE_buffer_write_uint8(@buffer, @team);
+				}
+			#endif
+			#if GMNET
+				__ONLINE_buffer_write_u8(@buffer, 8);
+				if(@spectating){
+					__ONLINE_buffer_write_u8(@buffer, 254);
+				}else{
+					__ONLINE_buffer_write_u8(@buffer, @team);
+				}
+			#endif
+			__ONLINE_socket_write_message(@socket, @buffer);
+		}
 	}
 }
 // PERIODIC LIST RECONCILE
@@ -731,26 +762,31 @@ if(@lastRoom != room){
 }
 if(@listCounter >= room_speed * 15){
 	@listCounter = 0;
-	if(@connected && socket_get_state(@socket) == 2){
-		buffer_clear(@buffer);
+	if(@connected && __ONLINE_socket_get_state(@socket) == 2){
+		__ONLINE_buffer_clear(@buffer);
 		#if not GMNET
-			buffer_write_uint8(@buffer, 10);
+			__ONLINE_buffer_write_uint8(@buffer, 10);
 		#endif
 		#if GMNET
-			buffer_write_u8(@buffer, 10);
+			__ONLINE_buffer_write_u8(@buffer, 10);
 		#endif
 		if(@selfID != ""){
-			buffer_write_string(@buffer, @selfID);
+			__ONLINE_buffer_write_string(@buffer, @selfID);
 		}
-		socket_write_message(@socket, @buffer);
+		__ONLINE_socket_write_message(@socket, @buffer);
 	}
 }
 if(!@spectating){
+#if PLAYER_LIST
+@p = @get_active_player();
+#endif
+#if not PLAYER_LIST
 @p = %arg0;
 #if PLAYER2
 	if(!instance_exists(@p)){
 		@p = %arg1;
 	}
+#endif
 #endif
 @exists = instance_exists(@p);
 @X = @pX;
@@ -760,17 +796,22 @@ if(@exists){
 	@p = instance_find(@p, 0);
 	if(@exists != @pExists){
 		// SEND PLAYER CREATE
-		buffer_clear(@buffer);
+		__ONLINE_buffer_clear(@buffer);
 		#if not GMNET
-			buffer_write_uint8(@buffer, 0);
+			__ONLINE_buffer_write_uint8(@buffer, 0);
 		#endif
 		#if GMNET
-			buffer_write_u8(@buffer, 0);
+			__ONLINE_buffer_write_u8(@buffer, 0);
 		#endif
-		socket_write_message(@socket, @buffer);
+		__ONLINE_socket_write_message(@socket, @buffer);
 	}
 	@X = @p.x;
 	@Y = @p.y;
+#if CUSTOM_WORLD_OBJ
+	// With a custom world object we move it to the player's position to hopefully avoid most cases where certain camera code would disable this instance (TheBiob heritage).
+	x = @X;
+	y = @Y;
+#endif
 	@stoppedFrames += 1;
 	if(@pX != @X || @pY != @Y || keyboard_check_released(vk_anykey) || keyboard_check_pressed(vk_anykey)){
 		@stoppedFrames = 0;
@@ -781,104 +822,124 @@ if(@exists){
 		}
 		// SEND PLAYER MOVED
 		if(@selfID != ""){
-			buffer_clear(@buffer);
+			__ONLINE_buffer_clear(@buffer);
 			#if not GMNET
-				buffer_write_uint8(@buffer, 1);
-				buffer_write_string(@buffer, @selfID);
-				buffer_write_string(@buffer, @selfGameID);
-				buffer_write_uint16(@buffer, room);
-				buffer_write_uint64(@buffer, current_time);
-				buffer_write_int32(@buffer, @X);
-				buffer_write_int32(@buffer, @Y);
-				buffer_write_int32(@buffer, @p.sprite_index);
-				buffer_write_float32(@buffer, @p.image_speed);
+				__ONLINE_buffer_write_uint8(@buffer, 1);
+				__ONLINE_buffer_write_string(@buffer, @selfID);
+				__ONLINE_buffer_write_string(@buffer, @selfGameID);
+				__ONLINE_buffer_write_uint16(@buffer, room);
+				__ONLINE_buffer_write_uint64(@buffer, current_time);
+				__ONLINE_buffer_write_int32(@buffer, @X);
+				__ONLINE_buffer_write_int32(@buffer, @Y);
+				__ONLINE_buffer_write_int32(@buffer, @p.sprite_index);
+				__ONLINE_buffer_write_float32(@buffer, @p.image_speed);
 				#if GM8YY
-					buffer_write_float32(@buffer, @p.image_xscale*@p.xScale);
+					__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*@p.xScale);
 				#endif
 				#if GLOBAL_PLAYER_XSCALE
-					buffer_write_float32(@buffer, @p.image_xscale*global.player_xscale);
+					__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*global.player_xscale);
 				#endif
 				#if not GLOBAL_PLAYER_XSCALE
 					#if not GM8YY
 						#if PLAYER_XSCALE
-							buffer_write_float32(@buffer, @p.image_xscale*@p.xScale);
+							__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*@p.xScale);
 						#endif
 						#if not PLAYER_XSCALE
 							#if PLAYER_XSCALE_LOWER
-								buffer_write_float32(@buffer, @p.image_xscale*@p.xscale);
+								__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*@p.xscale);
 							#endif
 							#if not PLAYER_XSCALE_LOWER
-								buffer_write_float32(@buffer, @p.image_xscale);
+								#if PLAYER_FACING
+									__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*@p.facing);
+								#endif
+								#if not PLAYER_FACING
+									__ONLINE_buffer_write_float32(@buffer, @p.image_xscale);
+								#endif
 							#endif
 						#endif
 					#endif
 				#endif
 				#if STUDIO
-				buffer_write_float32(@buffer, @p.image_yscale*global.grav);
-			#endif
+					#if GRAVITY
+					__ONLINE_buffer_write_float32(@buffer, @p.image_yscale*global.grav);
+					#endif
+					#if not GRAVITY
+					__ONLINE_buffer_write_float32(@buffer, @p.image_yscale);
+					#endif
+				#endif
 				#if GM8YY
-					buffer_write_float32(@buffer, @p.image_yscale*global.grav);
+					__ONLINE_buffer_write_float32(@buffer, @p.image_yscale*global.grav);
 				#endif
 				#if not STUDIO
 					#if not GM8YY
-						buffer_write_float32(@buffer, @p.image_yscale);
+						__ONLINE_buffer_write_float32(@buffer, @p.image_yscale);
 					#endif
 				#endif
-				buffer_write_float32(@buffer, @p.image_angle);
-				buffer_write_string(@buffer, @name);
+				__ONLINE_buffer_write_float32(@buffer, @p.image_angle);
+				__ONLINE_buffer_write_string(@buffer, @name);
 			#endif
 			#if GMNET
-				buffer_write_u8(@buffer, 1);
-				buffer_write_string(@buffer, @selfID);
-				buffer_write_string(@buffer, @selfGameID);
-				buffer_write_u16(@buffer, room);
-				buffer_write_u64(@buffer, current_time);
-				buffer_write_i32(@buffer, @X);
-				buffer_write_i32(@buffer, @Y);
-				buffer_write_i32(@buffer, @p.sprite_index);
-				buffer_write_float(@buffer, @p.image_speed);
+				__ONLINE_buffer_write_u8(@buffer, 1);
+				__ONLINE_buffer_write_string(@buffer, @selfID);
+				__ONLINE_buffer_write_string(@buffer, @selfGameID);
+				__ONLINE_buffer_write_u16(@buffer, room);
+				__ONLINE_buffer_write_u64(@buffer, current_time);
+				__ONLINE_buffer_write_i32(@buffer, @X);
+				__ONLINE_buffer_write_i32(@buffer, @Y);
+				__ONLINE_buffer_write_i32(@buffer, @p.sprite_index);
+				__ONLINE_buffer_write_float(@buffer, @p.image_speed);
 				#if not RENEX
 					#if GLOBAL_PLAYER_XSCALE
-						buffer_write_float(@buffer, @p.image_xscale*global.player_xscale);
+						__ONLINE_buffer_write_float(@buffer, @p.image_xscale*global.player_xscale);
 					#endif
 					#if GM8YY
-						buffer_write_float(@buffer, @p.image_xscale*@p.xScale);
+						__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.xScale);
 					#endif
 					#if not GLOBAL_PLAYER_XSCALE
 						#if not GM8YY
 							#if PLAYER_XSCALE
-								buffer_write_float(@buffer, @p.image_xscale*@p.xScale);
+								__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.xScale);
 							#endif
 							#if not PLAYER_XSCALE
 								#if PLAYER_XSCALE_LOWER
-									buffer_write_float(@buffer, @p.image_xscale*@p.xscale);
+									__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.xscale);
 								#endif
 								#if not PLAYER_XSCALE_LOWER
-									buffer_write_float(@buffer, @p.image_xscale);
+									#if PLAYER_FACING
+										__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.facing);
+									#endif
+									#if not PLAYER_FACING
+										__ONLINE_buffer_write_float(@buffer, @p.image_xscale);
+									#endif
 								#endif
 							#endif
 						#endif
 					#endif
 					#if STUDIO
-						buffer_write_float(@buffer, @p.image_yscale*global.grav);
+						#if GRAVITY
+						__ONLINE_buffer_write_float(@buffer, @p.image_yscale*global.grav);
+						#endif
+						#if not GRAVITY
+						__ONLINE_buffer_write_float(@buffer, @p.image_yscale);
+						#endif
 					#endif
 					#if GM8YY
-						buffer_write_float(@buffer, @p.image_yscale*global.grav);
+						__ONLINE_buffer_write_float(@buffer, @p.image_yscale*global.grav);
 					#endif
 					#if not STUDIO
 						#if not GM8YY
-							buffer_write_float(@buffer, @p.image_yscale);
+							__ONLINE_buffer_write_float(@buffer, @p.image_yscale);
 						#endif
 					#endif
 				#endif
 				#if RENEX
-					buffer_write_float(@buffer, @p.image_xscale*@p.x_scale);
-					buffer_write_float(@buffer, @p.image_yscale*global.grav);
+					__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.x_scale);
+					__ONLINE_buffer_write_float(@buffer, @p.image_yscale*global.grav);
 				#endif
-				buffer_write_float(@buffer, @p.image_angle);
-				buffer_write_string(@buffer, @name);
+				__ONLINE_buffer_write_float(@buffer, @p.image_angle);
+				__ONLINE_buffer_write_string(@buffer, @name);
 			#endif
-			udpsocket_send(@udpsocket, @buffer);
+			__ONLINE_udpsocket_send(@udpsocket, @buffer);
 		}
 	}
 	@t += 1;
@@ -911,7 +972,7 @@ if(@exists){
 			@message = wd_input_box("Chat", "Say something:", "");
 			#endif
 			#if CJKTEXT
-			@message = ansi_to_utf8(wd_input_box("Chat", "Say something:", ""));
+			@message = __ONLINE_ansi_to_utf8(wd_input_box("Chat", "Say something:", ""));
 			#endif
 			#if not GM80
 			#if not CJKTEXT
@@ -943,15 +1004,15 @@ if(@exists){
 			}
 			#endif
 			#endif
-			buffer_clear(@buffer);
+			__ONLINE_buffer_clear(@buffer);
 			#if not GMNET
-				buffer_write_uint8(@buffer, 4);
+				__ONLINE_buffer_write_uint8(@buffer, 4);
 			#endif
 			#if GMNET
-				buffer_write_u8(@buffer, 4);
+				__ONLINE_buffer_write_u8(@buffer, 4);
 			#endif
-			buffer_write_string(@buffer, @message);
-			socket_write_message(@socket, @buffer);
+			__ONLINE_buffer_write_string(@buffer, @message);
+			__ONLINE_socket_write_message(@socket, @buffer);
 			@selfChatBubble = @message;
 			#if GM80
 			@selfChatBubble = __ONLINE_gbk_trunc(@selfChatBubble, 77, "...");
@@ -1000,51 +1061,37 @@ if(@exists){
 }
 if(@exists != @pExists){
 	// SEND PLAYER DESTROYED
-	buffer_clear(@buffer);
+	__ONLINE_buffer_clear(@buffer);
 	#if not GMNET
-		buffer_write_uint8(@buffer, 1);
+		__ONLINE_buffer_write_uint8(@buffer, 1);
 	#endif
 	#if GMNET
-		buffer_write_u8(@buffer, 1);
+		__ONLINE_buffer_write_u8(@buffer, 1);
 	#endif
-	socket_write_message(@socket, @buffer);
+	__ONLINE_socket_write_message(@socket, @buffer);
 }
 @pExists = @exists;
 @pX = @X;
 @pY = @Y;
 }
-@heartbeat += 1/room_speed;
-if(@heartbeat > 3){
-	@heartbeat = 0;
-	// SEND PLAYER HEARTBEAT
-	buffer_clear(@buffer);
-	#if not GMNET
-		buffer_write_uint8(@buffer, 2);
-	#endif
-	#if GMNET
-		buffer_write_u8(@buffer, 2);
-	#endif
-
-	socket_write_message(@socket, @buffer);
-}
 #if not GMNET
-socket_update_write(@socket);
+__ONLINE_socket_update_write(@socket);
 #endif
 #if GMNET
-socket_send(@socket);
+__ONLINE_socket_send(@socket);
 #endif
 // UDP SOCKETS
-while(udpsocket_receive(@udpsocket, @buffer)){
+while(__ONLINE_udpsocket_receive(@udpsocket, @buffer)){
 	#if not GMNET
-		switch(buffer_read_uint8(@buffer)){
+		switch(__ONLINE_buffer_read_uint8(@buffer)){
 	#endif
 	#if GMNET
-		switch(buffer_read_u8(@buffer)){
+		switch(__ONLINE_buffer_read_u8(@buffer)){
 	#endif
 		case 1:
 			// RECEIVED MOVED
-			@ID = buffer_read_string(@buffer);
-			@gameID = buffer_read_string(@buffer);
+			@ID = __ONLINE_buffer_read_string(@buffer);
+			@gameID = __ONLINE_buffer_read_string(@buffer);
 			@found = false;
 			@oPlayer = 0;
 			for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
@@ -1067,42 +1114,42 @@ while(udpsocket_receive(@udpsocket, @buffer)){
 			}
 			@oPlayer.@avatarAlive = true;
 			#if not GMNET
-				@oPlayer.@oRoom = buffer_read_uint16(@buffer);
-				@syncTime = buffer_read_uint64(@buffer);
+				@oPlayer.@oRoom = __ONLINE_buffer_read_uint16(@buffer);
+				@syncTime = __ONLINE_buffer_read_uint64(@buffer);
 				if(@oPlayer.@syncTime < @syncTime){
 					@oPlayer.@syncTime = @syncTime;
-					@oPlayer.@targetX = buffer_read_int32(@buffer);
-					@oPlayer.@targetY = buffer_read_int32(@buffer);
+					@oPlayer.@targetX = __ONLINE_buffer_read_int32(@buffer);
+					@oPlayer.@targetY = __ONLINE_buffer_read_int32(@buffer);
 					if(!@oPlayer.@lerpInit){
 						@oPlayer.x = @oPlayer.@targetX;
 						@oPlayer.y = @oPlayer.@targetY;
 						@oPlayer.@lerpInit = true;
 					}
-					@oPlayer.sprite_index = buffer_read_int32(@buffer);
-					@oPlayer.image_speed = buffer_read_float32(@buffer);
-					@oPlayer.image_xscale = buffer_read_float32(@buffer);
-					@oPlayer.image_yscale = buffer_read_float32(@buffer);
-					@oPlayer.image_angle = buffer_read_float32(@buffer);
-					@oPlayer.@name = buffer_read_string(@buffer);
+					@oPlayer.sprite_index = __ONLINE_buffer_read_int32(@buffer);
+					@oPlayer.image_speed = __ONLINE_buffer_read_float32(@buffer);
+					@oPlayer.image_xscale = __ONLINE_buffer_read_float32(@buffer);
+					@oPlayer.image_yscale = __ONLINE_buffer_read_float32(@buffer);
+					@oPlayer.image_angle = __ONLINE_buffer_read_float32(@buffer);
+					@oPlayer.@name = __ONLINE_buffer_read_string(@buffer);
 			#endif
 			#if GMNET
-				@oPlayer.@oRoom = buffer_read_u16(@buffer);
-				@syncTime = buffer_read_u64(@buffer);
+				@oPlayer.@oRoom = __ONLINE_buffer_read_u16(@buffer);
+				@syncTime = __ONLINE_buffer_read_u64(@buffer);
 				if(@oPlayer.@syncTime < @syncTime){
 					@oPlayer.@syncTime = @syncTime;
-					@oPlayer.@targetX = buffer_read_i32(@buffer);
-					@oPlayer.@targetY = buffer_read_i32(@buffer);
+					@oPlayer.@targetX = __ONLINE_buffer_read_i32(@buffer);
+					@oPlayer.@targetY = __ONLINE_buffer_read_i32(@buffer);
 					if(!@oPlayer.@lerpInit){
 						@oPlayer.x = @oPlayer.@targetX;
 						@oPlayer.y = @oPlayer.@targetY;
 						@oPlayer.@lerpInit = true;
 					}
-					@oPlayer.sprite_index = buffer_read_i32(@buffer);
-					@oPlayer.image_speed = buffer_read_float(@buffer);
-					@oPlayer.image_xscale = buffer_read_float(@buffer);
-					@oPlayer.image_yscale = buffer_read_float(@buffer);
-					@oPlayer.image_angle = buffer_read_float(@buffer);
-					@oPlayer.@name = buffer_read_string(@buffer);
+					@oPlayer.sprite_index = __ONLINE_buffer_read_i32(@buffer);
+					@oPlayer.image_speed = __ONLINE_buffer_read_float(@buffer);
+					@oPlayer.image_xscale = __ONLINE_buffer_read_float(@buffer);
+					@oPlayer.image_yscale = __ONLINE_buffer_read_float(@buffer);
+					@oPlayer.image_angle = __ONLINE_buffer_read_float(@buffer);
+					@oPlayer.@name = __ONLINE_buffer_read_string(@buffer);
 			#endif
 			}
 			break;
@@ -1110,7 +1157,7 @@ while(udpsocket_receive(@udpsocket, @buffer)){
 			break;
 	}
 }
-@udpState = udpsocket_get_state(@udpsocket);
+@udpState = __ONLINE_udpsocket_get_state(@udpsocket);
 if(@udpState == 1){
 	@udpReady = true;
 	@udpGraceFrames = room_speed*3;
@@ -1119,20 +1166,20 @@ if(@udpState == 1){
 		@udpGraceFrames -= 1;
 	}else if(!@udpReady && @udpRetryCount < 3){
 		@udpRetryCount += 1;
-		if(udpsocket_exists(@udpsocket)){
-			udpsocket_destroy(@udpsocket);
+		if(__ONLINE_udpsocket_exists(@udpsocket)){
+			__ONLINE_udpsocket_destroy(@udpsocket);
 		}
-		@udpsocket = udpsocket_create();
-		udpsocket_start(@udpsocket, false, 0);
-		udpsocket_set_destination(@udpsocket, @server, @udpPort);
-		buffer_clear(@buffer);
+		@udpsocket = __ONLINE_udpsocket_create();
+		__ONLINE_udpsocket_start(@udpsocket, false, 0);
+		__ONLINE_udpsocket_set_destination(@udpsocket, @server, @udpPort);
+		__ONLINE_buffer_clear(@buffer);
 		#if not GMNET
-			buffer_write_uint8(@buffer, 0);
+			__ONLINE_buffer_write_uint8(@buffer, 0);
 		#endif
 		#if GMNET
-			buffer_write_u8(@buffer, 0);
+			__ONLINE_buffer_write_u8(@buffer, 0);
 		#endif
-		udpsocket_send(@udpsocket, @buffer);
+		__ONLINE_udpsocket_send(@udpsocket, @buffer);
 		@udpGraceFrames = room_speed*3;
 	}else if(!@udpReady){
 		if(!@reconnecting){
@@ -1166,6 +1213,15 @@ if(@udpState == 1){
 }
 	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keySave) && !@settingsOpen){
 	@save_enabled = 1 - @save_enabled;
+	if(!@save_enabled){
+		// Toggling online saves off discards any pending online save.
+		#if TEMPFILE
+			if(file_exists("tempOnline2")){
+				file_delete("tempOnline2");
+			}
+		#endif
+		@sSaved = false;
+	}
 	#if GMS2
 		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
 	#endif
@@ -1238,22 +1294,22 @@ if(@udpState == 1){
 		if(!keyboard_check(@keyPing)){
 			@pingWheelOpen = false;
 			if(!@pingWheelCanceled){
-				buffer_clear(@buffer);
+				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
-					buffer_write_uint8(@buffer, 11);
-					buffer_write_int32(@buffer, room);
-					buffer_write_float32(@buffer, @pingWheelCenterX);
-					buffer_write_float32(@buffer, @pingWheelCenterY);
-					buffer_write_uint8(@buffer, @pingWheelHover);
+					__ONLINE_buffer_write_uint8(@buffer, 11);
+					__ONLINE_buffer_write_int32(@buffer, room);
+					__ONLINE_buffer_write_float32(@buffer, @pingWheelCenterX);
+					__ONLINE_buffer_write_float32(@buffer, @pingWheelCenterY);
+					__ONLINE_buffer_write_uint8(@buffer, @pingWheelHover);
 				#endif
 				#if GMNET
-					buffer_write_u8(@buffer, 11);
-					buffer_write_i32(@buffer, room);
-					buffer_write_float(@buffer, @pingWheelCenterX);
-					buffer_write_float(@buffer, @pingWheelCenterY);
-					buffer_write_u8(@buffer, @pingWheelHover);
+					__ONLINE_buffer_write_u8(@buffer, 11);
+					__ONLINE_buffer_write_i32(@buffer, room);
+					__ONLINE_buffer_write_float(@buffer, @pingWheelCenterX);
+					__ONLINE_buffer_write_float(@buffer, @pingWheelCenterY);
+					__ONLINE_buffer_write_u8(@buffer, @pingWheelHover);
 				#endif
-				socket_write_message(@socket, @buffer);
+				__ONLINE_socket_write_message(@socket, @buffer);
 				@pingX[@pingHead] = @pingWheelCenterX;
 				@pingY[@pingHead] = @pingWheelCenterY;
 				@pingT[@pingHead] = current_time;
@@ -1298,9 +1354,14 @@ if(@specProgress >= 1){
 	@specHoldFrames = -1;
 	if(!@spectating){
 		// ENTER SPECTATOR
-		@p = %arg0;
-		#if PLAYER2
-			if(!instance_exists(@p)) @p = %arg1;
+		#if PLAYER_LIST
+			@p = @get_active_player();
+		#endif
+		#if not PLAYER_LIST
+			@p = %arg0;
+			#if PLAYER2
+				if(!instance_exists(@p)) @p = %arg1;
+			#endif
 		#endif
 		if(instance_exists(@p)){
 			@p = instance_find(@p, 0);
@@ -1309,7 +1370,12 @@ if(@specProgress >= 1){
 			@specRoom = room;
 			@specObj = @p.object_index;
 			#if STUDIO
-				@specGrav = global.grav;
+				#if GRAVITY
+					@specGrav = global.grav;
+				#endif
+				#if not GRAVITY
+					@specGrav = 1;
+				#endif
 			#endif
 			#if GM8YY
 				@specGrav = (global.grav + 1) / 2;
@@ -1405,6 +1471,7 @@ if(@specProgress >= 1){
 				#endif
 			}
 			#if STUDIO
+				#if GRAVITY
 				if(global.grav != @specGrav){
 					#if SCR_FLIP_GRAV
 						scrFlipGrav();
@@ -1415,6 +1482,7 @@ if(@specProgress >= 1){
 						}
 					#endif
 				}
+				#endif
 			#endif
 			#if not STUDIO
 				global.grav = @specGrav;
@@ -1430,17 +1498,29 @@ if(@specProgress >= 1){
 	}
 }
 if(@spectating){
-	if(instance_exists(%arg0)){
-		with(instance_find(%arg0, 0)){
-			instance_destroy();
+	#if PLAYER_LIST
+		for(@di = 0; @di < ds_list_size(@obj_list); @di += 1){
+			@dobj = ds_list_find_value(@obj_list, @di);
+			if(instance_exists(@dobj)){
+				with(instance_find(@dobj, 0)){
+					instance_destroy();
+				}
+			}
 		}
-	}
-	#if PLAYER2
-		if(instance_exists(%arg1)){
-			with(instance_find(%arg1, 0)){
+	#endif
+	#if not PLAYER_LIST
+		if(instance_exists(%arg0)){
+			with(instance_find(%arg0, 0)){
 				instance_destroy();
 			}
 		}
+		#if PLAYER2
+			if(instance_exists(%arg1)){
+				with(instance_find(%arg1, 0)){
+					instance_destroy();
+				}
+			}
+		#endif
 	#endif
 	if(view_enabled && view_visible[0]){
 		view_object[0] = -1;
@@ -1601,6 +1681,7 @@ if(@spectating){
 				#endif
 			}
 			#if STUDIO
+				#if GRAVITY
 				if(global.grav != @specGrav){
 					#if SCR_FLIP_GRAV
 						scrFlipGrav();
@@ -1611,6 +1692,7 @@ if(@spectating){
 						}
 					#endif
 				}
+				#endif
 			#endif
 			#if not STUDIO
 				global.grav = @specGrav;
@@ -1647,32 +1729,35 @@ if(@spectating){
 }
 if(@teamChanged){
 	@teamChanged = false;
-	buffer_clear(@buffer);
+	__ONLINE_buffer_clear(@buffer);
 	#if not GMNET
-		buffer_write_uint8(@buffer, 8);
-		buffer_write_uint8(@buffer, @team);
+		__ONLINE_buffer_write_uint8(@buffer, 8);
+		__ONLINE_buffer_write_uint8(@buffer, @team);
 	#endif
 	#if GMNET
-		buffer_write_u8(@buffer, 8);
-		buffer_write_u8(@buffer, @team);
+		__ONLINE_buffer_write_u8(@buffer, 8);
+		__ONLINE_buffer_write_u8(@buffer, @team);
 	#endif
-	socket_write_message(@socket, @buffer);
+	__ONLINE_socket_write_message(@socket, @buffer);
+	@lastTeamSent = @team;
 	ini_open("@config.ini");
 	ini_write_real("config", "team", @team);
 	ini_close();
 }
 if(@spectating != @spectatingPrev && @socket != -1){
 	@spectatingPrev = @spectating;
-	buffer_clear(@buffer);
+	__ONLINE_buffer_clear(@buffer);
 	#if not GMNET
-		buffer_write_uint8(@buffer, 8);
-		if(@spectating){ buffer_write_uint8(@buffer, 254); }else{ buffer_write_uint8(@buffer, @team); }
+		__ONLINE_buffer_write_uint8(@buffer, 8);
+		if(@spectating){ __ONLINE_buffer_write_uint8(@buffer, 254); }else{ __ONLINE_buffer_write_uint8(@buffer, @team); }
 	#endif
 	#if GMNET
-		buffer_write_u8(@buffer, 8);
-		if(@spectating){ buffer_write_u8(@buffer, 254); }else{ buffer_write_u8(@buffer, @team); }
+		__ONLINE_buffer_write_u8(@buffer, 8);
+		if(@spectating){ __ONLINE_buffer_write_u8(@buffer, 254); }else{ __ONLINE_buffer_write_u8(@buffer, @team); }
 	#endif
-	socket_write_message(@socket, @buffer);
+	__ONLINE_socket_write_message(@socket, @buffer);
+	@lastSpecSent = @spectating;
+	@lastTeamSent = @team;
 }
 if(@visChanged){
 	@visChanged = false;
@@ -1741,16 +1826,16 @@ if(@syncEnabledChanged){
 if(@saveHistApply >= 0){
 	if(@spectating){
 		if(@socket != -1){
-			buffer_clear(@buffer);
+			__ONLINE_buffer_clear(@buffer);
 			#if not GMNET
-				buffer_write_uint8(@buffer, 8);
-				buffer_write_uint8(@buffer, @team);
+				__ONLINE_buffer_write_uint8(@buffer, 8);
+				__ONLINE_buffer_write_uint8(@buffer, @team);
 			#endif
 			#if GMNET
-				buffer_write_u8(@buffer, 8);
-				buffer_write_u8(@buffer, @team);
+				__ONLINE_buffer_write_u8(@buffer, 8);
+				__ONLINE_buffer_write_u8(@buffer, @team);
 			#endif
-			socket_write_message(@socket, @buffer);
+			__ONLINE_socket_write_message(@socket, @buffer);
 		}
 		@spectating = false;
 		@spectatingPrev = false;
@@ -1770,22 +1855,23 @@ if(@saveHistApply >= 0){
 	@sRoom = @saveHistRoom[@shIdx];
 	@sSaved = true;
 	#if TEMPFILE
-		buffer_clear(@buffer);
+		__ONLINE_buffer_clear(@buffer);
 		#if not GMNET
-			buffer_write_uint8(@buffer, @sGravity);
-			buffer_write_int32(@buffer, @sX);
-			buffer_write_float64(@buffer, @sY);
-			buffer_write_int16(@buffer, @sRoom);
-			buffer_write_to_file(@buffer, "tempOnline2");
+			__ONLINE_buffer_write_uint8(@buffer, @sGravity);
+			__ONLINE_buffer_write_int32(@buffer, @sX);
+			__ONLINE_buffer_write_float64(@buffer, @sY);
+			__ONLINE_buffer_write_int16(@buffer, @sRoom);
+			__ONLINE_buffer_write_to_file(@buffer, "tempOnline2");
 		#endif
 		#if GMNET
-			buffer_write_u8(@buffer, @sGravity);
-			buffer_write_i32(@buffer, @sX);
-			buffer_write_double(@buffer, @sY);
-			buffer_write_i16(@buffer, @sRoom);
-			buffer_save(@buffer, "tempOnline2");
+			__ONLINE_buffer_write_u8(@buffer, @sGravity);
+			__ONLINE_buffer_write_i32(@buffer, @sX);
+			__ONLINE_buffer_write_double(@buffer, @sY);
+			__ONLINE_buffer_write_i16(@buffer, @sRoom);
+			__ONLINE_buffer_save(@buffer, "tempOnline2");
 		#endif
 	#endif
+	// Real player only - never a PLAYER_LIST alt/display object (C1).
 	@_rp = %arg0;
 	#if PLAYER2
 		if(!instance_exists(@_rp)) @_rp = %arg1;
@@ -1904,40 +1990,40 @@ if(@saveHistDirty){
 				}
 			}
 		}
-		buffer_clear(@buffer);
+		__ONLINE_buffer_clear(@buffer);
 		#if not GMNET
-			buffer_write_uint16(@buffer, 65535);
-			buffer_write_uint8(@buffer, 2);
-			buffer_write_uint16(@buffer, @saveHistCount);
+			__ONLINE_buffer_write_uint16(@buffer, 65535);
+			__ONLINE_buffer_write_uint8(@buffer, 2);
+			__ONLINE_buffer_write_uint16(@buffer, @saveHistCount);
 			for(@shI = 0; @shI < @saveHistCount; @shI += 1){
-				buffer_write_uint8(@buffer, @saveHistFav[@shI]);
-				buffer_write_uint8(@buffer, @saveHistHotkey[@shI]);
-				buffer_write_uint8(@buffer, @saveHistGrav[@shI]);
-				buffer_write_int32(@buffer, @saveHistX[@shI]);
-				buffer_write_float64(@buffer, @saveHistY[@shI]);
-				buffer_write_int16(@buffer, @saveHistRoom[@shI]);
-				buffer_write_float64(@buffer, @saveHistTime[@shI]);
-				buffer_write_string(@buffer, @saveHistName[@shI]);
-				buffer_write_string(@buffer, @saveHistRoomName[@shI]);
+				__ONLINE_buffer_write_uint8(@buffer, @saveHistFav[@shI]);
+				__ONLINE_buffer_write_uint8(@buffer, @saveHistHotkey[@shI]);
+				__ONLINE_buffer_write_uint8(@buffer, @saveHistGrav[@shI]);
+				__ONLINE_buffer_write_int32(@buffer, @saveHistX[@shI]);
+				__ONLINE_buffer_write_float64(@buffer, @saveHistY[@shI]);
+				__ONLINE_buffer_write_int16(@buffer, @saveHistRoom[@shI]);
+				__ONLINE_buffer_write_float64(@buffer, @saveHistTime[@shI]);
+				__ONLINE_buffer_write_string(@buffer, @saveHistName[@shI]);
+				__ONLINE_buffer_write_string(@buffer, @saveHistRoomName[@shI]);
 			}
-			buffer_write_to_file(@buffer, "@saves");
+			__ONLINE_buffer_write_to_file(@buffer, "@saves");
 		#endif
 		#if GMNET
-			buffer_write_u16(@buffer, 65535);
-			buffer_write_u8(@buffer, 2);
-			buffer_write_u16(@buffer, @saveHistCount);
+			__ONLINE_buffer_write_u16(@buffer, 65535);
+			__ONLINE_buffer_write_u8(@buffer, 2);
+			__ONLINE_buffer_write_u16(@buffer, @saveHistCount);
 			for(@shI = 0; @shI < @saveHistCount; @shI += 1){
-				buffer_write_u8(@buffer, @saveHistFav[@shI]);
-				buffer_write_u8(@buffer, @saveHistHotkey[@shI]);
-				buffer_write_u8(@buffer, @saveHistGrav[@shI]);
-				buffer_write_i32(@buffer, @saveHistX[@shI]);
-				buffer_write_double(@buffer, @saveHistY[@shI]);
-				buffer_write_i16(@buffer, @saveHistRoom[@shI]);
-				buffer_write_double(@buffer, @saveHistTime[@shI]);
-				buffer_write_string(@buffer, @saveHistName[@shI]);
-				buffer_write_string(@buffer, @saveHistRoomName[@shI]);
+				__ONLINE_buffer_write_u8(@buffer, @saveHistFav[@shI]);
+				__ONLINE_buffer_write_u8(@buffer, @saveHistHotkey[@shI]);
+				__ONLINE_buffer_write_u8(@buffer, @saveHistGrav[@shI]);
+				__ONLINE_buffer_write_i32(@buffer, @saveHistX[@shI]);
+				__ONLINE_buffer_write_double(@buffer, @saveHistY[@shI]);
+				__ONLINE_buffer_write_i16(@buffer, @saveHistRoom[@shI]);
+				__ONLINE_buffer_write_double(@buffer, @saveHistTime[@shI]);
+				__ONLINE_buffer_write_string(@buffer, @saveHistName[@shI]);
+				__ONLINE_buffer_write_string(@buffer, @saveHistRoomName[@shI]);
 			}
-			buffer_save(@buffer, "@saves");
+			__ONLINE_buffer_save(@buffer, "@saves");
 		#endif
 	}
 }
@@ -1946,18 +2032,18 @@ if(@ratingSubmit){
 	@ratingSubmit = false;
 	if(!@ratingSubmitting && @ratingCooldown <= 0 && @connected && @rStars >= 1 && @rStars <= 5){
 		@ratingSubmitting = true;
-		buffer_clear(@buffer);
+		__ONLINE_buffer_clear(@buffer);
 		#if not GMNET
-			buffer_write_uint8(@buffer, 9);
-			buffer_write_uint8(@buffer, @rStars);
-			buffer_write_uint8(@buffer, @rCleared);
+			__ONLINE_buffer_write_uint8(@buffer, 9);
+			__ONLINE_buffer_write_uint8(@buffer, @rStars);
+			__ONLINE_buffer_write_uint8(@buffer, @rCleared);
 		#endif
 		#if GMNET
-			buffer_write_u8(@buffer, 9);
-			buffer_write_u8(@buffer, @rStars);
-			buffer_write_u8(@buffer, @rCleared);
+			__ONLINE_buffer_write_u8(@buffer, 9);
+			__ONLINE_buffer_write_u8(@buffer, @rStars);
+			__ONLINE_buffer_write_u8(@buffer, @rCleared);
 		#endif
-		socket_write_message(@socket, @buffer);
+		__ONLINE_socket_write_message(@socket, @buffer);
 	}
 }
 if(@ratingResultTimer > 0) @ratingResultTimer -= 1;
@@ -1965,10 +2051,72 @@ if(@ratingCooldown > 0) @ratingCooldown -= 1;
 if(@rClearWarn > 0) @rClearWarn -= 1;
 // FLUSH TCP
 #if not GMNET
-socket_update_write(@socket);
+__ONLINE_socket_update_write(@socket);
 #endif
 #if GMNET
-socket_send(@socket);
+__ONLINE_socket_send(@socket);
+#endif
+
+#if PLAYER_LIST
+// PLAYER OBJECT PICK MODE (entered from settings tab 0, "Player Objects" row).
+// L-click an instance: add/remove its object; R-click: add at top priority;
+// Enter/Esc/settings key: close and persist (only when edited this session).
+if(@debug_pick_player){
+	if(keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_enter) || keyboard_check_pressed(@keySettings)){
+		@debug_pick_player = false;
+		if(@objListEdited){
+			@objListEdited = false;
+			@f = file_text_open_write("__online_player_objects");
+			for(@i = 0; @i < ds_list_size(@obj_list); @i += 1){
+				file_text_write_real(@f, ds_list_find_value(@obj_list, @i) + 1); // +1: GM8 text files and 0 don't mix
+				file_text_writeln(@f);
+			}
+			file_text_close(@f);
+			// export a shareable converter config snippet (games/<game>.ini format)
+			@str = "alt_player_objects=";
+			@comma = "";
+			for(@i = 0; @i < ds_list_size(@obj_list); @i += 1){
+				@obj_id = ds_list_find_value(@obj_list, @i);
+				#if PLAYER2
+					if(@obj_id != %arg0 && @obj_id != %arg1){
+				#endif
+				#if not PLAYER2
+					if(@obj_id != %arg0){
+				#endif
+					@str += @comma + object_get_name(@obj_id);
+					@comma = ",";
+				}
+			}
+			@f = file_text_open_write(@gameName + ".ini");
+			file_text_write_string(@f, "# " + @gameName + " player objects");
+			file_text_writeln(@f);
+			file_text_write_string(@f, "[iwpo]");
+			file_text_writeln(@f);
+			file_text_write_string(@f, @str);
+			file_text_writeln(@f);
+			file_text_close(@f);
+		}
+	}else{
+		@target_instance = instance_position(mouse_x, mouse_y, all);
+		if(@target_instance != noone){
+			@pickIdx = ds_list_find_index(@obj_list, @target_instance.object_index);
+			if(@pickIdx >= 0){
+				if(mouse_check_button_pressed(mb_left)){
+					ds_list_delete(@obj_list, @pickIdx);
+					@objListEdited = true;
+				}
+			}else{
+				if(mouse_check_button_pressed(mb_left)){
+					ds_list_add(@obj_list, @target_instance.object_index);
+					@objListEdited = true;
+				}else if(mouse_check_button_pressed(mb_right)){
+					ds_list_insert(@obj_list, 0, @target_instance.object_index);
+					@objListEdited = true;
+				}
+			}
+		}
+	}
+}
 #endif
 
 // SETTINGS PANEL
@@ -2002,9 +2150,33 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_down)){
-			@kbRow[0] += 1; if(@kbRow[0] > 6) @kbRow[0] = 6;
+			#if PLAYER_LIST
+				@kbRow[0] += 1; if(@kbRow[0] > 8) @kbRow[0] = 8;
+			#endif
+			#if not PLAYER_LIST
+				@kbRow[0] += 1; if(@kbRow[0] > 7) @kbRow[0] = 7;
+			#endif
 			@kbAct = 1;
 		}
+		#if PLAYER_LIST
+			if(keyboard_check_pressed(vk_enter) && @kbRow[0] == 7){
+				@settingsOpen = false;
+				@debug_pick_player = true;
+				@kbAct = 1;
+			}
+			if(keyboard_check_pressed(vk_enter) && @kbRow[0] == 8){
+				@manualReconnect = true;
+				@settingsOpen = false;
+				@kbAct = 1;
+			}
+		#endif
+		#if not PLAYER_LIST
+			if(keyboard_check_pressed(vk_enter) && @kbRow[0] == 7){
+				@manualReconnect = true;
+				@settingsOpen = false;
+				@kbAct = 1;
+			}
+		#endif
 		if(keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
 			if(keyboard_check_pressed(vk_right)) @kbDir = 1; else @kbDir = -1;
 			if(@kbRow[0] == 0){
@@ -2018,6 +2190,14 @@ if(@settingsOpen && @keybindEditing < 0){
 			}else if(@kbRow[0] == 2){
 				@save_enabled = 1 - @save_enabled;
 				@saveChanged = true;
+				if(!@save_enabled){
+					#if TEMPFILE
+						if(file_exists("tempOnline2")){
+							file_delete("tempOnline2");
+						}
+					#endif
+					@sSaved = false;
+				}
 			}else if(@kbRow[0] == 3){
 				@fastLoadEnabled = !@fastLoadEnabled;
 				@fastLoadChanged = true;
@@ -2201,7 +2381,6 @@ if(@settingsOpen && @keybindEditing < 0){
 		}
 		if(@kbAct == 0 && (@kbRow[2] == 1 && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)))){
 			@rCleared = 1 - @rCleared;
-			@rClearAutoSet = false;
 			@kbAct = 1;
 		}
 		if(@kbAct == 0 && @kbRow[2] == 2 && keyboard_check_pressed(vk_enter)){

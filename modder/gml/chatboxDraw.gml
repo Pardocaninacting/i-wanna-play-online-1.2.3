@@ -39,11 +39,11 @@ if(@timer > 0 && @scale > 0){
 	@right = room_width;
 	@top = 0;
 	@bottom = room_height;
-	if(view_enabled && view_visible[0]){
-		@left = view_xview[0];
-		@right = @left + view_wview[0];
-		@top = view_yview[0];
-		@bottom = @top + view_hview[0];
+	if(view_enabled && view_visible[view_current]){
+		@left = view_xview[view_current];
+		@right = @left + view_wview[view_current];
+		@top = view_yview[view_current];
+		@bottom = @top + view_hview[view_current];
 	}
 	@xx = min(max(@xx, @left + @dW/2 + 4), @right - @dW/2 - 4);
 	@yy = min(max(@yy - @dH - 8, @top + 4), @bottom - @dH - 20);

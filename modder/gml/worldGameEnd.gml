@@ -72,40 +72,40 @@ if(@saveHistDirty){
 			}
 		}
 	}
-	buffer_clear(@buffer);
+	__ONLINE_buffer_clear(@buffer);
 	#if not GMNET
-		buffer_write_uint16(@buffer, 65535);
-		buffer_write_uint8(@buffer, 2);
-		buffer_write_uint16(@buffer, @saveHistCount);
+		__ONLINE_buffer_write_uint16(@buffer, 65535);
+		__ONLINE_buffer_write_uint8(@buffer, 2);
+		__ONLINE_buffer_write_uint16(@buffer, @saveHistCount);
 		for(@shI = 0; @shI < @saveHistCount; @shI += 1){
-			buffer_write_uint8(@buffer, @saveHistFav[@shI]);
-			buffer_write_uint8(@buffer, @saveHistHotkey[@shI]);
-			buffer_write_uint8(@buffer, @saveHistGrav[@shI]);
-			buffer_write_int32(@buffer, @saveHistX[@shI]);
-			buffer_write_float64(@buffer, @saveHistY[@shI]);
-			buffer_write_int16(@buffer, @saveHistRoom[@shI]);
-			buffer_write_float64(@buffer, @saveHistTime[@shI]);
-			buffer_write_string(@buffer, @saveHistName[@shI]);
-			buffer_write_string(@buffer, @saveHistRoomName[@shI]);
+			__ONLINE_buffer_write_uint8(@buffer, @saveHistFav[@shI]);
+			__ONLINE_buffer_write_uint8(@buffer, @saveHistHotkey[@shI]);
+			__ONLINE_buffer_write_uint8(@buffer, @saveHistGrav[@shI]);
+			__ONLINE_buffer_write_int32(@buffer, @saveHistX[@shI]);
+			__ONLINE_buffer_write_float64(@buffer, @saveHistY[@shI]);
+			__ONLINE_buffer_write_int16(@buffer, @saveHistRoom[@shI]);
+			__ONLINE_buffer_write_float64(@buffer, @saveHistTime[@shI]);
+			__ONLINE_buffer_write_string(@buffer, @saveHistName[@shI]);
+			__ONLINE_buffer_write_string(@buffer, @saveHistRoomName[@shI]);
 		}
-		buffer_write_to_file(@buffer, "@saves");
+		__ONLINE_buffer_write_to_file(@buffer, "@saves");
 	#endif
 	#if GMNET
-		buffer_write_u16(@buffer, 65535);
-		buffer_write_u8(@buffer, 2);
-		buffer_write_u16(@buffer, @saveHistCount);
+		__ONLINE_buffer_write_u16(@buffer, 65535);
+		__ONLINE_buffer_write_u8(@buffer, 2);
+		__ONLINE_buffer_write_u16(@buffer, @saveHistCount);
 		for(@shI = 0; @shI < @saveHistCount; @shI += 1){
-			buffer_write_u8(@buffer, @saveHistFav[@shI]);
-			buffer_write_u8(@buffer, @saveHistHotkey[@shI]);
-			buffer_write_u8(@buffer, @saveHistGrav[@shI]);
-			buffer_write_i32(@buffer, @saveHistX[@shI]);
-			buffer_write_double(@buffer, @saveHistY[@shI]);
-			buffer_write_i16(@buffer, @saveHistRoom[@shI]);
-			buffer_write_double(@buffer, @saveHistTime[@shI]);
-			buffer_write_string(@buffer, @saveHistName[@shI]);
-			buffer_write_string(@buffer, @saveHistRoomName[@shI]);
+			__ONLINE_buffer_write_u8(@buffer, @saveHistFav[@shI]);
+			__ONLINE_buffer_write_u8(@buffer, @saveHistHotkey[@shI]);
+			__ONLINE_buffer_write_u8(@buffer, @saveHistGrav[@shI]);
+			__ONLINE_buffer_write_i32(@buffer, @saveHistX[@shI]);
+			__ONLINE_buffer_write_double(@buffer, @saveHistY[@shI]);
+			__ONLINE_buffer_write_i16(@buffer, @saveHistRoom[@shI]);
+			__ONLINE_buffer_write_double(@buffer, @saveHistTime[@shI]);
+			__ONLINE_buffer_write_string(@buffer, @saveHistName[@shI]);
+			__ONLINE_buffer_write_string(@buffer, @saveHistRoomName[@shI]);
 		}
-		buffer_save(@buffer, "@saves");
+		__ONLINE_buffer_save(@buffer, "@saves");
 	#endif
 }
 #if TEMPFILE
@@ -121,13 +121,26 @@ if(@saveHistDirty){
 		}
 	}
 #endif
+#if PLAYER_LIST
+// persist player object list if edited in-game but pick mode was never closed cleanly
+if(@objListEdited){
+	@objListEdited = false;
+	@f = file_text_open_write("__online_player_objects");
+	for(@i = 0; @i < ds_list_size(@obj_list); @i += 1){
+		file_text_write_real(@f, ds_list_find_value(@obj_list, @i) + 1);
+		file_text_writeln(@f);
+	}
+	file_text_close(@f);
+}
+ds_list_destroy(@obj_list);
+#endif
 ds_map_destroy(@teamMap);
-buffer_destroy(@buffer);
+__ONLINE_buffer_destroy(@buffer);
 #if TEMPFILE
 	if(!file_exists("tempOnline")){
 #endif
-socket_destroy(@socket);
-udpsocket_destroy(@udpsocket);
+__ONLINE_socket_destroy(@socket);
+__ONLINE_udpsocket_destroy(@udpsocket);
 #if TEMPFILE
 	}
 #endif

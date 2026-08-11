@@ -4,9 +4,9 @@ if(@chatLogOpen){
 	@_color = draw_get_color();
 	@clLeft = 8;
 	@clBottom = -40;
-	if(view_enabled && view_visible[0]){
-		@clLeft += view_xview[0];
-		@clBottom += view_yview[0] + view_hview[0];
+	if(view_enabled && view_visible[view_current]){
+		@clLeft += view_xview[view_current];
+		@clBottom += view_yview[view_current] + view_hview[view_current];
 	}else{
 		@clBottom += room_height;
 	}
@@ -193,9 +193,9 @@ if(@showPlayerList){
 	@_color = draw_get_color();
 	@plX = -10;
 	@plY = 10;
-	if(view_enabled && view_visible[0]){
-		@plX += view_xview[0] + view_wview[0];
-		@plY += view_yview[0];
+	if(view_enabled && view_visible[view_current]){
+		@plX += view_xview[view_current] + view_wview[view_current];
+		@plY += view_yview[view_current];
 	}else{
 		@plX += room_width;
 	}
@@ -311,9 +311,9 @@ if(@settingsOpen){
 	@spH = 400;
 	@spX = 0;
 	@spY = 0;
-	if(view_enabled && view_visible[0]){
-		@spX = view_xview[0] + floor((view_wview[0] - @spW) / 2);
-		@spY = view_yview[0] + floor((view_hview[0] - @spH) / 2);
+	if(view_enabled && view_visible[view_current]){
+		@spX = view_xview[view_current] + floor((view_wview[view_current] - @spW) / 2);
+		@spY = view_yview[view_current] + floor((view_hview[view_current] - @spH) / 2);
 	}else{
 		@spX = floor((room_width - @spW) / 2);
 		@spY = floor((room_height - @spH) / 2);
@@ -541,6 +541,41 @@ if(@settingsOpen){
 		draw_rectangle(@btnCamRX, @btnCamRY, @btnCamRX + @btnCamRW, @btnCamRY + @btnCamRH, false);
 		draw_set_color(c_white);
 		draw_text(@btnCamRX + @btnCamRW/2, @rowY, ">");
+		#if PLAYER_LIST
+			@rowY = @contentY + 200;
+			draw_set_halign(fa_left);
+			draw_set_color(c_white);
+			draw_text(@spX + 16, @rowY, "Player Objects:");
+			@btnPickX = @spX + 252;
+			@btnPickY = @rowY;
+			@btnPickW = 56;
+			@btnPickH = 18;
+			draw_set_color(c_gray);
+			draw_rectangle(@btnPickX, @btnPickY, @btnPickX + @btnPickW, @btnPickY + @btnPickH, false);
+			draw_set_color(c_white);
+			draw_set_halign(fa_center);
+			draw_text(@btnPickX + @btnPickW/2, @rowY, "Pick");
+			draw_set_halign(fa_left);
+		#endif
+		#if PLAYER_LIST
+			@rowY = @contentY + 228;
+		#endif
+		#if not PLAYER_LIST
+			@rowY = @contentY + 200;
+		#endif
+		draw_set_halign(fa_left);
+		draw_set_color(c_white);
+		draw_text(@spX + 16, @rowY, "Reconnect:");
+		@btnRecX = @spX + 252;
+		@btnRecY = @rowY;
+		@btnRecW = 56;
+		@btnRecH = 18;
+		draw_set_color(c_gray);
+		draw_rectangle(@btnRecX, @btnRecY, @btnRecX + @btnRecW, @btnRecY + @btnRecH, false);
+		draw_set_color(c_white);
+		draw_set_halign(fa_center);
+		draw_text(@btnRecX + @btnRecW/2, @rowY, "Now");
+		draw_set_halign(fa_left);
 	}
 	// TAB 1: SAVES
 	if(@settingsTab == 1){
@@ -1084,6 +1119,16 @@ if(@settingsOpen){
 				}
 				@a.@state = -2;
 			}
+			#if PLAYER_LIST
+				if(@mx >= @btnPickX && @mx <= @btnPickX + @btnPickW && @my >= @btnPickY && @my <= @btnPickY + @btnPickH){
+					@settingsOpen = false;
+					@debug_pick_player = true;
+				}
+			#endif
+			if(@mx >= @btnRecX && @mx <= @btnRecX + @btnRecW && @my >= @btnRecY && @my <= @btnRecY + @btnRecH){
+				@manualReconnect = true;
+				@settingsOpen = false;
+			}
 		}
 		if(!@tabClicked && @settingsTab == 1){
 			@kbFocus = 1;
@@ -1228,11 +1273,11 @@ if(@spectating || @specProgress > 0){
 	@hudY = 0;
 	@hudW = 0;
 	@hudH = 0;
-	if(view_enabled && view_visible[0]){
-		@hudX = view_xview[0];
-		@hudY = view_yview[0];
-		@hudW = view_wview[0];
-		@hudH = view_hview[0];
+	if(view_enabled && view_visible[view_current]){
+		@hudX = view_xview[view_current];
+		@hudY = view_yview[view_current];
+		@hudW = view_wview[view_current];
+		@hudH = view_hview[view_current];
 	}else{
 		@hudW = room_width;
 		@hudH = room_height;
@@ -1319,11 +1364,11 @@ if(@showArrows || @spectating){
 	@arVY = 0;
 	@arVW = room_width;
 	@arVH = room_height;
-	if(view_enabled && view_visible[0]){
-		@arVX = view_xview[0];
-		@arVY = view_yview[0];
-		@arVW = view_wview[0];
-		@arVH = view_hview[0];
+	if(view_enabled && view_visible[view_current]){
+		@arVX = view_xview[view_current];
+		@arVY = view_yview[view_current];
+		@arVW = view_wview[view_current];
+		@arVH = view_hview[view_current];
 	}
 	#if STUDIO
 		if(global.@ftOnline >= 0){
@@ -1763,3 +1808,58 @@ if(@showArrows || @spectating){
 		draw_set_font(0);
 	}
 }
+
+#if PLAYER_LIST
+// PLAYER OBJECT PICK MODE HUD (paired with the input block in worldEndStep)
+if(@debug_pick_player){
+	@_alpha = draw_get_alpha();
+	@_color = draw_get_color();
+	#if not STUDIO
+		draw_set_font(@ftOnlinePlayerName);
+	#endif
+	draw_set_valign(fa_top);
+	draw_set_halign(fa_left);
+	@pkX = 8;
+	@pkY = 8;
+	if(view_enabled && view_visible[view_current]){
+		@pkX += view_xview[view_current];
+		@pkY += view_yview[view_current];
+	}
+	@pkLines = ds_list_size(@obj_list) + 4;
+	draw_set_alpha(0.85);
+	draw_set_color(c_black);
+	draw_rectangle(@pkX, @pkY, @pkX + 400, @pkY + @pkLines * 18 + 10, false);
+	draw_set_alpha(1);
+	draw_set_color(c_white);
+	draw_text(@pkX + 8, @pkY + 4, "Player objects:  L = add/remove");
+	draw_text(@pkX + 8, @pkY + 22, "R = add first,  Enter/Esc = done");
+	@pkYY = @pkY + 42;
+	for(@pkI = 0; @pkI < ds_list_size(@obj_list); @pkI += 1){
+		@pkObj = ds_list_find_value(@obj_list, @pkI);
+		@pkTxt = object_get_name(@pkObj);
+		if(@pkObj == @get_active_player()){
+			@pkTxt += " (active)";
+		}
+		if(instance_exists(@pkObj)){
+			@pkInst = instance_find(@pkObj, 0);
+			@pkTxt += "  (" + string(@pkInst.x) + ", " + string(@pkInst.y) + ")";
+		}else{
+			@pkTxt += "  [no instance]";
+		}
+		draw_set_color(c_white);
+		draw_text(@pkX + 16, @pkYY, @pkTxt);
+		@pkYY += 18;
+	}
+	@pkTgt = instance_position(mouse_x, mouse_y, all);
+	if(@pkTgt != noone){
+		draw_set_color(c_yellow);
+		if(ds_list_find_index(@obj_list, @pkTgt.object_index) >= 0){
+			draw_text(@pkX + 8, @pkYY, "> " + object_get_name(@pkTgt.object_index) + ": L = remove");
+		}else{
+			draw_text(@pkX + 8, @pkYY, "> " + object_get_name(@pkTgt.object_index) + ": L = add, R = add first");
+		}
+	}
+	draw_set_alpha(@_alpha);
+	draw_set_color(@_color);
+}
+#endif

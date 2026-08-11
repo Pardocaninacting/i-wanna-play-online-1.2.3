@@ -1,9 +1,9 @@
 /// ONLINE
 @xx = 20;
 @yy = 20 + @msgSlot * 20;
-if(view_enabled && view_visible[0]){
-	@xx += view_xview[0];
-	@yy += view_yview[0];
+if(view_enabled && view_visible[view_current]){
+	@xx += view_xview[view_current];
+	@yy += view_yview[view_current];
 }
 @text = "";
 if(@state == 4) @text = "Online save enabled!";
