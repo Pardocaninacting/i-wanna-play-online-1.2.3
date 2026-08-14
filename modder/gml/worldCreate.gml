@@ -6,6 +6,8 @@
 // %arg4: The game name
 // %arg5: The version
 // (7th arg: player object list init code, PLAYER_LIST only, already __ONLINE_-prefixed)
+// (8th arg: built-in sprite count = base index for runtime sprite_add sweeps,
+//  0 when skins are disabled)
 if(!instance_exists(@userInterface)){
 	instance_create(0, 0, @userInterface);
 }
@@ -78,6 +80,7 @@ if(!@objListLoaded){
 @kbRow[2] = 0;
 @kbRow[3] = 0;
 @kbRow[4] = 0;
+@kbRow[5] = 0;
 @kbFocus = 1;
 @kbDelay = 0;
 @gameName = "%arg4";
@@ -210,6 +213,47 @@ for(@scI = 0; @scI < 16; @scI += 1){
 	@syncName[@scI] = "";
 	@syncCount[@scI] = 0;
 }
+// SKINS
+@skinCount = 0;
+@skinSel = -1;
+@skinLoaded = -1;
+@skinAutoDL = 1;
+@skinSavedHash = "";
+@skinSavedDir = "";
+@skinAutoDLChanged = false;
+@skinPage = 0;
+@skinPrevLoaded = -1;
+@skinPrevRow = -1;
+@skinPrevTimer = 0;
+global.@skinOn = 0;
+// No create-time initialization of the skin slot arrays here: @skin_scan
+// fully initializes every slot it fills and readers stay below @skinCount,
+// so a fixed pass over the 4096 slot cap would be dead cost on every
+// game_restart.
+// game_restart keeps sprite_add resources alive, so the previously loaded skin
+// sprites (selection AND menu preview) must be freed before the mirror arrays
+// below are reset. Dynamically added sprites always land at or beyond the
+// built-in sprite count, so a range sweep needs no persistent id bookkeeping
+// at all. Do NOT use variable_global_exists for this: on GM8.0 it always
+// returns true (verified on fish), which made the old flag guard fire on the
+// FIRST boot and sprite_delete the game's own sprite 0 (the still-
+// uninitialized mirror arrays read as 0) - run animation froze and the
+// skinless fallback draw errored "Trying to draw non-existing sprite".
+@skSprBase = %arg7;
+if(@skSprBase > 0){
+    for(@skDel = @skSprBase; @skDel < @skSprBase + 8192; @skDel += 1){
+        if(sprite_exists(@skDel)) sprite_delete(@skDel);
+    }
+}
+for(@skSt = 0; @skSt < 7; @skSt += 1){
+    @skinSpr[@skSt] = -1;
+    @skinPrevSpr[@skSt] = -1;
+    global.@skinSpr[@skSt] = -1;
+    global.@skinPrevSpr[@skSt] = -1;
+    global.@skinFrames[@skSt] = 0;
+    global.@mapSpr[@skSt] = -1;
+    global.@mapFrames[@skSt] = 0;
+}
 @cfgDir = program_directory;
 if (string_char_at(@cfgDir, string_length(@cfgDir)) != chr(92)) @cfgDir += chr(92);
 @cfgPath = @cfgDir + "@config.ini";
@@ -259,6 +303,9 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		@team = ini_read_real("config", "team", @team);
 		if(@team < 0 || @team > 7) @team = 0;
 		@team = floor(@team);
+		@skinAutoDL = ini_read_real("config", "skinAutoDL", 1);
+		@skinSavedHash = ini_read_string("config", "skin", "");
+		@skinSavedDir = ini_read_string("config", "skinDir", "");
 		@syncEnabled = ini_read_real("sync", "sync_enabled", @syncEnabled);
 		@syncEntryCount = ini_read_real("sync", "entryCount", @syncEntryCount);
 		if(@syncEntryCount < 0) @syncEntryCount = 0;
@@ -648,3 +695,42 @@ if(@fwBerlin >= 0){
 	fw_draw_set_font(@fwCjk);
 }
 #endif
+
+// SKINS: scan the skins folder, then restore the persisted selection. The
+// saved directory name locates the skin instantly; if the folder was renamed
+// or deleted (or the config predates skinDir), fall back to a one-time hash
+// scan that stops at the first match. The hash scan re-hashes folders until
+// the hit, so it must NOT run on the normal path: with ~200 skins installed
+// it cost seconds on every game_restart (fish restarts on every load).
+@skin_scan();
+@skinFound = -1;
+if(@skinSavedDir != ""){
+    for(@skI = 0; @skI < @skinCount; @skI += 1){
+        if(@skinDir[@skI] == @skinSavedDir){
+            @skinFound = @skI;
+            break;
+        }
+    }
+}
+if(@skinFound < 0 && @skinSavedHash != ""){
+    // Renamed folder or pre-skinDir config: one-shot hash-scan fallback.
+    for(@skI = 0; @skI < @skinCount; @skI += 1){
+        if(@skinFound < 0){
+            @skin_ensure_hash(@skI);
+            if(@skinHash[@skI] == @skinSavedHash){
+                @skinFound = @skI;
+            }
+        }
+    }
+}
+if(@skinFound >= 0){
+    @skin_select(@skinFound);
+}else if(@skinSavedHash != "" || @skinSavedDir != ""){
+    // The saved skin no longer exists: forget it on disk as well.
+    @skinSavedHash = "";
+    @skinSavedDir = "";
+    ini_open("@config.ini");
+    ini_write_string("config", "skin", "");
+    ini_write_string("config", "skinDir", "");
+    ini_close();
+}

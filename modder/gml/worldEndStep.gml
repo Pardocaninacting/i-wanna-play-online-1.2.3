@@ -1074,6 +1074,9 @@ if(@exists != @pExists){
 @pX = @X;
 @pY = @Y;
 }
+// SKINS: keep the global draw-state mirror in sync every frame (the function
+// early-outs when no skin is selected).
+@skin_mirror();
 #if not GMNET
 __ONLINE_socket_update_write(@socket);
 #endif
@@ -1823,6 +1826,12 @@ if(@syncEnabledChanged){
 	ini_write_real("sync", "sync_enabled", @syncEnabled);
 	ini_close();
 }
+if(@skinAutoDLChanged){
+    @skinAutoDLChanged = false;
+    ini_open("@config.ini");
+    ini_write_real("config", "skinAutoDL", @skinAutoDL);
+    ini_close();
+}
 if(@saveHistApply >= 0){
 	if(@spectating){
 		if(@socket != -1){
@@ -2126,12 +2135,12 @@ if(@settingsOpen && @keybindEditing < 0){
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 0){
 		if(keyboard_check_pressed(vk_left)){
 			@settingsTab -= 1;
-			if(@settingsTab < 0) @settingsTab = 4;
+			if(@settingsTab < 0) @settingsTab = 5;
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_right)){
 			@settingsTab += 1;
-			if(@settingsTab > 4) @settingsTab = 0;
+			if(@settingsTab > 5) @settingsTab = 0;
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_down) || keyboard_check_pressed(vk_enter)){
@@ -2436,6 +2445,53 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 	}
+    if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 5){
+        // Rows 0..skinCount-1 are skins, row skinCount is Auto-download,
+        // row skinCount+1 is Clear.
+        @skRows = @skinCount + 2;
+        if(@kbRow[5] > @skRows - 1) @kbRow[5] = @skRows - 1;
+        if(keyboard_check_pressed(vk_up)){
+            if(@kbRow[5] <= 0){
+                @kbRow[5] = 0;
+                @kbFocus = 0;
+            }else{
+                @kbRow[5] -= 1;
+            }
+            if(@kbRow[5] < @skinCount) @skinPage = @kbRow[5] div 12;
+            @kbAct = 1;
+        }
+        if(keyboard_check_pressed(vk_down)){
+            @kbRow[5] += 1;
+            if(@kbRow[5] > @skRows - 1) @kbRow[5] = @skRows - 1;
+            if(@kbRow[5] < @skinCount) @skinPage = @kbRow[5] div 12;
+            @kbAct = 1;
+        }
+        if(keyboard_check_pressed(vk_pageup)){
+            @kbRow[5] -= 12;
+            if(@kbRow[5] < 0) @kbRow[5] = 0;
+            if(@kbRow[5] < @skinCount) @skinPage = @kbRow[5] div 12;
+            @kbAct = 1;
+        }
+        if(keyboard_check_pressed(vk_pagedown)){
+            @kbRow[5] += 12;
+            if(@kbRow[5] > @skRows - 1) @kbRow[5] = @skRows - 1;
+            if(@kbRow[5] < @skinCount) @skinPage = @kbRow[5] div 12;
+            @kbAct = 1;
+        }
+        if(@kbRow[5] == @skinCount && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_enter))){
+            @skinAutoDL = 1 - @skinAutoDL;
+            @skinAutoDLChanged = true;
+            @kbAct = 1;
+        }
+        if(@kbRow[5] < @skinCount && keyboard_check_pressed(vk_enter)){
+            @skin_select(@kbRow[5]);
+            @kbAct = 1;
+        }
+        if(@kbRow[5] == @skinCount + 1 && keyboard_check_pressed(vk_enter)){
+            @skin_clear();
+            @kbAct = 1;
+        }
+    }
 	if(@kbAct){
 		@kbDelay = 6;
 	}
@@ -2480,5 +2536,6 @@ if(@keybindSave){
 	ini_write_real("config", "team", @team);
 	ini_write_real("config", "lerp", @lerpEnabled);
 	ini_write_real("config", "fast_load", @fastLoadEnabled);
+	ini_write_real("config", "skinAutoDL", @skinAutoDL);
 	ini_close();
 }

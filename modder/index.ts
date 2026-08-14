@@ -170,7 +170,7 @@ const main = async function(): Promise<string> {
 	}
 	if(await IsGMS(input)){
 		console.log("Target: GameMaker Studio");
-		await ConverterGMS(input, gameName, server, ports, customSlot);
+		await ConverterGMS(input, gameName, server, ports, customSlot, defines);
 	}else{
 		console.log("Target: Game Maker 8");
 		if(forceExternalDll)

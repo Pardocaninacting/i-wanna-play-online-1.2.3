@@ -102,6 +102,13 @@ export class GMObject extends Asset {
 	public addGameEndCode(GML: Buffer): void {
 		this.addCode(GML, 7, 3);
 	}
+	// Read-only event presence check. Category/subtype are raw GM8 numbers
+	// (Create = 0/0, Draw = 8/0); true when the object carries the event with at
+	// least one action. Used by the skin injector to pick replace vs overlay
+	// draw code without disturbing the existing event list.
+	public hasEvent(event: number, type: number): boolean {
+		return this.events[event].findIndex(element => element[0] == type && element[1].length > 0) >= 0;
+	}
 	// C4 (TheBiob object.ts heritage): checks whether any code action of the
 	// given event contains searchStr. Category/subtype are raw GM8 numbers
 	// (Create = 0/0, Draw = 8/0). Matches require an identifier boundary on the

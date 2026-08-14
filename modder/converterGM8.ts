@@ -100,6 +100,125 @@ const localizeExitForWith = function(code: Buffer): Buffer {
 	].join("\r\n"), 'latin1');
 }
 
+// Splits a rendered GML blob into named sections introduced by marker lines of
+// the form `///// <kind> <name>` ("script" for md5.gml/skinLib.gml, "mode" for
+// playerDrawInject.gml). Content before the first marker is dropped. The input
+// must already be rendered through GMLCode.getGML, so section names carry the
+// final __ONLINE_ prefix (the source marker `@` has been rewritten by then).
+const splitMarkedSections = function(rendered: Buffer, kind: string): Array<{name: string, code: Buffer}> {
+	const lines: Array<string> = rendered.toString('latin1').split(/\r\n|\r|\n/g);
+	const marker: RegExp = new RegExp(`^/////\\s+${kind}\\s+([A-Za-z0-9_]+)\\s*$`);
+	const sections: Array<{name: string, code: Buffer}> = [];
+	let currentName: string = null;
+	let currentLines: Array<string> = [];
+	const flush = function(): void {
+		if(currentName === null)
+			return;
+		// Trim blank padding lines; keep inner formatting intact.
+		while(currentLines.length > 0 && currentLines[0].trim() === "") currentLines.shift();
+		while(currentLines.length > 0 && currentLines[currentLines.length-1].trim() === "") currentLines.pop();
+		sections.push({name: currentName, code: Buffer.from(currentLines.join("\r\n"), 'latin1')});
+		currentName = null;
+		currentLines = [];
+	}
+	for(const line of lines){
+		const match: RegExpExecArray = marker.exec(line.trim());
+		if(match){
+			flush();
+			currentName = match[1];
+			currentLines = [];
+		}else if(currentName !== null){
+			currentLines.push(line);
+		}
+	}
+	flush();
+	return sections;
+}
+
+// T1: split a rendered script-pack GML (md5.gml / skinLib.gml) into one entry
+// per `///// script <name>` section; each entry becomes a standalone GM8 script
+// asset. Exported for conversion-time verification harnesses.
+export const splitMarkedScripts = function(rendered: Buffer): Array<{name: string, code: Buffer}> {
+	return splitMarkedSections(rendered, "script");
+}
+
+// Renders a skin-system GML file through the standard pipeline. These files are
+// delivered as a parallel GML pack; a missing file must surface as a clear
+// conversion-time error, not a raw ENOENT.
+const renderSkinGml = async function(filename: string): Promise<Buffer> {
+	if(!await fs.exists(path.join(__dirname, "gml", `${filename}.gml`)))
+		throw new Error(`Skin system GML missing: gml/${filename}.gml. The skin feature requires md5.gml, skinLib.gml and playerDrawInject.gml in the gml/ folder; convert with iwpo.no_skins=true to build without skin support.`);
+	return GMLCode.getGML(filename);
+}
+
+// Animation states indexed 0-6, the shared contract with the skin GML
+// (global.__ONLINE_mapSpr[st] / global.__ONLINE_mapFrames[st]).
+const SKIN_MAP_STATES: Array<string> = ["idle", "run", "jump", "fall", "slide", "bow", "bullet"];
+// Default sprite-name candidates per state (matched case-insensitively).
+// Per-game override: define iwpo.skins.map.<state>=<spriteName>.
+const SKIN_SPRITE_CANDIDATES: {[state: string]: Array<string>} = {
+	idle: ["playeridle", "sprplayeridle", "player_idle", "spr_player_idle", "splayeridle"],
+	run: ["playerrunning", "playerrun", "sprplayerrun", "sprplayerrunning", "player_running", "splayerrunning", "splayerrun"],
+	jump: ["playerjump", "sprplayerjump", "player_jump", "splayerjump"],
+	fall: ["playerfall", "sprplayerfall", "player_fall", "splayerfall"],
+	slide: ["playersliding", "playerslide", "sprplayersliding", "sprplayerslide", "playerclimb", "sprplayerclimb", "splayersliding", "splayerslide"],
+	bow: ["playerbow", "sprplayerbow", "sbow"],
+	bullet: ["sprbullet", "playerbullet", "sprplayerbullet", "bullet", "sbullet"],
+};
+
+// T3: resolve the game-sprite -> animation-state map and emit the world-Create
+// assignment block. Unmatched states are written as -1/0 (the GML-side default),
+// keeping the injected block fully deterministic. Sprite indices are compile-time
+// constants: the position inside the game's sprite table. The emitted code must
+// spell __ONLINE_ names in full — it is injected verbatim via addCreateCode and
+// never passes through the @ -> __ONLINE_ substitution. Exported for
+// conversion-time verification harnesses.
+export const buildSkinSpriteMap = function(sprites: Array<Sprite>, defines: Map<string, string>): string {
+	const findSprite = function(name: string): number {
+		const target: string = name.toLowerCase();
+		for(let i: number = 0; i < sprites.length; ++i)
+			if(sprites[i] && sprites[i].name.toString('ascii').toLowerCase() === target)
+				return i;
+		return -1;
+	}
+	const lines: Array<string> = ["// [iwpo] skin sprite-state map (generated at convert time)"];
+	console.log("Skin sprite map:");
+	for(let st: number = 0; st < SKIN_MAP_STATES.length; ++st){
+		const state: string = SKIN_MAP_STATES[st];
+		const defineKey: string = `iwpo.skins.map.${state}`;
+		let spriteIndex: number = -1;
+		let source: string = "";
+		if(defines.has(defineKey)){
+			const defineValue: string = (defines.get(defineKey) as string).trim();
+			if(defineValue !== ""){
+				spriteIndex = findSprite(defineValue);
+				if(spriteIndex >= 0)
+					source = `define ${defineKey}=${defineValue}`;
+				else
+					console.warn(`[skins] ${defineKey}=${defineValue}: no such sprite in this game, falling back to default candidates`);
+			}
+		}
+		if(spriteIndex < 0){
+			for(const candidate of SKIN_SPRITE_CANDIDATES[state]){
+				spriteIndex = findSprite(candidate);
+				if(spriteIndex >= 0){
+					source = `candidate "${candidate}"`;
+					break;
+				}
+			}
+		}
+		if(spriteIndex >= 0){
+			const frames: number = sprites[spriteIndex].frames.length;
+			lines.push(`global.__ONLINE_mapSpr[${st}] = ${spriteIndex}; global.__ONLINE_mapFrames[${st}] = ${frames};`);
+			console.log(`  [skins] ${state} -> ${sprites[spriteIndex].name.toString('ascii')} (index ${spriteIndex}, ${frames} frame(s)) [${source}]`);
+		}else{
+			lines.push(`global.__ONLINE_mapSpr[${st}] = -1; global.__ONLINE_mapFrames[${st}] = 0;`);
+			console.log(`  [skins] ${state} -> no matching sprite (-1)`);
+		}
+	}
+	return lines.join("\r\n");
+}
+
 const isIdentChar = function(ch: string): boolean {
 	return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
 }
@@ -616,9 +735,40 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		replaceChunk(exe, soundsOffsets, putAssets(exe, sounds));
 	}
 	sounds = null;
+	// Skin system master switch (covers T1-T4). iwpo.no_skins=true/1 disables all
+	// skin-related injection: script assets, player Draw hooks, the sprite-state
+	// map constants and the [config] ini keys. With injection skipped, the
+	// GML-side global defaults (-1) keep the game safely skinless.
+	const noSkinsRaw: string = defines.has("iwpo.no_skins") ? (defines.get("iwpo.no_skins") as string).toLowerCase() : "";
+	const skinsEnabled: boolean = noSkinsRaw !== "true" && noSkinsRaw !== "1";
+	// Fail fast: md5.gml and skinLib.gml are always required (their script assets
+	// are injected unconditionally — worldCreate/worldEndStep call them in every
+	// converted game); playerDrawInject.gml is only needed with skins enabled.
+	// Abort before any asset rewriting instead of deep into the conversion.
+	for(const skinFile of (skinsEnabled ? ["md5", "skinLib", "playerDrawInject"] : ["md5", "skinLib"])){
+		if(!await fs.exists(path.join(__dirname, "gml", `${skinFile}.gml`)))
+			throw new Error(`Skin system GML missing: gml/${skinFile}.gml. md5.gml and skinLib.gml must always be present in the gml/ folder; playerDrawInject.gml too unless converting with iwpo.no_skins=true.`);
+	}
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Sprites header");
-	getAssetRefs(exe); // skip sprites section (no modification needed)
+	// T3: the skin sprite-state map needs sprite names/indices/frame counts, so
+	// the section is deserialized when skins are enabled. Sprites are never
+	// written back — with skins disabled keep the old cheap skip.
+	let skinMapCode: string = "";
+	// Built-in sprite count, baked into worldCreate as the base index for the
+	// restart-time dynamic-sprite sweep (0 disables the sweep). The converter
+	// never writes sprites back, so this count stays valid in the output game.
+	let skinSpriteBase: number = 0;
+	if(skinsEnabled){
+		const sprites: Array<Sprite> = getAssets(exe, Sprite.deserialize) as Array<Sprite>;
+		if(process.env.IWPO_SKIN_LIST_SPRITES)
+			for(let si: number = 0; si < sprites.length; ++si)
+				if(sprites[si]) console.log(`[sprite ${si}] ${(sprites[si] as Sprite).name.toString('latin1')}`);
+		skinMapCode = buildSkinSpriteMap(sprites, defines);
+		skinSpriteBase = sprites.length;
+	}else{
+		getAssetRefs(exe); // skip sprites section (no modification needed)
+	}
 
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Backgrounds header");
@@ -750,6 +900,12 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// iwpo.alt_player_objects appends comma-separated object names after player/player2.
 	// Unlike TheBiob we validate alt names against the object list: GM8 compiles the
 	// baked names as constants, so an unknown name would be a hard compile error.
+	// Objects receiving the skin Draw injection (T2): exactly the object set the
+	// player list covers (player/player2 plus validated iwpo.alt_player_objects
+	// entries), or just player/player2 when PLAYER_LIST is disabled.
+	const skinTargetObjects: Array<GMObject> = [player];
+	if (player2 != undefined)
+		skinTargetObjects.push(player2);
 	let playerListInitCode: string = "";
 	const noPlayerList: string = defines.has("iwpo.no_player_list") ? (defines.get("iwpo.no_player_list") as string).toLowerCase() : "";
 	if (noPlayerList !== "true" && noPlayerList !== "1") {
@@ -768,8 +924,10 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 				continue;
 			}
 			const canonicalAlt: string = altObj.name.toString('ascii');
-			if (playerListNames.indexOf(canonicalAlt) < 0)
+			if (playerListNames.indexOf(canonicalAlt) < 0){
 				playerListNames.push(canonicalAlt);
+				skinTargetObjects.push(altObj);
+			}
 		}
 		for (const listName of playerListNames)
 			playerListInitCode += `ds_list_add(__ONLINE_obj_list, ${listName});\r\n`;
@@ -1178,7 +1336,66 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const gameNameBuf: Buffer = useUtf8
 		? Buffer.from(gameName)
 		: iconv.encode(gameName, "gbk");
-	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), gameNameBuf, Buffer.from(Utils.getVersion(), 'ascii'), Buffer.from(playerListInitCode, 'ascii')));
+	// ===== Skin system injection (T1 script assets + T2 player Draw hooks) =====
+	// T1 is unconditional: worldCreate/worldEndStep call __ONLINE_skin_scan,
+	// __ONLINE_skin_mirror & co. in every converted game, so the script assets
+	// must always exist (they stay inert without an iwposkins\ folder). T2/T3
+	// remain gated behind iwpo.no_skins.
+	{
+		// T1: md5.gml and skinLib.gml are section packs — every `///// script <name>`
+		// section becomes a standalone script asset (same push pattern as
+		// __ONLINE_gbk_trunc below). Section names already carry the __ONLINE_
+		// prefix, applied by the render pipeline's @ substitution.
+		const skinScriptNames: Set<string> = new Set<string>();
+		for(const packFile of ["md5", "skinLib"]){
+			const sections: Array<{name: string, code: Buffer}> = splitMarkedScripts(await renderSkinGml(packFile));
+			if(sections.length === 0)
+				throw new Error(`Skin system GML gml/${packFile}.gml has no "///// script <name>" sections`);
+			for(const section of sections){
+				if(!section.name.startsWith("__ONLINE_"))
+					console.warn(`[skins] ${packFile}.gml section "${section.name}" lacks the __ONLINE_ prefix; injected as-is`);
+				if(skinScriptNames.has(section.name))
+					throw new Error(`Skin system GML: duplicate script section "${section.name}"`);
+				skinScriptNames.add(section.name);
+				const skinScript: Script = new Script();
+				skinScript.name = Buffer.from(section.name, 'ascii');
+				skinScript.source = section.code;
+				scripts.push(skinScript);
+			}
+			console.log(`[skins] ${packFile}.gml -> ${sections.length} script(s): ${sections.map(section => section.name).join(", ")}`);
+		}
+	}
+	if(skinsEnabled){
+		// T2: playerDrawInject.gml carries two `///// mode <name>` sections. Objects
+		// without a Draw event get the replace section; objects that already draw
+		// themselves get the overlay section appended (overlay-after-game-draw is
+		// the GML-side design). addDrawCode appends the code action in both cases.
+		const drawSections: Array<{name: string, code: Buffer}> = splitMarkedSections(await renderSkinGml("playerDrawInject"), "mode");
+		const findDrawMode = function(modeName: string): Buffer {
+			const hits: Array<{name: string, code: Buffer}> = drawSections.filter(section => section.name.toLowerCase() === modeName);
+			return hits.length > 0 ? hits[0].code : null;
+		}
+		const drawReplaceCode: Buffer = findDrawMode("replace");
+		const drawOverlayCode: Buffer = findDrawMode("overlay");
+		if(drawReplaceCode === null || drawOverlayCode === null)
+			throw new Error(`Skin system GML gml/playerDrawInject.gml must contain both "///// mode replace" and "///// mode overlay" sections`);
+		for(const skinTarget of skinTargetObjects){
+			const skinTargetName: string = skinTarget.name.toString('ascii');
+			if(skinTarget.hasEvent(8, 0)){ // Draw event = category 8, subtype 0
+				skinTarget.addDrawCode(drawOverlayCode);
+				console.log(`[skins] ${skinTargetName}: existing Draw event -> overlay appended`);
+			}else{
+				skinTarget.addDrawCode(drawReplaceCode);
+				console.log(`[skins] ${skinTargetName}: no Draw event -> replace injected`);
+			}
+		}
+	}
+	world.addCreateCode(await GMLCode.getGML("worldCreate", Buffer.from(uniqueKey,'ascii'), Buffer.from(server,'ascii'), Buffer.from(ports.tcp.toString(), 'ascii'), Buffer.from(ports.udp.toString(),'ascii'), gameNameBuf, Buffer.from(Utils.getVersion(), 'ascii'), Buffer.from(playerListInitCode, 'ascii'), Buffer.from(skinSpriteBase.toString(), 'ascii')));
+	// T3: the generated sprite-state map runs right after the worldCreate template
+	// (addCreateCode appends code actions in call order). The block spells
+	// __ONLINE_ names in full — it never passes through the @ substitution.
+	if(skinsEnabled && skinMapCode !== "")
+		world.addCreateCode(Buffer.from(skinMapCode, 'ascii'));
 	// Opt-in compatibility path: keep EndStep as the default, but allow Step
 	// injection plus world-driven helper ticks for GM8.2/yuuutu edge cases.
 	const addTickRaw = function(obj: GMObject, gml: Buffer, tickEventName: TickEventName): void {
@@ -1443,7 +1660,10 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const outputDir: string = path.dirname(input);
 	await fs.writeFile(path.join(outputDir, `${gameName}_online.exe`), getExeBuffer());
 	const runtimeConfigPath: string = path.join(outputDir, configFilename);
-	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1`;
+	// T4: factory runtime defaults for the skin system ([config] section):
+	// skin= (empty = no skin selected) and skinAutoDL=1 (auto-download on).
+	// Omitted entirely when the skin system is disabled (iwpo.no_skins).
+	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1` + (skinsEnabled ? `\nskin=\nskinAutoDL=1` : ``);
 	await fs.writeFile(runtimeConfigPath, configContent, "utf8");
 	if(customSlot){
 		// Write/merge the runtime `[sync]` section into `__ONLINE_config.ini` next to the produced EXE.

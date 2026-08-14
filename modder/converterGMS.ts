@@ -37,6 +37,7 @@ interface ConverterGMSConfig {
 	resourceDirectory: string,
 	useX64NativeHttpDll: boolean,
 	successMarkerPath: string,
+	defines?: Record<string, string>,
 }
 
 const Unpack = async function(file: string, folder: string): Promise<boolean> {
@@ -110,7 +111,7 @@ const WriteConverterConfig = async function(dataWin: string, config: ConverterGM
 	return configPath;
 }
 
-const ConvertDataWin = async function(input: string, output: string, gameName: string, gameId: string, server: string, ports: Ports, useX64NativeHttpDll: boolean, customSlot: CustomSlotConfig | null): Promise<void> {
+const ConvertDataWin = async function(input: string, output: string, gameName: string, gameId: string, server: string, ports: Ports, useX64NativeHttpDll: boolean, customSlot: CustomSlotConfig | null, defines: Map<string, string>): Promise<void> {
 	if(!await fs.exists(CONVERTER_GMS2_EXE))
 		throw new Error(`Cannot find converterGMS2.exe in lib/converterGMS2/`);
 	const successMarkerPath: string = path.join(path.dirname(input), "__ONLINE_utmt_success.txt");
@@ -118,6 +119,9 @@ const ConvertDataWin = async function(input: string, output: string, gameName: s
 		await fs.unlink(successMarkerPath);
 	// v2 (§11): runtime sync is fully driven by `__ONLINE_config.ini [sync]`; no GML codegen.
 	let gmlDir: string = path.join(__dirname, "gml");
+	// iwpo.* defines (tool settings + per-game ini + --define) for the C# converter.
+	const definesJson: Record<string, string> = {};
+	defines.forEach((value: string, key: string) => { definesJson[key] = value; });
 	const configPath: string = await WriteConverterConfig(input, {
 		gameId: gameId,
 		server: server,
@@ -129,6 +133,7 @@ const ConvertDataWin = async function(input: string, output: string, gameName: s
 		resourceDirectory: path.join(__dirname, "lib"),
 		useX64NativeHttpDll: useX64NativeHttpDll,
 		successMarkerPath: successMarkerPath,
+		defines: definesJson,
 	});
 	try{
 		await new Promise<void>((resolve, reject) => {
@@ -165,7 +170,7 @@ export const IsGMS = async function(input: string): Promise<boolean> {
 	return isPacked || fs.exists(path.join(path.dirname(input), "data.win"));
 }
 
-export const ConverterGMS = async function(input: string, gameName: string, server: string, ports: Ports, customSlot: CustomSlotConfig | null = null): Promise<void> {
+export const ConverterGMS = async function(input: string, gameName: string, server: string, ports: Ports, customSlot: CustomSlotConfig | null = null, defines: Map<string, string> = new Map<string, string>()): Promise<void> {
 	await Utils.rimraf(GMS_WORK_FOLDER);
 	await fs.mkdirp(GMS_WORK_FOLDER);
 	console.log("Reading executable...");
@@ -191,14 +196,14 @@ export const ConverterGMS = async function(input: string, gameName: string, serv
 	console.log("Generating game key...");
 	const uniqueKey: string = md5(`${gameName}\0${(await fs.stat(oldDataWin)).size}`);
 	console.log("Converting data.win...");
-	await ConvertDataWin(oldDataWin, newDataWin, gameName, uniqueKey, server, ports, useX64NativeHttpDll, customSlot);
+	await ConvertDataWin(oldDataWin, newDataWin, gameName, uniqueKey, server, ports, useX64NativeHttpDll, customSlot, defines);
 	await fs.unlink(oldDataWin);
 	if(isPacked){
 		const onlineDir: string = path.join(path.dirname(input), `${gameName}_online`);
 		await Utils.rimraf(onlineDir);
 		await Utils.copyDir(GMS_WORK_FOLDER, onlineDir);
 		await CopyHttpDll(onlineDir, useX64NativeHttpDll);
-		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1`;
+		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1\nskin=\nskinAutoDL=1`;
 		await fs.writeFile(path.join(onlineDir, CONFIG_FILENAME), configContent, "utf8");
 		if(customSlot) await WriteRuntimeSyncDefaults(onlineDir, customSlot);
 	}else{
@@ -206,7 +211,7 @@ export const ConverterGMS = async function(input: string, gameName: string, serv
 		await fs.rename(tmpDataWin, path.join(path.dirname(input), "data_backup.win"));
 		await fs.copyFile(newDataWin, tmpDataWin);
 		await CopyHttpDll(path.dirname(input), useX64NativeHttpDll);
-		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1`;
+		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1\nskin=\nskinAutoDL=1`;
 		await fs.writeFile(path.join(path.dirname(input), CONFIG_FILENAME), configContent, "utf8");
 		if(customSlot) await WriteRuntimeSyncDefaults(path.dirname(input), customSlot);
 	}

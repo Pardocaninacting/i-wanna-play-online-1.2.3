@@ -6,6 +6,7 @@ using System.Drawing.Imaging;
 using System.Drawing.Text;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 using Underanalyzer.Decompiler;
@@ -29,6 +30,8 @@ sealed class ConverterConfig
     public string ResourceDirectory { get; set; }
     public bool UseX64NativeHttpDll { get; set; }
     public string SuccessMarkerPath { get; set; }
+    // iwpo.* define overrides (nullable; absent in older config files).
+    public Dictionary<string, string> Defines { get; set; }
 }
 
 sealed class SharedSavePatch
@@ -121,11 +124,11 @@ static class Program
         if (Data.GameObjects.ByName(Prefix + "onlinePlayer") != null)
             throw new Exception("This game is already an online version.");
 
-        var world = FindObjectInteractive("world object", "world", "World", "objWorld", "oWorld");
-        var player = FindObjectInteractive("player object", "player", "Player", "objPlayer", "oPlayer", "objplayer");
+        var world = FindObjectInteractive("world object", "iwpo.world", "world", "World", "objWorld", "oWorld");
+        var player = FindObjectInteractive("player object", "iwpo.player", "player", "Player", "objPlayer", "oPlayer", "objplayer");
         var player2 = FindObject("player2", "objPlayer2", "oPlayer2");
-        var saveGame = FindScriptInteractive("save script", "save_save", "savegame", "saveGame", "savedata_save", "scrSaveGame", "SaveGame");
-        var loadGame = FindScriptInteractive("load script", "save_load", "loadgame", "loadGame", "savedata_load", "scrLoadGame", "LoadGame");
+        var saveGame = FindScriptInteractive("save script", "iwpo.saveGame", "save_save", "savegame", "saveGame", "savedata_save", "scrSaveGame", "SaveGame");
+        var loadGame = FindScriptInteractive("load script", "iwpo.loadGame", "save_load", "loadgame", "loadGame", "savedata_load", "scrLoadGame", "LoadGame");
 
         if (saveGame?.Code is null)
             throw new Exception("Unable to find the save script.");
@@ -174,6 +177,10 @@ static class Program
 
         if (Data.Scripts.ByName("scrFlipGrav") != null)
             activeFlags.Add("SCR_FLIP_GRAV");
+
+        // The skin system (script assets + player draw injection + sprite mapping)
+        // can be turned off entirely via the iwpo.no_skins define.
+        var skinsEnabled = !GetDefineFlag("iwpo.no_skins");
 
         // Build shared save patch
         var player2Name = player2?.Name?.Content ?? string.Empty;
@@ -227,6 +234,11 @@ static class Program
         var worldCreateCode = RenderTemplate(activeFlags, "worldCreateGMS", Config.GameId, Config.Server,
                 Config.TcpPort.ToString(), Config.UdpPort.ToString(), Config.GameName,
                 Config.Version, sharedSaveSupported ? "1" : "0", onlineFontIndex.ToString());
+        // The map slots are always assigned and run before the template body so
+        // the skin library can rely on them at Create time: the real mapping when
+        // skins are enabled, defaults -1/0 otherwise (the menu preview reads the
+        // slots even with iwpo.no_skins, so they must never be uninitialised).
+        worldCreateCode = (skinsEnabled ? BuildSpriteMapCode() : BuildSpriteMapDefaultsCode()) + "\r\n" + worldCreateCode;
         importGroup.QueueAppend(
             world.EventHandlerFor(EventType.Create, Data),
             worldCreateCode);
@@ -280,6 +292,20 @@ static class Program
         if (sharedSaveSupported)
             QueueSharedSavePatch(importGroup, sharedSavePatch);
 
+        // Skin system: script assets (md5, skinLib) are injected unconditionally —
+        // worldCreate/worldEndStep call them in every converted game, so the assets
+        // must exist even with iwpo.no_skins (they stay inert without an iwposkins
+        // folder). Player Draw injection and the sprite map stay gated.
+        InjectSkinScriptAssets(importGroup, activeFlags);
+        if (skinsEnabled)
+        {
+            InjectPlayerDrawEvents(importGroup, activeFlags, player, player2);
+        }
+        else
+        {
+            Console.WriteLine("Skin player draw injection: disabled via iwpo.no_skins");
+        }
+
         Console.WriteLine("Compiling GML...");
         importGroup.Import();
     }
@@ -308,8 +334,17 @@ static class Program
         return Data.Scripts.FirstOrDefault(script => NameMatches(script?.Name?.Content, names));
     }
 
-    static UndertaleGameObject FindObjectInteractive(string typeName, params string[] names)
+    static UndertaleGameObject FindObjectInteractive(string typeName, string defineKey, params string[] names)
     {
+        var defineValue = GetDefine(defineKey);
+        if (defineValue != null)
+        {
+            // A define always wins over the candidate table and skips the interactive
+            // prompt (mirrors the GM8 converter's findAssetInteractive define handling).
+            var defineResult = FindObject(defineValue);
+            if (defineResult != null) return defineResult;
+            throw new Exception($"No {typeName} named '{defineValue}' (from {defineKey}) found.");
+        }
         var result = FindObject(names);
         if (result != null) return result;
         if (!Console.IsInputRedirected)
@@ -333,8 +368,17 @@ static class Program
         throw new Exception($"Unable to find the {typeName}.");
     }
 
-    static UndertaleScript FindScriptInteractive(string typeName, params string[] names)
+    static UndertaleScript FindScriptInteractive(string typeName, string defineKey, params string[] names)
     {
+        var defineValue = GetDefine(defineKey);
+        if (defineValue != null)
+        {
+            // A define always wins over the candidate table and skips the interactive
+            // prompt (mirrors the GM8 converter's findAssetInteractive define handling).
+            var defineResult = FindScript(defineValue);
+            if (defineResult != null) return defineResult;
+            throw new Exception($"No {typeName} named '{defineValue}' (from {defineKey}) found.");
+        }
         var result = FindScript(names);
         if (result != null) return result;
         if (!Console.IsInputRedirected)
@@ -965,6 +1009,247 @@ static class Program
             if (ch == '}') { depth--; if (depth == 0) return i; }
         }
         return -1;
+    }
+
+    // --- iwpo.* define channel ---
+
+    static string GetDefine(string key)
+    {
+        if (key != null && Config.Defines != null &&
+            Config.Defines.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+            return value;
+        return null;
+    }
+
+    static bool GetDefineFlag(string key)
+    {
+        var value = GetDefine(key);
+        if (value is null) return false;
+        return !(value == "0" || value.Equals("false", StringComparison.OrdinalIgnoreCase));
+    }
+
+    // --- Skin system ---
+
+    // Game sprite -> skin state candidate names, in map slot order:
+    // 0 idle, 1 run, 2 jump, 3 fall, 4 slide, 5 bow, 6 bullet.
+    static readonly string[] SpriteStateNames = { "idle", "run", "jump", "fall", "slide", "bow", "bullet" };
+    static readonly string[][] SpriteStateCandidates =
+    {
+        new[] { "playeridle", "sprplayeridle", "player_idle", "spr_player_idle", "splayeridle" },
+        new[] { "playerrunning", "playerrun", "sprplayerrun", "sprplayerrunning", "player_running", "splayerrunning", "splayerrun" },
+        new[] { "playerjump", "sprplayerjump", "player_jump", "splayerjump" },
+        new[] { "playerfall", "sprplayerfall", "player_fall", "splayerfall" },
+        new[] { "playersliding", "playerslide", "sprplayersliding", "sprplayerslide", "playerclimb", "sprplayerclimb", "splayersliding", "splayerslide" },
+        new[] { "playerbow", "sprplayerbow", "sbow" },
+        new[] { "sprbullet", "playerbullet", "sprplayerbullet", "bullet", "sbullet" },
+    };
+
+    static UndertaleSprite FindSpriteByName(string name)
+    {
+        return Data.Sprites.FirstOrDefault(s => string.Equals(s?.Name?.Content, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    // Emits the global.__ONLINE_mapSpr / global.__ONLINE_mapFrames constant
+    // assignments consumed by the skin templates. Every slot is always assigned
+    // (-1 / 0 when unmatched) so the skin library never reads an unassigned entry.
+    static string BuildSpriteMapCode()
+    {
+        var sb = new StringBuilder("// Game sprite -> skin state mapping (generated by the converter)");
+        for (var st = 0; st < SpriteStateNames.Length; st++)
+        {
+            var state = SpriteStateNames[st];
+            var defineValue = GetDefine($"iwpo.skins.map.{state}");
+            UndertaleSprite sprite = null;
+            if (defineValue != null)
+            {
+                sprite = FindSpriteByName(defineValue);
+                if (sprite is null)
+                    throw new Exception($"No sprite named '{defineValue}' (from iwpo.skins.map.{state}) found.");
+            }
+            else
+            {
+                foreach (var candidate in SpriteStateCandidates[st])
+                {
+                    sprite = FindSpriteByName(candidate);
+                    if (sprite != null) break;
+                }
+            }
+            if (sprite is null)
+            {
+                Console.WriteLine($"Skin sprite map: {state} -> (no match)");
+                sb.Append($"\r\nglobal.__ONLINE_mapSpr[{st}] = -1; global.__ONLINE_mapFrames[{st}] = 0;");
+                continue;
+            }
+            // Sprite asset references compile to their data.Sprites list index, so
+            // the raw integer is a valid constant in GML.
+            var index = Data.Sprites.IndexOf(sprite);
+            var frames = sprite.Textures?.Count ?? 0;
+            Console.WriteLine($"Skin sprite map: {state} -> {sprite.Name.Content} (index {index}, {frames} frames)");
+            sb.Append($"\r\nglobal.__ONLINE_mapSpr[{st}] = {index}; global.__ONLINE_mapFrames[{st}] = {frames};");
+        }
+        return sb.ToString();
+    }
+
+    // Defaults-only variant used when the skin system is disabled via
+    // iwpo.no_skins: every slot assigned -1/0 without touching the game's sprite
+    // list, so the skin menu preview can never read an uninitialised global.
+    static string BuildSpriteMapDefaultsCode()
+    {
+        var sb = new StringBuilder("// Game sprite -> skin state mapping (defaults; skins disabled)");
+        for (var st = 0; st < SpriteStateNames.Length; st++)
+            sb.Append($"\r\nglobal.__ONLINE_mapSpr[{st}] = -1; global.__ONLINE_mapFrames[{st}] = 0;");
+        return sb.ToString();
+    }
+
+    // Renders a skin template, reporting a clear error when the shared GML file
+    // has not been delivered to the gml directory yet.
+    static string RenderSkinTemplate(ISet<string> activeFlags, string templateName)
+    {
+        var path = Path.Combine(Config.GmlDirectory, templateName + ".gml");
+        if (!File.Exists(path))
+            throw new Exception($"Skin system template not found: {path} (place {templateName}.gml in the gml directory, or set the iwpo.no_skins define to disable skin injection)");
+        return RenderTemplate(activeFlags, templateName);
+    }
+
+    // Splits a rendered template into named sections introduced by
+    // "///// script <name>" marker lines. The shared GM8/GMS skin templates pack
+    // several one-function scripts into a single file; GMS needs one asset each.
+    static List<KeyValuePair<string, string>> SplitMarkedScripts(string rendered, string templateName)
+    {
+        var sections = new List<KeyValuePair<string, string>>();
+        string currentName = null;
+        var body = new StringBuilder();
+        void Flush()
+        {
+            if (currentName is null) return;
+            var text = body.ToString().Trim();
+            if (text.Length == 0)
+                throw new Exception($"Section '///// script {currentName}' in {templateName}.gml has no code.");
+            if (sections.Any(s => s.Key == currentName))
+                throw new Exception($"Duplicate section '///// script {currentName}' in {templateName}.gml.");
+            sections.Add(new KeyValuePair<string, string>(currentName, text));
+        }
+        foreach (var rawLine in Regex.Split(rendered, "\r\n|\r|\n"))
+        {
+            var match = Regex.Match(rawLine.Trim(), @"^/////\s*script\s+(\S+)\s*$");
+            if (match.Success)
+            {
+                Flush();
+                currentName = match.Groups[1].Value;
+                body.Clear();
+                continue;
+            }
+            if (currentName is null)
+            {
+                // Only blank lines and comments may precede the first marker.
+                var trimmed = rawLine.Trim();
+                if (trimmed.Length > 0 && !trimmed.StartsWith("//", StringComparison.Ordinal))
+                    throw new Exception($"Unexpected content before the first ///// script section in {templateName}.gml: {trimmed}");
+                continue;
+            }
+            body.AppendLine(rawLine);
+        }
+        Flush();
+        if (sections.Count == 0)
+            throw new Exception($"No ///// script sections found in {templateName}.gml.");
+        return sections;
+    }
+
+    // Creates one script asset per marked section of the md5/skinLib templates.
+    static void InjectSkinScriptAssets(CodeImportGroup importGroup, ISet<string> activeFlags)
+    {
+        foreach (var templateName in new[] { "md5", "skinLib" })
+        {
+            var rendered = RenderSkinTemplate(activeFlags, templateName);
+            foreach (var section in SplitMarkedScripts(rendered, templateName))
+            {
+                var name = section.Key;
+                var body = section.Value;
+                if (Data.Scripts.ByName(name) != null)
+                    throw new Exception($"Cannot inject skin script '{name}': a script with that name already exists.");
+                // AutoCreateAssets is off, so the script asset and its code entry are
+                // created explicitly here (mirroring CodeImportGroup's own scheme:
+                // code entry "gml_Script_<name>" plus script asset "<name>").
+                var code = UndertaleCode.CreateEmptyEntry(Data, "gml_Script_" + name);
+                Data.Scripts.Add(new UndertaleScript()
+                {
+                    Name = Data.Strings.MakeString(name),
+                    Code = code,
+                });
+                // GMS2.3+ script assets hold function declarations; GMS1 holds the body directly.
+                if (Data.IsVersionAtLeast(2, 3))
+                    body = $"function {name}() {{\r\n{body}\r\n}}";
+                importGroup.QueueReplace(code, body);
+                Console.WriteLine($"Skin script: {name}");
+            }
+        }
+    }
+
+    // Splits the playerDrawInject template into its "replace" and "overlay"
+    // sections (marked by "///// mode <name>" lines).
+    static Dictionary<string, string> SplitMarkedModes(string rendered, string templateName)
+    {
+        var modes = new Dictionary<string, string>(StringComparer.Ordinal);
+        string currentMode = null;
+        var body = new StringBuilder();
+        void Flush()
+        {
+            if (currentMode is null) return;
+            modes[currentMode] = body.ToString().Trim();
+        }
+        foreach (var rawLine in Regex.Split(rendered, "\r\n|\r|\n"))
+        {
+            var match = Regex.Match(rawLine.Trim(), @"^/////\s*mode\s+(\w+)\s*$");
+            if (match.Success)
+            {
+                Flush();
+                currentMode = match.Groups[1].Value;
+                body.Clear();
+                continue;
+            }
+            if (currentMode is null)
+            {
+                // Only blank lines and comments may precede the first marker.
+                var trimmed = rawLine.Trim();
+                if (trimmed.Length > 0 && !trimmed.StartsWith("//", StringComparison.Ordinal))
+                    throw new Exception($"Unexpected content before the first ///// mode section in {templateName}.gml: {trimmed}");
+                continue;
+            }
+            body.AppendLine(rawLine);
+        }
+        Flush();
+        return modes;
+    }
+
+    static void InjectPlayerDrawEvents(CodeImportGroup importGroup, ISet<string> activeFlags, UndertaleGameObject player, UndertaleGameObject player2)
+    {
+        var rendered = RenderSkinTemplate(activeFlags, "playerDrawInject");
+        var modes = SplitMarkedModes(rendered, "playerDrawInject");
+        if (!modes.TryGetValue("replace", out var replaceCode) || replaceCode.Length == 0)
+            throw new Exception("playerDrawInject.gml is missing its '///// mode replace' section.");
+        if (!modes.TryGetValue("overlay", out var overlayCode) || overlayCode.Length == 0)
+            throw new Exception("playerDrawInject.gml is missing its '///// mode overlay' section.");
+        InjectPlayerDrawEvent(importGroup, player, replaceCode, overlayCode);
+        if (player2 != null)
+            InjectPlayerDrawEvent(importGroup, player2, replaceCode, overlayCode);
+    }
+
+    static void InjectPlayerDrawEvent(CodeImportGroup importGroup, UndertaleGameObject obj, string replaceCode, string overlayCode)
+    {
+        var existing = FindEventCode(obj, EventType.Draw);
+        if (existing is null)
+        {
+            // No Draw event: create one holding the replace section.
+            importGroup.QueueReplace(obj.EventHandlerFor(EventType.Draw, EventSubtypeDraw.Draw, Data), replaceCode);
+            Console.WriteLine($"Skin draw inject: {obj.Name.Content} (new Draw event)");
+        }
+        else
+        {
+            // Existing Draw event: append the overlay section so the skin draws on
+            // top of the game's own drawing.
+            importGroup.QueueAppend(existing, overlayCode);
+            Console.WriteLine($"Skin draw inject: {obj.Name.Content} (appended to existing Draw event)");
+        }
     }
 
     // --- GML template engine ---
