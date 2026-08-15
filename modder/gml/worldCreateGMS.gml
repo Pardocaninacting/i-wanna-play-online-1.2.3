@@ -25,7 +25,7 @@ set_utf8_mode(1);
 @tcpPort = %arg2;
 @udpPort = %arg3;
 @version = "%arg5";
-@protocolVersion = 2;
+@protocolVersion = 3;
 @race = false;
 @password = "";
 @vis = 0;
@@ -199,6 +199,28 @@ for(@scI = 0; @scI < 16; @scI += 1){
 @skinPrevLoaded = -1;
 @skinPrevRow = -1;
 @skinPrevTimer = 0;
+@skinVisCount = 0;
+@skinUnknown = -1;
+// S2 network exchange (see worldCreate.gml for the full commentary).
+@skinNetDirty = false;
+@skinHashScan = 0;
+@skinHintNext = 0;
+for(@skH = 0; @skH < 8; @skH += 1){
+    @skinHint[@skH] = "";
+}
+@skinMap = ds_map_create();
+@skinMapHint = ds_map_create();
+global.@rskCount = 0;
+global.@rskUnknown = 0;
+// 32 slots = 1 reserved Unknown + up to 31 distinct remote skins at once
+// (players sharing a skin share a slot; released slots are recycled).
+for(@rskI = 0; @rskI < 32; @rskI += 1){
+    global.@rskHash[@rskI] = "";
+    for(@rskSt = 0; @rskSt < 7; @rskSt += 1){
+        global.@rskSpr[@rskI, @rskSt] = -1;
+        global.@rskFrames[@rskI, @rskSt] = 0;
+    }
+}
 global.@skinOn = 0;
 // No create-time initialization of the skin slot arrays here: @skin_scan
 // fully initializes every slot it fills and readers stay below @skinCount,
@@ -215,6 +237,14 @@ if(variable_global_exists("@skinMirInit")){
             }
             if(global.@skinPrevSpr[@skSt] >= 0 && sprite_exists(global.@skinPrevSpr[@skSt])){
                 sprite_delete(global.@skinPrevSpr[@skSt]);
+            }
+        }
+        // S2: remote-player slots (incl. the Unknown fallback in slot 0).
+        for(@rskI = 0; @rskI < 32; @rskI += 1){
+            for(@rskSt = 0; @rskSt < 7; @rskSt += 1){
+                if(global.@rskSpr[@rskI, @rskSt] >= 0 && sprite_exists(global.@rskSpr[@rskI, @rskSt])){
+                    sprite_delete(global.@rskSpr[@rskI, @rskSt]);
+                }
             }
         }
     }
@@ -670,4 +700,16 @@ if(@skinFound >= 0){
     ini_write_string("config", "skin", "");
     ini_write_string("config", "skinDir", "");
     ini_close();
+}
+// S2: the hidden "Unknown" fallback package occupies remote slot 0.
+if(@skinUnknown >= 0){
+    if(@skin_slot_load(0, @skinUnknown)){
+        global.@rskHash[0] = "<unknown>";
+        global.@rskCount = 1;
+        global.@rskUnknown = 1;
+    }
+}
+// S2: (re)apply remote skins to any pre-existing player instances.
+for(@skI = 0; @skI < instance_number(@onlinePlayer); @skI += 1){
+    @skin_apply_remote(instance_find(@onlinePlayer, @skI));
 }

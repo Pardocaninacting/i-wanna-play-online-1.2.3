@@ -12,6 +12,8 @@ export enum TcpMsg {
     LIST        = 10, // C→S: request roster (no payload); S→C: u16 count, [stringNT id, stringNT name, u8 team] × count
     PING        = 11, // C→S: [i32 room?] f32 x, f32 y, u8 type;  S→C: stringNT senderId, [i32 room?] f32 x, f32 y, u8 type
                       // Legacy clients send 9 bytes (no room); current clients send 13 bytes (room first).
+    SKIN        = 12, // C→S: 16-byte hash + stringNT dir-name hint (all-zero hash = no skin). Protocol v3+.
+    SKIN_NOTIFY = 13, // S→C: stringNT playerId, 16-byte hash, stringNT dir hint. Only sent to protocol v3+ clients.
 }
 
 export enum UdpMsg {

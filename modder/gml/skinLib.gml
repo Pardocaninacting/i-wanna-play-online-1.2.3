@@ -42,7 +42,14 @@ return 0;
 // every load). Every reader stays below @skinCount, and @skin_parse fills
 // the per-state fields before they are read, so slots beyond the count are
 // never touched uninitialized.
+// The reserved "Unknown" package (unknown-skin fallback for remote players)
+// is moved to the LAST slot and excluded from @skinVisCount: the menu lists
+// only [0, @skinVisCount), while hash matching and the fallback draw may use
+// the full range.
 @skinCount = 0;
+@skinVisCount = 0;
+@skinUnknown = -1;
+@skHiddenDir = "";
 if(!directory_exists("iwposkins")){
     return 0;
 }
@@ -53,6 +60,38 @@ if(!directory_exists("iwposkins")){
     while(@skEntry != "" && @skinCount < 4096){
         if(@skEntry != "." && @skEntry != ".."){
             if(directory_exists(@skBase + @skEntry)){
+                if(string_lower(@skEntry) == "unknown"){
+                    @skHiddenDir = @skEntry;
+                }else{
+                    @skinDir[@skinCount] = @skEntry;
+                    @skinName[@skinCount] = "";
+                    @skinMaker[@skinCount] = "";
+                    @skinSource[@skinCount] = "";
+                    @skinHash[@skinCount] = "";
+                    @skinParsed[@skinCount] = 0;
+                    for(@skSt = 0; @skSt < 7; @skSt += 1){
+                        @skinHas[@skinCount, @skSt] = 0;
+                        @skinFrames[@skinCount, @skSt] = 0;
+                        @skinFw[@skinCount, @skSt] = 32;
+                        @skinOx[@skinCount, @skSt] = 17;
+                        @skinOy[@skinCount, @skSt] = 23;
+                    }
+                    @skinCount += 1;
+                }
+            }
+        }
+        @skEntry = file_find_next();
+    }
+    file_find_close();
+#endif
+#if not STUDIO
+    // GM8: fa_directory lists folders only, no extra filter needed.
+    @skEntry = file_find_first(@skBase + "*", fa_directory);
+    while(@skEntry != "" && @skinCount < 4096){
+        if(@skEntry != "." && @skEntry != ".."){
+            if(string_lower(@skEntry) == "unknown"){
+                @skHiddenDir = @skEntry;
+            }else{
                 @skinDir[@skinCount] = @skEntry;
                 @skinName[@skinCount] = "";
                 @skinMaker[@skinCount] = "";
@@ -73,30 +112,25 @@ if(!directory_exists("iwposkins")){
     }
     file_find_close();
 #endif
-#if not STUDIO
-    // GM8: fa_directory lists folders only, no extra filter needed.
-    @skEntry = file_find_first(@skBase + "*", fa_directory);
-    while(@skEntry != "" && @skinCount < 4096){
-        if(@skEntry != "." && @skEntry != ".."){
-            @skinDir[@skinCount] = @skEntry;
-            @skinName[@skinCount] = "";
-            @skinMaker[@skinCount] = "";
-            @skinSource[@skinCount] = "";
-            @skinHash[@skinCount] = "";
-            @skinParsed[@skinCount] = 0;
-            for(@skSt = 0; @skSt < 7; @skSt += 1){
-                @skinHas[@skinCount, @skSt] = 0;
-                @skinFrames[@skinCount, @skSt] = 0;
-                @skinFw[@skinCount, @skSt] = 32;
-                @skinOx[@skinCount, @skSt] = 17;
-                @skinOy[@skinCount, @skSt] = 23;
-            }
-            @skinCount += 1;
-        }
-        @skEntry = file_find_next();
+// Reserved fallback package: last slot, hidden from the selectable list.
+@skinVisCount = @skinCount;
+if(@skHiddenDir != "" && @skinCount < 4096){
+    @skinDir[@skinCount] = @skHiddenDir;
+    @skinName[@skinCount] = "";
+    @skinMaker[@skinCount] = "";
+    @skinSource[@skinCount] = "";
+    @skinHash[@skinCount] = "";
+    @skinParsed[@skinCount] = 0;
+    for(@skSt = 0; @skSt < 7; @skSt += 1){
+        @skinHas[@skinCount, @skSt] = 0;
+        @skinFrames[@skinCount, @skSt] = 0;
+        @skinFw[@skinCount, @skSt] = 32;
+        @skinOx[@skinCount, @skSt] = 17;
+        @skinOy[@skinCount, @skSt] = 23;
     }
-    file_find_close();
-#endif
+    @skinUnknown = @skinCount;
+    @skinCount += 1;
+}
 return @skinCount;
 
 ///// script @skin_parse
@@ -202,6 +236,7 @@ for(@skSt = 0; @skSt < 7; @skSt += 1){
 @skinSel = @skI;
 @skinLoaded = @skI;
 @skin_mirror();
+@skinNetDirty = true;
 ini_open("@config.ini");
 ini_write_string("config", "skin", @skinHash[@skI]);
 ini_write_string("config", "skinDir", @skinDir[@skI]);
@@ -214,6 +249,7 @@ return 1;
 @skinSel = -1;
 @skinLoaded = -1;
 @skin_mirror();
+@skinNetDirty = true;
 ini_open("@config.ini");
 ini_write_string("config", "skin", "");
 ini_write_string("config", "skinDir", "");
@@ -262,37 +298,46 @@ return -1;
 ///// script @skin_draw
 // Draws one skin frame. argument0: state, argument1: image_index,
 // argument2/3: x/y, argument4/5: xscale/yscale, argument6: angle,
-// argument7: alpha. Player context: reads only globals. Missing states
-// fall back slide -> fall -> idle (the kid slides DOWN vines, so the upward
-// jump pose is wrong; a state counts as missing when its mirrored sprite
-// slot is empty, i.e. the skin has no such png or it failed to load).
-// bow and bullet are optional states with NO fallback: when the slot is
-// empty this returns 0 — a bow caller must draw nothing (a skin without
-// bow.png is a character with no bow), a bullet caller must keep the game's
-// original sprite. Returns 1 when something was drawn, 0 otherwise.
+// argument7: alpha, argument8: source slot (-1 = the selected-skin global
+// mirror, 0-31 = a remote-player slot). Caller context reads only globals.
+// Missing states fall back slide -> fall -> idle (the kid slides DOWN vines,
+// so the upward jump pose is wrong; a state counts as missing when its
+// mirrored sprite slot is empty, i.e. the skin has no such png or it failed
+// to load). bow and bullet are optional states with NO fallback: when the
+// slot is empty this returns 0 — a bow caller must draw nothing (a skin
+// without bow.png is a character with no bow), a bullet caller must keep
+// the game's original sprite. Returns 1 when something was drawn, 0
+// otherwise.
 //
 // Frame pacing keeps the ORIGINAL per-frame duration no matter how many
 // frames the skin strip has (TheBiob skin_selector and IWSAP semantics: a
 // 20-frame idle plays all 20 frames at the game's own image_speed instead of
-// fast-forwarding the whole strip inside one original cycle). self is the
-// player instance, so the accumulator naturally lives per player instance.
+// fast-forwarding the whole strip inside one original cycle). The
+// accumulator lives on the CALLER instance (player or onlinePlayer), so
+// every instance paces independently.
+@skSlot = floor(argument8);
 @skEff = argument0;
-if(global.@skinSpr[@skEff] < 0){
+if(@skin_slot_spr(@skSlot, @skEff) < 0){
     if(@skEff == 4) @skEff = 3;
 }
-if(global.@skinSpr[@skEff] < 0){
+if(@skin_slot_spr(@skSlot, @skEff) < 0){
     if(argument0 >= 5) return 0;
     @skEff = 0;
 }
-if(global.@skinSpr[@skEff] < 0){
+@skSprId = @skin_slot_spr(@skSlot, @skEff);
+if(@skSprId < 0){
     return 0;
 }
 // Defense in depth: a mirrored id that no longer exists must degrade to the
 // caller's fallback/original draw, not raise a hard sprite error.
-if(!sprite_exists(global.@skinSpr[@skEff])){
+if(!sprite_exists(@skSprId)){
     return 0;
 }
-@skFrames = floor(global.@skinFrames[@skEff]);
+if(@skSlot < 0){
+    @skFrames = floor(global.@skinFrames[@skEff]);
+}else{
+    @skFrames = floor(global.@rskFrames[@skSlot, @skEff]);
+}
 if(@skFrames < 1) @skFrames = 1;
 // Per-frame-duration pacing accumulator (see header). GMS errors on reading
 // an undefined instance variable, so initialize on first use (GMS1 removed
@@ -325,7 +370,7 @@ if(@skinAnState != argument0){
 @skinAnPrevImg = argument1;
 @skinAnState = argument0;
 @skFrame = floor(@skinAnPos) mod @skFrames;
-draw_sprite_ext(global.@skinSpr[@skEff], @skFrame, argument2, argument3, argument4, argument5, argument6, c_white, argument7);
+draw_sprite_ext(@skSprId, @skFrame, argument2, argument3, argument4, argument5, argument6, c_white, argument7);
 return 1;
 
 ///// script @skin_prev_load
@@ -359,4 +404,234 @@ for(@skSt = 0; @skSt < 7; @skSt += 1){
     }
 }
 @skinPrevLoaded = -1;
+return 0;
+
+///// script @skin_slot_spr
+// argument0: source slot (-1 = selected-skin global mirror, 0-31 = remote
+// slot), argument1: state. Returns the mirrored sprite id (or -1).
+if(argument0 < 0){
+    return global.@skinSpr[argument1];
+}
+return global.@rskSpr[argument0, argument1];
+
+///// script @skin_resolve
+// argument0: hash hex. Returns the local skin index among ALREADY-COMPUTED
+// hashes only (never hashes here); -1 when not yet known.
+for(@skI = 0; @skI < @skinCount; @skI += 1){
+    if(@skinHash[@skI] != ""){
+        if(@skinHash[@skI] == argument0){
+            return @skI;
+        }
+    }
+}
+return -1;
+
+///// script @skin_slot_load
+// argument0: remote slot (0-31), argument1: local skin index. Loads every
+// state the skin ships into the global remote slot (6-arg sprite_add on both
+// engines, same as @skin_select). Returns 1 on success, 0 on bad args.
+@skSlot = floor(argument0);
+@skI = floor(argument1);
+if(@skSlot < 0 || @skSlot >= 32){
+    return 0;
+}
+if(@skI < 0 || @skI >= @skinCount){
+    return 0;
+}
+@skin_parse(@skI);
+@skin_sec_names();
+@skBase = "iwposkins" + chr(92) + @skinDir[@skI] + chr(92);
+for(@skSt = 0; @skSt < 7; @skSt += 1){
+    global.@rskSpr[@skSlot, @skSt] = -1;
+    global.@rskFrames[@skSlot, @skSt] = 0;
+    if(@skinHas[@skI, @skSt]){
+        global.@rskSpr[@skSlot, @skSt] = sprite_add(@skBase + @skSec[@skSt] + ".png", @skinFrames[@skI, @skSt], 0, 0, @skinOx[@skI, @skSt], @skinOy[@skI, @skSt]);
+        global.@rskFrames[@skSlot, @skSt] = @skinFrames[@skI, @skSt];
+    }
+}
+return 1;
+
+///// script @skin_slot_acquire
+// argument0: local skin index, argument1: hash hex. Returns the remote slot
+// holding that skin's sprites (loading on first use), or -1 when all slots
+// are taken. Slot 0 is the reserved "Unknown" fallback and never recycled.
+// Released slots (empty hash) are reused before growing: a peer cycling
+// through skins must not exhaust the fixed slot pool.
+for(@skSlot = 1; @skSlot < global.@rskCount; @skSlot += 1){
+    if(global.@rskHash[@skSlot] == argument1){
+        return @skSlot;
+    }
+}
+@skHole = 0;
+for(@skSlot = 1; @skSlot < global.@rskCount; @skSlot += 1){
+    if(global.@rskHash[@skSlot] == ""){
+        @skHole = @skSlot;
+        break;
+    }
+}
+if(@skHole > 0){
+    @skSlot = @skHole;
+}else{
+    if(global.@rskCount >= 32){
+        return -1;
+    }
+    @skSlot = global.@rskCount;
+    global.@rskCount += 1;
+}
+if(!@skin_slot_load(@skSlot, argument0)){
+    return -1;
+}
+global.@rskHash[@skSlot] = argument1;
+return @skSlot;
+
+///// script @skin_slot_release
+// argument0: an onlinePlayer instance, argument1: the remote slot it is
+// giving up. Frees the slot's sprites when no OTHER onlinePlayer still uses
+// that slot, so a peer cycling through skins (or leaving) cannot exhaust
+// the fixed pool. Slot 0 (the Unknown fallback) is never freed. World
+// context.
+@skP = argument0;
+@skSlot = floor(argument1);
+if(@skSlot <= 0){
+    return 0;
+}
+for(@skI = 0; @skI < instance_number(@onlinePlayer); @skI += 1){
+    @skQ = instance_find(@onlinePlayer, @skI);
+    if(@skQ != @skP){
+        if(@skQ.@skinSlot == @skSlot){
+            return 0;
+        }
+    }
+}
+for(@skSt = 0; @skSt < 7; @skSt += 1){
+    if(global.@rskSpr[@skSlot, @skSt] >= 0){
+        if(sprite_exists(global.@rskSpr[@skSlot, @skSt])){
+            sprite_delete(global.@rskSpr[@skSlot, @skSt]);
+        }
+    }
+    global.@rskSpr[@skSlot, @skSt] = -1;
+    global.@rskFrames[@skSlot, @skSt] = 0;
+}
+global.@rskHash[@skSlot] = "";
+return 1;
+
+///// script @skin_remote_unknown
+// argument0: an onlinePlayer instance whose hash failed local resolution.
+// Marks it explicitly-missing and pushes a one-per-hash local chat notice.
+// World context (touches the chat history arrays).
+@skP = argument0;
+@skP.@skinState = 3;
+@skP.@skinSlot = -1;
+@skHash = @skP.@skinHash;
+for(@skH = 0; @skH < 8; @skH += 1){
+    if(@skinHint[@skH] == @skHash){
+        return 0;
+    }
+}
+@skinHint[@skinHintNext] = @skHash;
+@skinHintNext = (@skinHintNext + 1) mod 8;
+@skMsg = "Skin missing for " + @skP.@name + " (" + string_copy(@skHash, 1, 8) + ")";
+if(@chatHistCount < @chatHistMax){
+    @chatHistName[@chatHistCount] = "SKIN";
+    @chatHistMsg[@chatHistCount] = @skMsg;
+    @chatHistTeam[@chatHistCount] = @skP.@team;
+    @chatHistCount += 1;
+}else{
+    for(@ci = 0; @ci < @chatHistMax - 1; @ci += 1){
+        @chatHistName[@ci] = @chatHistName[@ci + 1];
+        @chatHistMsg[@ci] = @chatHistMsg[@ci + 1];
+        @chatHistTeam[@ci] = @chatHistTeam[@ci + 1];
+    }
+    @chatHistName[@chatHistMax - 1] = "SKIN";
+    @chatHistMsg[@chatHistMax - 1] = @skMsg;
+    @chatHistTeam[@chatHistMax - 1] = @skP.@team;
+}
+return 1;
+
+///// script @skin_apply_remote
+// argument0: an onlinePlayer instance. Re-evaluates that player's remote
+// skin from @skinMap (playerId -> hash hex). Call right after the instance's
+// @ID is (re)assigned and from the SKIN_NOTIFY handler. World context.
+// The slot the player used before is released whenever the re-evaluation
+// moves it to a different slot (or none), keeping the pool recyclable.
+@skP = argument0;
+@skOldSlot = @skP.@skinSlot;
+@skP.@skinSlot = -1;
+if(!ds_map_exists(@skinMap, @skP.@ID)){
+    @skP.@skinHash = "";
+    @skP.@skinState = 0;
+    if(@skOldSlot > 0){
+        @skin_slot_release(@skP, @skOldSlot);
+    }
+    return 0;
+}
+@skP.@skinHash = ds_map_find_value(@skinMap, @skP.@ID);
+// Fast path: the sender's directory name hint usually hits the identical
+// bundled package - verify with a single hash computation.
+@skNIdx = -1;
+if(ds_map_exists(@skinMapHint, @skP.@ID)){
+    @skNHint = ds_map_find_value(@skinMapHint, @skP.@ID);
+    for(@skI = 0; @skI < @skinCount; @skI += 1){
+        if(@skinDir[@skI] == @skNHint){
+            @skin_ensure_hash(@skI);
+            if(@skinHash[@skI] == @skP.@skinHash){
+                @skNIdx = @skI;
+            }
+            break;
+        }
+    }
+}
+if(@skNIdx < 0){
+    @skNIdx = @skin_resolve(@skP.@skinHash);
+}
+if(@skNIdx >= 0){
+    @skP.@skinSlot = @skin_slot_acquire(@skNIdx, @skP.@skinHash);
+    if(@skP.@skinSlot < 0){
+        @skP.@skinState = 3; // remote slots exhausted: explicit missing
+    }else{
+        @skP.@skinState = 2;
+    }
+}else if(@skinHashScan >= @skinCount){
+    @skin_remote_unknown(@skP);
+}else{
+    @skP.@skinState = 1; // pending the background hash scan
+}
+if(@skOldSlot > 0){
+    if(@skP.@skinSlot != @skOldSlot){
+        @skin_slot_release(@skP, @skOldSlot);
+    }
+}
+return 1;
+
+///// script @skin_net_send
+// Writes SKIN (opcode 12: 16-byte hash + directory-name hint; all-zero hash
+// = no skin) into @buffer and sends it. World context; the caller
+// (worldEndStep) guarantees the socket is connected.
+__ONLINE_buffer_clear(@buffer);
+#if not GMNET
+    __ONLINE_buffer_write_uint8(@buffer, 12);
+#endif
+#if GMNET
+    __ONLINE_buffer_write_u8(@buffer, 12);
+#endif
+@skHex = "";
+@skHint = "";
+if(@skinSel >= 0){
+    @skHex = string_lower(@skinHash[@skinSel]);
+    @skHint = @skinDir[@skinSel];
+}
+for(@skB = 0; @skB < 16; @skB += 1){
+    @skByte = 0;
+    if(@skHex != ""){
+        @skByte = (string_pos(string_char_at(@skHex, @skB * 2 + 1), "0123456789abcdef") - 1) * 16 + string_pos(string_char_at(@skHex, @skB * 2 + 2), "0123456789abcdef") - 1;
+    }
+    #if not GMNET
+        __ONLINE_buffer_write_uint8(@buffer, @skByte);
+    #endif
+    #if GMNET
+        __ONLINE_buffer_write_u8(@buffer, @skByte);
+    #endif
+}
+__ONLINE_buffer_write_string(@buffer, @skHint);
+__ONLINE_socket_write_message(@socket, @buffer);
 return 0;

@@ -1029,13 +1029,13 @@ if(@settingsOpen){
         draw_set_halign(fa_left);
         // Paged list paradigm copied from the Saves tab (12 rows per page).
         @skPageSize = 12;
-        @skPages = floor((@skinCount + @skPageSize - 1) / @skPageSize);
+        @skPages = floor((@skinVisCount + @skPageSize - 1) / @skPageSize);
         if(@skPages < 1) @skPages = 1;
         if(@skinPage >= @skPages) @skinPage = @skPages - 1;
         if(@skinPage < 0) @skinPage = 0;
         @skStart = @skinPage * @skPageSize;
         @skEnd = @skStart + @skPageSize;
-        if(@skEnd > @skinCount) @skEnd = @skinCount;
+        if(@skEnd > @skinVisCount) @skEnd = @skinVisCount;
         @rowY = @contentY + 2;
         @btnSkPFX = @spX + 8;
         @btnSkPFY = @rowY - 2;
@@ -1073,7 +1073,7 @@ if(@settingsOpen){
         draw_text(@btnSkPEX + @btnSkPEW/2, @rowY, ">>");
         draw_set_halign(fa_left);
         draw_set_color(c_gray);
-        draw_text(@spX + 180, @rowY, string(@skinCount) + " skin(s)");
+        draw_text(@spX + 180, @rowY, string(@skinVisCount) + " skin(s)");
         for(@skVI = @skStart; @skVI < @skEnd; @skVI += 1){
             @entIdx = @skVI - @skStart;
             @entY = @contentY + 28 + @entIdx * 22;
@@ -1106,15 +1106,15 @@ if(@settingsOpen){
                 draw_text(@spX + 246, @entY, "*");
             }
         }
-        if(@skinCount == 0){
+        if(@skinVisCount == 0){
             draw_set_color(c_gray);
             draw_set_halign(fa_center);
             draw_text(@spX + @spW/2, @contentY + 120, "No skins found in iwposkins\");
             draw_set_halign(fa_left);
         }
-        // Row after the list: Auto-download toggle (keyboard row @skinCount).
+        // Row after the list: Auto-download toggle (keyboard row @skinVisCount).
         @rowY = @contentY + 28 + 12 * 22 + 4;
-        if(@kbFocus == 1 && @kbRow[5] == @skinCount){
+        if(@kbFocus == 1 && @kbRow[5] == @skinVisCount){
             draw_set_color(make_color_rgb(220, 200, 60));
             draw_rectangle(@spX + 4, @rowY - 3, @spX + 272, @rowY + 21, true);
         }
@@ -1146,9 +1146,9 @@ if(@settingsOpen){
         draw_set_color(c_white);
         draw_text(@btnSkAdRX + @btnSkAdRW/2, @rowY, ">");
         draw_set_halign(fa_left);
-        // Last row: clear the current skin (keyboard row @skinCount + 1).
+        // Last row: clear the current skin (keyboard row @skinVisCount + 1).
         @rowY += 26;
-        if(@kbFocus == 1 && @kbRow[5] == @skinCount + 1){
+        if(@kbFocus == 1 && @kbRow[5] == @skinVisCount + 1){
             draw_set_color(make_color_rgb(220, 200, 60));
             draw_rectangle(@spX + 4, @rowY - 3, @spX + 272, @rowY + 21, true);
         }
@@ -1169,7 +1169,7 @@ if(@settingsOpen){
         // preview slot (row changes reset the dwell and unload the slot), so
         // fast scrolling never thrashes sprite_add.
         @skPvRow = -1;
-        if(@kbRow[5] >= 0 && @kbRow[5] < @skinCount) @skPvRow = @kbRow[5];
+        if(@kbRow[5] >= 0 && @kbRow[5] < @skinVisCount) @skPvRow = @kbRow[5];
         if(@skPvRow != @skinPrevRow){
             @skinPrevRow = @skPvRow;
             @skinPrevTimer = 0;
@@ -1483,16 +1483,16 @@ if(@settingsOpen){
             if(@mx >= @btnSkAdLX && @mx <= @btnSkAdLX + @btnSkAdLW && @my >= @btnSkAdLY && @my <= @btnSkAdLY + @btnSkAdLH){
                 @skinAutoDL = 1 - @skinAutoDL;
                 @skinAutoDLChanged = true;
-                @kbRow[5] = @skinCount;
+                @kbRow[5] = @skinVisCount;
             }
             if(@mx >= @btnSkAdRX && @mx <= @btnSkAdRX + @btnSkAdRW && @my >= @btnSkAdRY && @my <= @btnSkAdRY + @btnSkAdRH){
                 @skinAutoDL = 1 - @skinAutoDL;
                 @skinAutoDLChanged = true;
-                @kbRow[5] = @skinCount;
+                @kbRow[5] = @skinVisCount;
             }
             if(@mx >= @btnSkClrX && @mx <= @btnSkClrX + @btnSkClrW && @my >= @btnSkClrY && @my <= @btnSkClrY + @btnSkClrH){
                 @skin_clear();
-                @kbRow[5] = @skinCount + 1;
+                @kbRow[5] = @skinVisCount + 1;
             }
         }
 		if(@mx >= @btnCX && @mx <= @btnCX + @btnCW && @my >= @btnCY && @my <= @btnCY + @btnCH){

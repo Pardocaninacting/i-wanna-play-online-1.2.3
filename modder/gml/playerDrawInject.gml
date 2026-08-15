@@ -22,7 +22,7 @@ if(global.@skinOn){
 }
 if(@st >= 0){
     @f = image_index;
-    if(!@skin_draw(@st, @f, x, y, image_xscale, image_yscale, image_angle, image_alpha)){
+    if(!@skin_draw(@st, @f, x, y, image_xscale, image_yscale, image_angle, image_alpha, -1)){
         @st = -1;
     }
 }
@@ -86,5 +86,5 @@ if(@st >= 0){
             @ys = image_yscale;
         #endif
     #endif
-    @skin_draw(@st, @f, x, y, @xs, @ys, image_angle, image_alpha);
+    @skin_draw(@st, @f, x, y, @xs, @ys, image_angle, image_alpha, -1);
 }

@@ -171,6 +171,7 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				}
 			}
 			@oPlayer.@name = @createdName;
+			@skin_apply_remote(@oPlayer);
 			break;
 		case 1:
 			// DESTROYED
@@ -429,7 +430,11 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				}
 			}
 			if(@receivedTeam < 8){
-				ds_map_replace(@teamMap, @ID, @receivedTeam);
+				if(ds_map_exists(@teamMap, @ID)){
+					ds_map_replace(@teamMap, @ID, @receivedTeam);
+				}else{
+					ds_map_add(@teamMap, @ID, @receivedTeam);
+				}
 			}
 			break;
 		case 9:
@@ -469,7 +474,11 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				#endif
 				ds_map_add(@listSeen, @listID, 1);
 				if(@listTeam < 8){
-					ds_map_replace(@teamMap, @listID, @listTeam);
+					if(ds_map_exists(@teamMap, @listID)){
+						ds_map_replace(@teamMap, @listID, @listTeam);
+					}else{
+						ds_map_add(@teamMap, @listID, @listTeam);
+					}
 				}
 				@found = false;
 				for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
@@ -500,11 +509,14 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 						@oPlayer.@spectating = false;
 						if(@listTeam < 8) @oPlayer.@team = @listTeam;
 					}
+					@skin_apply_remote(@oPlayer);
 				}
 			}
 			for(@i = instance_number(@onlinePlayer) - 1; @i >= 0; @i -= 1){
 				@oPlayer = instance_find(@onlinePlayer, @i);
 				if(!ds_map_exists(@listSeen, @oPlayer.@ID)){
+					// Leaving player: give the remote-skin slot back to the pool.
+					@skin_slot_release(@oPlayer, @oPlayer.@skinSlot);
 					with(@oPlayer){
 						instance_destroy();
 					}
@@ -561,6 +573,48 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			}
 			@pingHead = (@pingHead + 1) mod @pingMax;
 			break;
+		case 13:
+			// SKIN NOTIFY: stringNT playerId, 16-byte hash, stringNT dir hint.
+			// Zero hash = the player has no skin selected.
+			@skNID = __ONLINE_buffer_read_string(@buffer);
+			@skNHex = "";
+			@skNZero = 0;
+			for(@skB = 0; @skB < 16; @skB += 1){
+				#if not GMNET
+					@skByte = __ONLINE_buffer_read_uint8(@buffer);
+				#endif
+				#if GMNET
+					@skByte = __ONLINE_buffer_read_u8(@buffer);
+				#endif
+				@skNZero = @skNZero | @skByte;
+				@skNHex += string_char_at("0123456789abcdef", (@skByte div 16) + 1) + string_char_at("0123456789abcdef", (@skByte mod 16) + 1);
+			}
+			@skNHint = __ONLINE_buffer_read_string(@buffer);
+			if(@skNZero == 0){
+				ds_map_delete(@skinMap, @skNID);
+				ds_map_delete(@skinMapHint, @skNID);
+			}else{
+				// GM8.0 ds_map_replace only replaces EXISTING keys (it never
+				// adds), so a fresh playerId needs the exists/add form.
+				if(ds_map_exists(@skinMap, @skNID)){
+					ds_map_replace(@skinMap, @skNID, @skNHex);
+				}else{
+					ds_map_add(@skinMap, @skNID, @skNHex);
+				}
+				if(ds_map_exists(@skinMapHint, @skNID)){
+					ds_map_replace(@skinMapHint, @skNID, @skNHint);
+				}else{
+					ds_map_add(@skinMapHint, @skNID, @skNHint);
+				}
+			}
+			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+				@oPlayer = instance_find(@onlinePlayer, @i);
+				if(@oPlayer.@ID == @skNID){
+					@skin_apply_remote(@oPlayer);
+					break;
+				}
+			}
+			break;
 		default:
 			break;
 	}
@@ -616,6 +670,7 @@ switch(@socketState){
 				@reconnecting = false;
 				@reconnectAttempts = 0;
 				@listCounter = room_speed * 15;
+				@skinNetDirty = true;
 				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
 					__ONLINE_buffer_write_uint8(@buffer, 3);
@@ -715,6 +770,51 @@ if(@mustQuit){
 }
 if(@reconnecting){
 	exit;
+}
+// SKINS: (re)announce the local selection once connected - the dirty flag is
+// set by skin select/clear, the boot-time restore and the reconnect path.
+if(@skinNetDirty){
+	if(@connected && __ONLINE_socket_get_state(@socket) == 2){
+		@skinNetDirty = false;
+		@skin_net_send();
+	}
+}
+// SKINS: background hash resolution. One skin per step (only while a remote
+// player is waiting on it): hash the next library skin and match it against
+// pending players. Once the library is fully scanned, whatever is still
+// pending is genuinely missing locally.
+if(@skinHashScan < @skinCount){
+	@skAnyPending = false;
+	for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+		@oPlayer = instance_find(@onlinePlayer, @i);
+		if(@oPlayer.@skinState == 1){
+			@skAnyPending = true;
+			break;
+		}
+	}
+	if(@skAnyPending){
+		@skin_ensure_hash(@skinHashScan);
+		for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+			@oPlayer = instance_find(@onlinePlayer, @i);
+			if(@oPlayer.@skinState == 1 && @oPlayer.@skinHash == @skinHash[@skinHashScan]){
+				@oPlayer.@skinSlot = @skin_slot_acquire(@skinHashScan, @oPlayer.@skinHash);
+				if(@oPlayer.@skinSlot < 0){
+					@oPlayer.@skinState = 3;
+				}else{
+					@oPlayer.@skinState = 2;
+				}
+			}
+		}
+		@skinHashScan += 1;
+		if(@skinHashScan >= @skinCount){
+			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+				@oPlayer = instance_find(@onlinePlayer, @i);
+				if(@oPlayer.@skinState == 1){
+					@skin_remote_unknown(@oPlayer);
+				}
+			}
+		}
+	}
 }
 // PERIODIC HEARTBEAT
 @hbCounter += 1;
@@ -2448,7 +2548,7 @@ if(@settingsOpen && @keybindEditing < 0){
     if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 5){
         // Rows 0..skinCount-1 are skins, row skinCount is Auto-download,
         // row skinCount+1 is Clear.
-        @skRows = @skinCount + 2;
+        @skRows = @skinVisCount + 2;
         if(@kbRow[5] > @skRows - 1) @kbRow[5] = @skRows - 1;
         if(keyboard_check_pressed(vk_up)){
             if(@kbRow[5] <= 0){
@@ -2457,37 +2557,37 @@ if(@settingsOpen && @keybindEditing < 0){
             }else{
                 @kbRow[5] -= 1;
             }
-            if(@kbRow[5] < @skinCount) @skinPage = @kbRow[5] div 12;
+            if(@kbRow[5] < @skinVisCount) @skinPage = @kbRow[5] div 12;
             @kbAct = 1;
         }
         if(keyboard_check_pressed(vk_down)){
             @kbRow[5] += 1;
             if(@kbRow[5] > @skRows - 1) @kbRow[5] = @skRows - 1;
-            if(@kbRow[5] < @skinCount) @skinPage = @kbRow[5] div 12;
+            if(@kbRow[5] < @skinVisCount) @skinPage = @kbRow[5] div 12;
             @kbAct = 1;
         }
         if(keyboard_check_pressed(vk_pageup)){
             @kbRow[5] -= 12;
             if(@kbRow[5] < 0) @kbRow[5] = 0;
-            if(@kbRow[5] < @skinCount) @skinPage = @kbRow[5] div 12;
+            if(@kbRow[5] < @skinVisCount) @skinPage = @kbRow[5] div 12;
             @kbAct = 1;
         }
         if(keyboard_check_pressed(vk_pagedown)){
             @kbRow[5] += 12;
             if(@kbRow[5] > @skRows - 1) @kbRow[5] = @skRows - 1;
-            if(@kbRow[5] < @skinCount) @skinPage = @kbRow[5] div 12;
+            if(@kbRow[5] < @skinVisCount) @skinPage = @kbRow[5] div 12;
             @kbAct = 1;
         }
-        if(@kbRow[5] == @skinCount && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_enter))){
+        if(@kbRow[5] == @skinVisCount && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_enter))){
             @skinAutoDL = 1 - @skinAutoDL;
             @skinAutoDLChanged = true;
             @kbAct = 1;
         }
-        if(@kbRow[5] < @skinCount && keyboard_check_pressed(vk_enter)){
+        if(@kbRow[5] < @skinVisCount && keyboard_check_pressed(vk_enter)){
             @skin_select(@kbRow[5]);
             @kbAct = 1;
         }
-        if(@kbRow[5] == @skinCount + 1 && keyboard_check_pressed(vk_enter)){
+        if(@kbRow[5] == @skinVisCount + 1 && keyboard_check_pressed(vk_enter)){
             @skin_clear();
             @kbAct = 1;
         }

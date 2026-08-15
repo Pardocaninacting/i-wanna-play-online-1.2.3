@@ -10,7 +10,27 @@ if(instance_exists(%arg0)){
 if(@oWorld != noone && @oWorld.@vis <= 1){
 	if(sprite_exists(sprite_index)){
 		@_drawAlpha = image_alpha;
-		draw_sprite_ext(sprite_index, image_index, x, y, image_xscale, image_yscale, image_angle, c_white, @_drawAlpha);
+		@_drewSkin = 0;
+		if(@skinState >= 1){
+			// Remote skin: resolved players draw from their slot; pending and
+			// explicitly-missing players draw the "Unknown" fallback package
+			// (slot 0) when it is installed.
+			@_st = @skin_state_of(sprite_index);
+			if(@_st >= 0){
+				@_slot = -1;
+				if(@skinState == 2){
+					@_slot = @skinSlot;
+				}else if(global.@rskUnknown == 1){
+					@_slot = 0;
+				}
+				if(@_slot >= 0){
+					@_drewSkin = @skin_draw(@_st, image_index, x, y, image_xscale, image_yscale, image_angle, @_drawAlpha, @_slot);
+				}
+			}
+		}
+		if(!@_drewSkin){
+			draw_sprite_ext(sprite_index, image_index, x, y, image_xscale, image_yscale, image_angle, c_white, @_drawAlpha);
+		}
 		if(@oWorld.@vis == 0){
 			@_alpha = draw_get_alpha();
 			@_color = draw_get_color();
@@ -86,18 +106,23 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 				#endif
 			}
 			// PLAYER NAME
+			// PLAYER NAME (explicit-missing remote skins get a [?] marker)
+			@nameShown = @name;
+			if(@skinState == 3){
+				@nameShown = @name + " [?]";
+			}
 			@nameDrawX = @xx;
 			@nameDrawY = @yy;
 			#if CJKTEXT
-			@nameDrawW = __ONLINE_cjk_string_width_ext(@name, -1, 9999);
-			@nameDrawH = __ONLINE_cjk_string_height_ext(@name, -1, 9999);
+			@nameDrawW = __ONLINE_cjk_string_width_ext(@nameShown, -1, 9999);
+			@nameDrawH = __ONLINE_cjk_string_height_ext(@nameShown, -1, 9999);
 			@nameDrawX = round(@xx - @nameDrawW * 0.5);
 			@nameDrawY = round(@yy - @nameDrawH * 0.5);
 			#endif
 			#if not GM80
 			#if not CJKTEXT
-			@nameDrawW = string_width(@name);
-			@nameDrawH = string_height(@name);
+			@nameDrawW = string_width(@nameShown);
+			@nameDrawH = string_height(@nameShown);
 			@nameDrawX = round(@xx - @nameDrawW * 0.5);
 			@nameDrawY = round(@yy - @nameDrawH * 0.5);
 			draw_set_halign(fa_left);
@@ -109,26 +134,26 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 			#if GM80
 			fw_draw_set_halign(fa_center);
 			fw_draw_set_valign(fa_center);
-			__ONLINE_fw_use_font(@name);
-			fw_draw_text_ext(@xx+@border, @yy, @name, 9999);
-			fw_draw_text_ext(@xx, @yy+@border, @name, 9999);
-			fw_draw_text_ext(@xx-@border, @yy, @name, 9999);
-			fw_draw_text_ext(@xx, @yy-@border, @name, 9999);
+			__ONLINE_fw_use_font(@nameShown);
+			fw_draw_text_ext(@xx+@border, @yy, @nameShown, 9999);
+			fw_draw_text_ext(@xx, @yy+@border, @nameShown, 9999);
+			fw_draw_text_ext(@xx-@border, @yy, @nameShown, 9999);
+			fw_draw_text_ext(@xx, @yy-@border, @nameShown, 9999);
 			#endif
 			#if CJKTEXT
 			global.__ONLINE_cjkHalign = 0;
 			global.__ONLINE_cjkValign = 0;
-			__ONLINE_cjk_draw_text(@nameDrawX+@border, @nameDrawY, @name, 9999);
-			__ONLINE_cjk_draw_text(@nameDrawX, @nameDrawY+@border, @name, 9999);
-			__ONLINE_cjk_draw_text(@nameDrawX-@border, @nameDrawY, @name, 9999);
-			__ONLINE_cjk_draw_text(@nameDrawX, @nameDrawY-@border, @name, 9999);
+			__ONLINE_cjk_draw_text(@nameDrawX+@border, @nameDrawY, @nameShown, 9999);
+			__ONLINE_cjk_draw_text(@nameDrawX, @nameDrawY+@border, @nameShown, 9999);
+			__ONLINE_cjk_draw_text(@nameDrawX-@border, @nameDrawY, @nameShown, 9999);
+			__ONLINE_cjk_draw_text(@nameDrawX, @nameDrawY-@border, @nameShown, 9999);
 			#endif
 			#if not GM80
 			#if not CJKTEXT
-			draw_text(@nameDrawX+@border, @nameDrawY, @name);
-			draw_text(@nameDrawX, @nameDrawY+@border, @name);
-			draw_text(@nameDrawX-@border, @nameDrawY, @name);
-			draw_text(@nameDrawX, @nameDrawY-@border, @name);
+			draw_text(@nameDrawX+@border, @nameDrawY, @nameShown);
+			draw_text(@nameDrawX, @nameDrawY+@border, @nameShown);
+			draw_text(@nameDrawX-@border, @nameDrawY, @nameShown);
+			draw_text(@nameDrawX, @nameDrawY-@border, @nameShown);
 			#endif
 			#endif
 			@_tc = c_white;
@@ -138,14 +163,14 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 			draw_set_color(@_tc);
 			draw_set_alpha(@_drawAlpha);
 			#if GM80
-			fw_draw_text_ext(@xx, @yy, @name, 9999);
+			fw_draw_text_ext(@xx, @yy, @nameShown, 9999);
 			#endif
 			#if CJKTEXT
-			__ONLINE_cjk_draw_text(@nameDrawX, @nameDrawY, @name, 9999);
+			__ONLINE_cjk_draw_text(@nameDrawX, @nameDrawY, @nameShown, 9999);
 			#endif
 			#if not GM80
 			#if not CJKTEXT
-			draw_text(@nameDrawX, @nameDrawY, @name);
+			draw_text(@nameDrawX, @nameDrawY, @nameShown);
 			#endif
 			#endif
 			draw_set_alpha(@_alpha);

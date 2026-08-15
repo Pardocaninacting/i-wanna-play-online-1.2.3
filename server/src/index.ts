@@ -55,6 +55,9 @@ interface TcpPlayer {
     recvBuf: Buffer;
     /** Has the client sent its first CREATED message yet? Used to gate roster replay. */
     rosterSent: boolean;
+    /** 16-byte skin hash + directory-name hint; null hash = no skin selected. */
+    skinHash: Buffer | null;
+    skinHint: string;
 }
 
 /* ── State ─────────────────────────────────────────── */
@@ -77,6 +80,14 @@ const CUSTOM_DATA_V2_PROTOCOL_VERSION = 2;
 
 function supportsCustomDataV2(player: TcpPlayer): boolean {
     return player.protocolVersion >= CUSTOM_DATA_V2_PROTOCOL_VERSION;
+}
+
+// Skin exchange (SKIN / SKIN_NOTIFY) is gated on protocol v3: older clients
+// are never sent opcode 13 (they would kick themselves on the unknown opcode).
+const SKIN_PROTOCOL_VERSION = 3;
+
+function supportsSkins(player: TcpPlayer): boolean {
+    return player.protocolVersion >= SKIN_PROTOCOL_VERSION;
 }
 
 function getTeamSync(game: string, team: number, create: boolean): Map<string, SyncEntry> | null {
@@ -250,6 +261,23 @@ function sendRosterTo(player: TcpPlayer): void {
         spectatingMsg.writeStringNT(p.id);
         spectatingMsg.writeUInt8(0xFE);
         sendTo(player, spectatingMsg);
+    }
+    // Replay skin state: LIST responses double as the skin catch-up channel
+    // (join, periodic reconcile and post-game_restart room-change requests all
+    // land here), so remote skins recover without a dedicated resync path.
+    if (supportsSkins(player)) {
+        let skinCount = 0;
+        for (const p of peers) {
+            if (!p.skinHash) continue;
+            const skinMsg = new SmartBuffer();
+            skinMsg.writeUInt8(TcpMsg.SKIN_NOTIFY);
+            skinMsg.writeStringNT(p.id);
+            skinMsg.writeBuffer(p.skinHash);
+            skinMsg.writeStringNT(p.skinHint);
+            sendTo(player, skinMsg);
+            skinCount++;
+        }
+        if (skinCount > 0) log.info(`roster skins -> ${player.id} (${JSON.stringify(player.name)}): ${skinCount}`);
     }
 }
 
@@ -594,6 +622,36 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             sendRosterTo(player);
             break;
 
+        case TcpMsg.SKIN:
+            // 16-byte hash + stringNT dir-name hint. All-zero hash = no skin.
+            if (msg.remaining() < 17 || msg.remaining() > 300) { quitPlayer(player, "skin_bad_size"); return; }
+            {
+                const hash = msg.readBuffer(16);
+                const hint = msg.readStringNT().slice(0, 255);
+                if (msg.remaining() > 0) { quitPlayer(player, "skin_extra_bytes"); return; }
+                player.skinHint = hint;
+                player.skinHash = hash.every(b => b === 0) ? null : hash;
+                log.info(`SKIN from ${player.id} (${JSON.stringify(player.name)}) game=${JSON.stringify(player.game)} hash=${player.skinHash ? player.skinHash.toString("hex").slice(0, 8) : "-"} hint=${JSON.stringify(player.skinHint)}`);
+                // Relay to same-game peers that understand skins (version gate:
+                // older clients must never see opcode 13).
+                const notify = new SmartBuffer();
+                notify.writeUInt8(TcpMsg.SKIN_NOTIFY);
+                notify.writeStringNT(player.id);
+                notify.writeBuffer(hash);
+                notify.writeStringNT(player.skinHint);
+                const framed = frameMessage(notify.toBuffer());
+                notify.destroy();
+                let relayCount = 0;
+                for (const p of tcpPlayers) {
+                    if (p.id === player.id || p.game !== player.game || player.game === "") continue;
+                    if (p.quitted || !supportsSkins(p)) continue;
+                    p.socket.write(framed);
+                    relayCount++;
+                }
+                if (relayCount > 0) log.info(`SKIN relay ${player.id} -> ${relayCount} peers`);
+            }
+            break;
+
         default:
             quitPlayer(player, "unknown_opcode");
     }
@@ -621,6 +679,8 @@ createServer((socket: Socket) => {
         quitted: false,
         recvBuf: Buffer.alloc(0),
         rosterSent: false,
+        skinHash: null,
+        skinHint: "",
     };
 
     tcpPlayers.push(player);
