@@ -136,6 +136,11 @@ ds_list_destroy(@obj_list);
 #endif
 ds_map_destroy(@teamMap);
 __ONLINE_buffer_destroy(@buffer);
+__ONLINE_buffer_destroy(@dlBuffer);
+if(@skinDlFile >= 0){
+    file_bin_close(@skinDlFile);
+    @skinDlFile = -1;
+}
 #if TEMPFILE
 	if(!file_exists("tempOnline")){
 #endif

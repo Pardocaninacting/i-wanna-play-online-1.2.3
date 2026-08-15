@@ -208,6 +208,31 @@ for(@scI = 0; @scI < 16; @scI += 1){
 for(@skH = 0; @skH < 8; @skH += 1){
     @skinHint[@skH] = "";
 }
+// S3 auto-download (see worldCreate.gml for the full commentary).
+@dlBuffer = buffer_create();
+@skinDlFile = -1;
+@skinDlState = 0;
+@skinDlWait = 0;
+@skinDlHash = "";
+@skinDlHint = "";
+@skinDlDir = "";
+@skinDlCount = 0;
+@skinDlIdx = 0;
+@skinDlPos = 0;
+@skinDlQCount = 0;
+@skinDlFailNext = 0;
+@skinDlTmp = "";
+for(@skI = 0; @skI < 8; @skI += 1){
+    @skinDlQ[@skI] = "";
+    @skinDlQHint[@skI] = "";
+}
+for(@skI = 0; @skI < 16; @skI += 1){
+    @skinDlFail[@skI] = "";
+}
+for(@skI = 0; @skI < 32; @skI += 1){
+    @skinDlName[@skI] = "";
+    @skinDlFSize[@skI] = 0;
+}
 @skinMap = ds_map_create();
 @skinMapHint = ds_map_create();
 global.@rskCount = 0;
@@ -304,6 +329,7 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		@skinAutoDL = ini_read_real("config", "skinAutoDL", 1);
 		@skinSavedHash = ini_read_string("config", "skin", "");
 		@skinSavedDir = ini_read_string("config", "skinDir", "");
+		@skinDlTmp = ini_read_string("config", "skinDlTmp", "");
 		@syncEnabled = ini_read_real("sync", "sync_enabled", @syncEnabled);
 		@syncEntryCount = ini_read_real("sync", "entryCount", @syncEntryCount);
 		if(@syncEntryCount < 0) @syncEntryCount = 0;
@@ -319,6 +345,14 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		}
 		ini_close();
 	}
+}
+// SKINS: wipe a stale half-downloaded package (see worldCreate.gml).
+if(@skinDlTmp != ""){
+	@skin_dl_wipe(@skinDlTmp);
+	ini_open("@config.ini");
+	ini_write_string("config", "skinDlTmp", "");
+	ini_close();
+	@skinDlTmp = "";
 }
 if (!@cfgRead && file_exists(@serverPath)) {
 	@file = file_text_open_read(@serverPath);
@@ -707,6 +741,9 @@ if(@skinUnknown >= 0){
         global.@rskHash[0] = "<unknown>";
         global.@rskCount = 1;
         global.@rskUnknown = 1;
+        // @skin_slot_load already saved, but @rskCount was still 0 back then
+        // so slot 0 was skipped: re-save now that the slot counts.
+        @skin_spr_save();
     }
 }
 // S2: (re)apply remote skins to any pre-existing player instances.

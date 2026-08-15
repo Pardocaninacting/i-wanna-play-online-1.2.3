@@ -14,6 +14,10 @@ export enum TcpMsg {
                       // Legacy clients send 9 bytes (no room); current clients send 13 bytes (room first).
     SKIN        = 12, // C→S: 16-byte hash + stringNT dir-name hint (all-zero hash = no skin). Protocol v3+.
     SKIN_NOTIFY = 13, // S→C: stringNT playerId, 16-byte hash, stringNT dir hint. Only sent to protocol v3+ clients.
+    SKIN_GET    = 14, // C→S: 16-byte hash. Requests the package manifest from the server skin library. Protocol v3+.
+    SKIN_MANIFEST = 15, // S→C: 16-byte hash, u8 status (0=ok, 1=not found/invalid); when ok: u8 fileCount, [stringNT name, u32 size] × count.
+    SKIN_FILE_REQ = 16, // C→S: 16-byte hash + stringNT file name (must be one of the manifest entries). Protocol v3+.
+    SKIN_FILE   = 17, // S→C: 16-byte hash, stringNT name, u8 status; when ok: u32 totalSize, u32 offset, u16 chunkLen, chunkLen raw bytes (16 KiB chunks, in order).
 }
 
 export enum UdpMsg {

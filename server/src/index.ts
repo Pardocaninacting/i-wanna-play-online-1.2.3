@@ -11,9 +11,11 @@ import {
     MAX_SYNC_ENTRIES, MAX_SYNC_NAME_LEN, MAX_TEAMS,
     TCP_RATE_LIMIT, UDP_RATE_LIMIT,
     RATING_COOLDOWN_SEC, RATING_MAX_PER_GAME, RATING_DATA_DIR,
+    SKIN_DATA_DIR, SKIN_MAX_FILES, SKIN_MAX_FILE_SIZE, SKIN_MAX_TOTAL_SIZE,
+    SKIN_CHUNK, SKIN_DL_MAX_REQ_PER_MIN, SKIN_DL_MAX_BYTES_PER_MIN,
 } from "./config.js";
 import { TcpMsg, UdpMsg, varintByteLen, readVarint, frameMessage } from "./protocol.js";
-import { existsSync, mkdirSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
@@ -58,6 +60,11 @@ interface TcpPlayer {
     /** 16-byte skin hash + directory-name hint; null hash = no skin selected. */
     skinHash: Buffer | null;
     skinHint: string;
+    /** Skin-download rate limiting window (SKIN_GET / SKIN_FILE_REQ). */
+    skinDlWindowStart: number;
+    skinDlReqs: number;
+    skinDlBytes: number;
+    skinDlLimited: boolean;
 }
 
 /* ── State ─────────────────────────────────────────── */
@@ -88,6 +95,66 @@ const SKIN_PROTOCOL_VERSION = 3;
 
 function supportsSkins(player: TcpPlayer): boolean {
     return player.protocolVersion >= SKIN_PROTOCOL_VERSION;
+}
+
+/* ── Skin library (hash-addressed read-only store) ─── */
+
+interface SkinFileEntry { name: string; size: number; }
+
+const skinManifestCache = new Map<string, SkinFileEntry[] | null>();
+// Manifests mirror the client-side package hash scope: regular files directly
+// inside the package dir (subdirectories are not part of the hash).
+const SKIN_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,63}$/;
+
+if (!existsSync(SKIN_DATA_DIR)) mkdirSync(SKIN_DATA_DIR, { recursive: true });
+
+function skinManifest(hex: string): SkinFileEntry[] | null {
+    if (skinManifestCache.has(hex)) return skinManifestCache.get(hex)!;
+    let manifest: SkinFileEntry[] | null = null;
+    if (/^[0-9a-f]{32}$/.test(hex)) {
+        try {
+            const dir = join(SKIN_DATA_DIR, hex);
+            const entries: SkinFileEntry[] = [];
+            let total = 0;
+            for (const f of readdirSync(dir)) {
+                if (!SKIN_NAME_RE.test(f) || f.includes("..")) continue;
+                const st = statSync(join(dir, f));
+                if (!st.isFile()) continue;
+                entries.push({ name: f, size: st.size });
+                total += st.size;
+            }
+            if (entries.length > 0 && entries.length <= SKIN_MAX_FILES && total <= SKIN_MAX_TOTAL_SIZE
+                && entries.every(e => e.size <= SKIN_MAX_FILE_SIZE)) {
+                entries.sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+                manifest = entries;
+            }
+        } catch {}
+    }
+    skinManifestCache.set(hex, manifest);
+    return manifest;
+}
+
+// Per-player download budget. Over-limit requests are dropped silently (the
+// client times out and stays in its explicit-missing state) — a misbehaving
+// or buggy client must not be able to amplify traffic through file chunks.
+function skinDlAllow(player: TcpPlayer, bytes: number): boolean {
+    const now = Date.now();
+    if (now - player.skinDlWindowStart >= 60000) {
+        player.skinDlWindowStart = now;
+        player.skinDlReqs = 0;
+        player.skinDlBytes = 0;
+        player.skinDlLimited = false;
+    }
+    player.skinDlReqs += 1;
+    player.skinDlBytes += bytes;
+    if (player.skinDlReqs > SKIN_DL_MAX_REQ_PER_MIN || player.skinDlBytes > SKIN_DL_MAX_BYTES_PER_MIN) {
+        if (!player.skinDlLimited) {
+            player.skinDlLimited = true;
+            log.info(`SKIN_DL rate limited ${player.id} (${JSON.stringify(player.name)})`);
+        }
+        return false;
+    }
+    return true;
 }
 
 function getTeamSync(game: string, team: number, create: boolean): Map<string, SyncEntry> | null {
@@ -652,6 +719,81 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             }
             break;
 
+        case TcpMsg.SKIN_GET:
+            // 16-byte hash -> package manifest from the server skin library.
+            if (!supportsSkins(player)) { quitPlayer(player, "skin_get_version"); return; }
+            if (msg.remaining() !== 16) { quitPlayer(player, "skin_get_bad_size"); return; }
+            {
+                const hash = msg.readBuffer(16);
+                const hex = hash.toString("hex");
+                if (!skinDlAllow(player, 0)) break;
+                const reply = new SmartBuffer();
+                reply.writeUInt8(TcpMsg.SKIN_MANIFEST);
+                reply.writeBuffer(hash);
+                const manifest = skinManifest(hex);
+                if (!manifest) {
+                    reply.writeUInt8(1);
+                    sendTo(player, reply);
+                    log.info(`SKIN_GET ${player.id} (${JSON.stringify(player.name)}) hash=${hex.slice(0, 8)} -> not found`);
+                    break;
+                }
+                reply.writeUInt8(0);
+                reply.writeUInt8(manifest.length);
+                for (const f of manifest) {
+                    reply.writeStringNT(f.name);
+                    reply.writeUInt32LE(f.size);
+                }
+                sendTo(player, reply);
+                log.info(`SKIN_GET ${player.id} (${JSON.stringify(player.name)}) hash=${hex.slice(0, 8)} -> ${manifest.length} files`);
+            }
+            break;
+
+        case TcpMsg.SKIN_FILE_REQ:
+            // 16-byte hash + stringNT name (must be a manifest entry) -> file
+            // content in 16 KiB SKIN_FILE chunks (offset-ordered).
+            if (!supportsSkins(player)) { quitPlayer(player, "skin_file_version"); return; }
+            if (msg.remaining() < 17 || msg.remaining() > 120) { quitPlayer(player, "skin_file_bad_size"); return; }
+            {
+                const hash = msg.readBuffer(16);
+                const name = msg.readStringNT();
+                if (msg.remaining() > 0) { quitPlayer(player, "skin_file_extra"); return; }
+                const hex = hash.toString("hex");
+                const manifest = skinManifest(hex);
+                const entry = manifest ? manifest.find(f => f.name === name) : undefined;
+                let data: Buffer | null = null;
+                if (entry) {
+                    try { data = readFileSync(join(SKIN_DATA_DIR, hex, name)); } catch { data = null; }
+                }
+                if (!entry || data === null) {
+                    if (!skinDlAllow(player, 0)) break;
+                    const reply = new SmartBuffer();
+                    reply.writeUInt8(TcpMsg.SKIN_FILE);
+                    reply.writeBuffer(hash);
+                    reply.writeStringNT(name.slice(0, 64));
+                    reply.writeUInt8(1); // not found / unreadable
+                    sendTo(player, reply);
+                    break;
+                }
+                if (!skinDlAllow(player, data.length)) break; // limiter drop: client times out
+                log.info(`SKIN_FILE_REQ ${player.id} (${JSON.stringify(player.name)}) hash=${hex.slice(0, 8)} file=${JSON.stringify(name)} (${data.length}B)`);
+                // Empty files still get one terminal chunk so the client sees pos==size.
+                for (let off = 0; off < Math.max(data.length, 1); off += SKIN_CHUNK) {
+                    const chunk = data.subarray(off, Math.min(off + SKIN_CHUNK, data.length));
+                    const m = new SmartBuffer();
+                    m.writeUInt8(TcpMsg.SKIN_FILE);
+                    m.writeBuffer(hash);
+                    m.writeStringNT(name);
+                    m.writeUInt8(0);
+                    m.writeUInt32LE(data.length);
+                    m.writeUInt32LE(off);
+                    m.writeUInt16LE(chunk.length);
+                    m.writeBuffer(chunk);
+                    sendTo(player, m);
+                    if (data.length === 0) break;
+                }
+            }
+            break;
+
         default:
             quitPlayer(player, "unknown_opcode");
     }
@@ -681,6 +823,10 @@ createServer((socket: Socket) => {
         rosterSent: false,
         skinHash: null,
         skinHint: "",
+        skinDlWindowStart: 0,
+        skinDlReqs: 0,
+        skinDlBytes: 0,
+        skinDlLimited: false,
     };
 
     tcpPlayers.push(player);

@@ -28,3 +28,12 @@ export const UDP_RATE_LIMIT = 100; // per second
 export const RATING_COOLDOWN_SEC = 300;     // 5 min between ratings per player
 export const RATING_MAX_PER_GAME = 500;     // max stored ratings per game
 export const RATING_DATA_DIR = process.env.RATING_DATA_DIR || "./data/ratings";
+
+// Hash-addressed read-only skin package library: <SKIN_DATA_DIR>/<32-hex>/<files>
+export const SKIN_DATA_DIR = process.env.SKIN_DATA_DIR || "./data/skins";
+export const SKIN_MAX_FILES = 32;                    // manifest entry cap per package
+export const SKIN_MAX_FILE_SIZE = 1024 * 1024;       // 1 MiB per package file
+export const SKIN_MAX_TOTAL_SIZE = 4 * 1024 * 1024;  // 4 MiB per package
+export const SKIN_CHUNK = 16384;                     // SKIN_FILE payload bytes per message
+export const SKIN_DL_MAX_REQ_PER_MIN = 60;           // per-player manifest+file requests
+export const SKIN_DL_MAX_BYTES_PER_MIN = 8 * 1024 * 1024; // per-player served file bytes

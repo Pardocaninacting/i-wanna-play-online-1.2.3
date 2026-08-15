@@ -12,8 +12,8 @@
 // section per state with frames/framewidth/originx/originy.
 //
 // Calling context matters:
-// - scan/parse/ensure_hash/select/clear/unload/prev_* run with self = the
-//   world instance (they touch the world instance variables from
+// - scan/parse/ensure_hash/select/clear/unload/prev_*/dl_* run with self =
+//   the world instance (they touch the world instance variables from
 //   worldCreate.gml).
 // - state_of/draw run with self = the player instance (injected Draw code),
 //   so they may ONLY read the global mirror (global.__ONLINE_skin*).
@@ -41,7 +41,9 @@ return 0;
 // pass over the 4096 slot cap would stall GM8 games that game_restart on
 // every load). Every reader stays below @skinCount, and @skin_parse fills
 // the per-state fields before they are read, so slots beyond the count are
-// never touched uninitialized.
+// never touched uninitialized. Folders with no regular files are skipped:
+// a wiped half-download leaves an empty folder behind (GM8.0 has no
+// directory-delete), and it must never become a selectable entry.
 // The reserved "Unknown" package (unknown-skin fallback for remote players)
 // is moved to the LAST slot and excluded from @skinVisCount: the menu lists
 // only [0, @skinVisCount), while hash matching and the fallback draw may use
@@ -50,34 +52,22 @@ return 0;
 @skinVisCount = 0;
 @skinUnknown = -1;
 @skHiddenDir = "";
+@skListN = 0;
 if(!directory_exists("iwposkins")){
     return 0;
 }
 @skBase = "iwposkins" + chr(92);
+// Pass 1: collect subfolder names only. file_find has a single global search
+// state on both engines, so the per-folder content check below cannot run
+// inside this loop (it would clobber the enumeration).
 #if STUDIO
     // GMS: fa_directory lists files AND folders; keep only real folders.
     @skEntry = file_find_first(@skBase + "*", fa_directory);
-    while(@skEntry != "" && @skinCount < 4096){
+    while(@skEntry != "" && @skListN < 4096){
         if(@skEntry != "." && @skEntry != ".."){
             if(directory_exists(@skBase + @skEntry)){
-                if(string_lower(@skEntry) == "unknown"){
-                    @skHiddenDir = @skEntry;
-                }else{
-                    @skinDir[@skinCount] = @skEntry;
-                    @skinName[@skinCount] = "";
-                    @skinMaker[@skinCount] = "";
-                    @skinSource[@skinCount] = "";
-                    @skinHash[@skinCount] = "";
-                    @skinParsed[@skinCount] = 0;
-                    for(@skSt = 0; @skSt < 7; @skSt += 1){
-                        @skinHas[@skinCount, @skSt] = 0;
-                        @skinFrames[@skinCount, @skSt] = 0;
-                        @skinFw[@skinCount, @skSt] = 32;
-                        @skinOx[@skinCount, @skSt] = 17;
-                        @skinOy[@skinCount, @skSt] = 23;
-                    }
-                    @skinCount += 1;
-                }
+                @skList[@skListN] = @skEntry;
+                @skListN += 1;
             }
         }
         @skEntry = file_find_next();
@@ -87,31 +77,51 @@ if(!directory_exists("iwposkins")){
 #if not STUDIO
     // GM8: fa_directory lists folders only, no extra filter needed.
     @skEntry = file_find_first(@skBase + "*", fa_directory);
-    while(@skEntry != "" && @skinCount < 4096){
+    while(@skEntry != "" && @skListN < 4096){
         if(@skEntry != "." && @skEntry != ".."){
-            if(string_lower(@skEntry) == "unknown"){
-                @skHiddenDir = @skEntry;
-            }else{
-                @skinDir[@skinCount] = @skEntry;
-                @skinName[@skinCount] = "";
-                @skinMaker[@skinCount] = "";
-                @skinSource[@skinCount] = "";
-                @skinHash[@skinCount] = "";
-                @skinParsed[@skinCount] = 0;
-                for(@skSt = 0; @skSt < 7; @skSt += 1){
-                    @skinHas[@skinCount, @skSt] = 0;
-                    @skinFrames[@skinCount, @skSt] = 0;
-                    @skinFw[@skinCount, @skSt] = 32;
-                    @skinOx[@skinCount, @skSt] = 17;
-                    @skinOy[@skinCount, @skSt] = 23;
-                }
-                @skinCount += 1;
-            }
+            @skList[@skListN] = @skEntry;
+            @skListN += 1;
         }
         @skEntry = file_find_next();
     }
     file_find_close();
 #endif
+// Pass 2: keep only folders holding at least one regular file. A wiped
+// half-download leaves an EMPTY folder behind (GM8.0 has no directory
+// delete), and it must never be listed as a selectable skin.
+for(@skI = 0; @skI < @skListN; @skI += 1){
+    @skEntry = @skList[@skI];
+    @skHasFile = false;
+    @skE2 = file_find_first(@skBase + @skEntry + chr(92) + "*.*", 0);
+    while(@skE2 != ""){
+        if(!directory_exists(@skBase + @skEntry + chr(92) + @skE2)){
+            @skHasFile = true;
+            break;
+        }
+        @skE2 = file_find_next();
+    }
+    file_find_close();
+    if(!@skHasFile){
+        // empty folder: skip (an empty "unknown" is ignored too)
+    }else if(string_lower(@skEntry) == "unknown"){
+        @skHiddenDir = @skEntry;
+    }else if(@skinCount < 4096){
+        @skinDir[@skinCount] = @skEntry;
+        @skinName[@skinCount] = "";
+        @skinMaker[@skinCount] = "";
+        @skinSource[@skinCount] = "";
+        @skinHash[@skinCount] = "";
+        @skinParsed[@skinCount] = 0;
+        for(@skSt = 0; @skSt < 7; @skSt += 1){
+            @skinHas[@skinCount, @skSt] = 0;
+            @skinFrames[@skinCount, @skSt] = 0;
+            @skinFw[@skinCount, @skSt] = 32;
+            @skinOx[@skinCount, @skSt] = 17;
+            @skinOy[@skinCount, @skSt] = 23;
+        }
+        @skinCount += 1;
+    }
+}
 // Reserved fallback package: last slot, hidden from the selectable list.
 @skinVisCount = @skinCount;
 if(@skHiddenDir != "" && @skinCount < 4096){
@@ -236,6 +246,7 @@ for(@skSt = 0; @skSt < 7; @skSt += 1){
 @skinSel = @skI;
 @skinLoaded = @skI;
 @skin_mirror();
+@skin_spr_save();
 @skinNetDirty = true;
 ini_open("@config.ini");
 ini_write_string("config", "skin", @skinHash[@skI]);
@@ -249,6 +260,7 @@ return 1;
 @skinSel = -1;
 @skinLoaded = -1;
 @skin_mirror();
+@skin_spr_save();
 @skinNetDirty = true;
 ini_open("@config.ini");
 ini_write_string("config", "skin", "");
@@ -266,6 +278,38 @@ for(@skSt = 0; @skSt < 7; @skSt += 1){
 }
 @skinLoaded = -1;
 return 0;
+
+///// script @skin_spr_save
+// Persists every sprite this process created with sprite_add as
+// id,width,height,frames, so the next world Create can free exactly those
+// after a game_restart instead of sweeping the whole dynamic-sprite range
+// (which also hits sprites the GAME created at runtime). The extra fields let
+// the reader reject a leftover list from a previous process: sprite_add hands
+// out the same ids every run, so id alone would false-positive on a fresh
+// launch. Call after any batch that adds or frees skin sprites; world
+// context, own variable names so callers' loops survive.
+@skSvList = "";
+for(@skSvSt = 0; @skSvSt < 7; @skSvSt += 1){
+    if(@skinSpr[@skSvSt] >= 0) @skSvList += @skin_spr_rec(@skinSpr[@skSvSt]);
+    if(@skinPrevSpr[@skSvSt] >= 0) @skSvList += @skin_spr_rec(@skinPrevSpr[@skSvSt]);
+}
+for(@skSvSlot = 0; @skSvSlot < global.@rskCount; @skSvSlot += 1){
+    for(@skSvSt = 0; @skSvSt < 7; @skSvSt += 1){
+        if(global.@rskSpr[@skSvSlot, @skSvSt] >= 0) @skSvList += @skin_spr_rec(global.@rskSpr[@skSvSlot, @skSvSt]);
+    }
+}
+ini_open("@config.ini");
+ini_write_string("config", "skinSprIds", @skSvList);
+ini_close();
+return 0;
+
+///// script @skin_spr_rec
+// argument0: a sprite id. Returns its "id,width,height,frames," record, or ""
+// when the sprite is gone.
+if(!sprite_exists(argument0)){
+    return "";
+}
+return string(argument0) + "," + string(sprite_get_width(argument0)) + "," + string(sprite_get_height(argument0)) + "," + string(sprite_get_number(argument0)) + ",";
 
 ///// script @skin_mirror
 // Cheap per-frame sync of the selected skin into the global draw state that
@@ -392,6 +436,7 @@ if(@skinHas[@skI, 0]){
     global.@skinPrevSpr[0] = @skinPrevSpr[0];
 }
 @skinPrevLoaded = @skI;
+@skin_spr_save();
 return 1;
 
 ///// script @skin_prev_unload
@@ -404,6 +449,7 @@ for(@skSt = 0; @skSt < 7; @skSt += 1){
     }
 }
 @skinPrevLoaded = -1;
+@skin_spr_save();
 return 0;
 
 ///// script @skin_slot_spr
@@ -449,6 +495,7 @@ for(@skSt = 0; @skSt < 7; @skSt += 1){
         global.@rskFrames[@skSlot, @skSt] = @skinFrames[@skI, @skSt];
     }
 }
+@skin_spr_save();
 return 1;
 
 ///// script @skin_slot_acquire
@@ -513,11 +560,15 @@ for(@skSt = 0; @skSt < 7; @skSt += 1){
     global.@rskFrames[@skSlot, @skSt] = 0;
 }
 global.@rskHash[@skSlot] = "";
+@skin_spr_save();
 return 1;
 
 ///// script @skin_remote_unknown
 // argument0: an onlinePlayer instance whose hash failed local resolution.
-// Marks it explicitly-missing and pushes a one-per-hash local chat notice.
+// Marks it explicitly-missing. With auto-download on, the hash is queued for
+// a server fetch instead of an immediate chat notice (a notice is pushed only
+// when the download later fails or cannot be queued); with auto-download off,
+// a one-per-hash local chat notice is pushed right away.
 // World context (touches the chat history arrays).
 @skP = argument0;
 @skP.@skinState = 3;
@@ -530,6 +581,16 @@ for(@skH = 0; @skH < 8; @skH += 1){
 }
 @skinHint[@skinHintNext] = @skHash;
 @skinHintNext = (@skinHintNext + 1) mod 8;
+if(@skinAutoDL){
+    @skHint2 = "";
+    if(ds_map_exists(@skinMapHint, @skP.@ID)){
+        @skHint2 = ds_map_find_value(@skinMapHint, @skP.@ID);
+    }
+    if(@skin_dl_enqueue(@skHash, @skHint2) > 0){
+        return 1;
+    }
+    // Queue full or already failed this session: fall through to the notice.
+}
 @skMsg = "Skin missing for " + @skP.@name + " (" + string_copy(@skHash, 1, 8) + ")";
 if(@chatHistCount < @chatHistMax){
     @chatHistName[@chatHistCount] = "SKIN";
@@ -635,3 +696,339 @@ for(@skB = 0; @skB < 16; @skB += 1){
 __ONLINE_buffer_write_string(@buffer, @skHint);
 __ONLINE_socket_write_message(@socket, @buffer);
 return 0;
+
+///// script @skin_dl_sanitize
+// argument0: a directory-name hint (from the remote player's SKIN_NOTIFY).
+// Returns a name safe to create inside iwposkins\: whitelist [A-Za-z0-9._-],
+// max 48 chars, no pure-dot names, no ".." sequences, and never the reserved
+// "unknown" (that folder is the hidden fallback package). "" = unusable.
+@skS = "";
+@skNonDot = 0;
+for(@skI = 1; @skI <= string_length(argument0); @skI += 1){
+    @skO = ord(string_char_at(argument0, @skI));
+    if((@skO >= 65 && @skO <= 90) || (@skO >= 97 && @skO <= 122) || (@skO >= 48 && @skO <= 57) || @skO == 95 || @skO == 45 || @skO == 46){
+        @skS += string_char_at(argument0, @skI);
+        if(@skO != 46) @skNonDot += 1;
+    }
+    if(string_length(@skS) >= 48) break;
+}
+if(@skNonDot < 1) return "";
+if(string_pos("..", @skS) > 0) return "";
+if(string_lower(@skS) == "unknown") return "";
+return @skS;
+
+///// script @skin_dl_name_ok
+// argument0: a file name from a SKIN_MANIFEST reply. Whitelist
+// [A-Za-z0-9._-], length 1-64, no "."/".." names and no ".." anywhere:
+// downloaded files must stay flat inside the package directory.
+@skNL = string_length(argument0);
+if(@skNL < 1 || @skNL > 64) return 0;
+if(argument0 == ".") return 0;
+if(string_pos("..", argument0) > 0) return 0;
+for(@skI = 1; @skI <= @skNL; @skI += 1){
+    @skO = ord(string_char_at(argument0, @skI));
+    if((@skO >= 65 && @skO <= 90) || (@skO >= 97 && @skO <= 122) || (@skO >= 48 && @skO <= 57) || @skO == 95 || @skO == 45 || @skO == 46){
+        // allowed
+    }else{
+        return 0;
+    }
+}
+return 1;
+
+///// script @skin_dl_notice
+// argument0: message. Pushes a local "SKIN" chat-history entry (same ring
+// logic as the notice half of @skin_remote_unknown, without a player).
+if(@chatHistCount < @chatHistMax){
+    @chatHistName[@chatHistCount] = "SKIN";
+    @chatHistMsg[@chatHistCount] = argument0;
+    @chatHistTeam[@chatHistCount] = 0;
+    @chatHistCount += 1;
+}else{
+    for(@ci = 0; @ci < @chatHistMax - 1; @ci += 1){
+        @chatHistName[@ci] = @chatHistName[@ci + 1];
+        @chatHistMsg[@ci] = @chatHistMsg[@ci + 1];
+        @chatHistTeam[@ci] = @chatHistTeam[@ci + 1];
+    }
+    @chatHistName[@chatHistMax - 1] = "SKIN";
+    @chatHistMsg[@chatHistMax - 1] = argument0;
+    @chatHistTeam[@chatHistMax - 1] = 0;
+}
+return 1;
+
+///// script @skin_dl_wipe
+// argument0: a directory name inside iwposkins\. Deletes every regular file
+// in it. The (now empty) directory itself stays behind: GM8.0 has no
+// directory-delete function, and @skin_scan skips empty folders anyway, so
+// the leftover is invisible. Missing directories are fine. Names with path
+// separators or ".." are refused (the name normally comes from
+// @skin_dl_sanitize or the "dl_<hex>" fallback, but the boot-time stale
+// cleanup passes a value read back from the ini).
+if(argument0 == "") return 0;
+if(string_pos("/", argument0) > 0) return 0;
+if(string_pos(chr(92), argument0) > 0) return 0;
+if(string_pos("..", argument0) > 0) return 0;
+@skWBase = "iwposkins" + chr(92) + argument0;
+if(!directory_exists(@skWBase)) return 0;
+@skWBase += chr(92);
+@skWE = file_find_first(@skWBase + "*.*", 0);
+while(@skWE != ""){
+    if(!directory_exists(@skWBase + @skWE)){
+        file_delete(@skWBase + @skWE);
+    }
+    @skWE = file_find_next();
+}
+file_find_close();
+// The empty folder itself stays behind (see the header comment).
+return 1;
+
+///// script @skin_dl_enqueue
+// argument0: hash hex, argument1: directory-name hint. Queues the package for
+// download from the server skin library. Returns 1 when newly queued, 2 when
+// already pending (queued or in flight), 0 when rejected (download of this
+// hash already failed this session, or the 8-slot queue is full - the caller
+// should surface the plain missing-notice then).
+if(@skinDlHash == argument0) return 2;
+for(@skI = 0; @skI < @skinDlQCount; @skI += 1){
+    if(@skinDlQ[@skI] == argument0) return 2;
+}
+for(@skI = 0; @skI < 16; @skI += 1){
+    if(@skinDlFail[@skI] == argument0) return 0;
+}
+if(@skinDlQCount >= 8) return 0;
+@skinDlQ[@skinDlQCount] = argument0;
+@skinDlQHint[@skinDlQCount] = argument1;
+@skinDlQCount += 1;
+return 1;
+
+///// script @skin_dl_send_req
+// Writes SKIN_GET (opcode 14) or SKIN_FILE_REQ (16) into @buffer and sends
+// it. argument0: opcode, argument1: hash hex, argument2: file name (""
+// omits the name field - SKIN_GET carries none). World context; the caller
+// guarantees the socket is connected. Safe to call from inside the message
+// read loop: @buffer is reloaded by the next read_message (case 5 precedent).
+__ONLINE_buffer_clear(@buffer);
+#if not GMNET
+    __ONLINE_buffer_write_uint8(@buffer, argument0);
+#endif
+#if GMNET
+    __ONLINE_buffer_write_u8(@buffer, argument0);
+#endif
+for(@skB = 0; @skB < 16; @skB += 1){
+    @skByte = (string_pos(string_char_at(argument1, @skB * 2 + 1), "0123456789abcdef") - 1) * 16 + string_pos(string_char_at(argument1, @skB * 2 + 2), "0123456789abcdef") - 1;
+    #if not GMNET
+        __ONLINE_buffer_write_uint8(@buffer, @skByte);
+    #endif
+    #if GMNET
+        __ONLINE_buffer_write_u8(@buffer, @skByte);
+    #endif
+}
+if(argument2 != ""){
+    __ONLINE_buffer_write_string(@buffer, argument2);
+}
+__ONLINE_socket_write_message(@socket, @buffer);
+return 0;
+
+///// script @skin_dl_begin
+// Pops the download queue head and requests its manifest from the server.
+// Returns 1 when a SKIN_GET was sent, 0 when staying idle (queue empty or
+// socket not connected). The in-flight directory is recorded in the ini
+// (skinDlTmp) so a crash or game_restart mid-download can be cleaned up at
+// the next boot - a half-written package must never enter the library.
+if(@skinDlState != 0) return 0;
+if(@skinDlQCount < 1) return 0;
+if(!@connected) return 0;
+if(__ONLINE_socket_get_state(@socket) != 2) return 0;
+@skinDlHash = @skinDlQ[0];
+@skinDlHint = @skinDlQHint[0];
+for(@skI = 1; @skI < @skinDlQCount; @skI += 1){
+    @skinDlQ[@skI - 1] = @skinDlQ[@skI];
+    @skinDlQHint[@skI - 1] = @skinDlQHint[@skI];
+}
+@skinDlQCount -= 1;
+@skinDlQ[@skinDlQCount] = "";
+@skinDlQHint[@skinDlQCount] = "";
+// Target directory: the sanitized hint, unless that folder already exists
+// (same-named different package - identical content would have resolved
+// locally and never queued); the hash-derived name is the fallback.
+@skinDlDir = @skin_dl_sanitize(@skinDlHint);
+if(@skinDlDir == ""){
+    @skinDlDir = "dl_" + string_copy(@skinDlHash, 1, 16);
+}
+if(directory_exists("iwposkins" + chr(92) + @skinDlDir)){
+    @skinDlDir = "dl_" + string_copy(@skinDlHash, 1, 16);
+}
+// Wipe a stale partial of a previous attempt, then (re)create the folder.
+@skin_dl_wipe(@skinDlDir);
+if(!directory_exists("iwposkins")){
+    directory_create("iwposkins");
+}
+directory_create("iwposkins" + chr(92) + @skinDlDir);
+ini_open("@config.ini");
+ini_write_string("config", "skinDlTmp", @skinDlDir);
+ini_close();
+__ONLINE_buffer_clear(@dlBuffer);
+@skinDlCount = 0;
+@skinDlIdx = 0;
+@skinDlPos = 0;
+@skinDlFile = -1;
+@skin_dl_send_req(14, @skinDlHash, "");
+@skinDlState = 1;
+@skinDlWait = room_speed * 30;
+return 1;
+
+///// script @skin_dl_requeue
+// The connection was (re)established while a download was in flight: the
+// in-flight request died with the old socket, so put the package back at the
+// queue tail (silently - this is not a failure) and reset the transfer
+// state. The partial directory is wiped; the restarted download re-creates
+// it. Called from worldEndStep's (re)connect path.
+if(@skinDlState == 0) return 0;
+if(@skinDlFile >= 0){
+    file_bin_close(@skinDlFile);
+    @skinDlFile = -1;
+}
+@skin_dl_wipe(@skinDlDir);
+ini_open("@config.ini");
+ini_write_string("config", "skinDlTmp", "");
+ini_close();
+if(@skinDlQCount < 8){
+    @skinDlQ[@skinDlQCount] = @skinDlHash;
+    @skinDlQHint[@skinDlQCount] = @skinDlHint;
+    @skinDlQCount += 1;
+}
+@skinDlState = 0;
+@skinDlHash = "";
+@skinDlHint = "";
+@skinDlDir = "";
+@skinDlCount = 0;
+@skinDlIdx = 0;
+@skinDlPos = 0;
+__ONLINE_buffer_clear(@dlBuffer);
+return 1;
+
+///// script @skin_dl_fail
+// argument0: chat notice text ("" = silent). Wipes the partial directory,
+// remembers the hash in the 16-entry failure ring (no automatic retries this
+// session) and resets the transfer state.
+if(@skinDlFile >= 0){
+    file_bin_close(@skinDlFile);
+    @skinDlFile = -1;
+}
+@skin_dl_wipe(@skinDlDir);
+ini_open("@config.ini");
+ini_write_string("config", "skinDlTmp", "");
+ini_close();
+@skinDlDir = "";
+if(@skinDlHash != ""){
+    @skKnown = false;
+    for(@skI = 0; @skI < 16; @skI += 1){
+        if(@skinDlFail[@skI] == @skinDlHash) @skKnown = true;
+    }
+    if(!@skKnown){
+        @skinDlFail[@skinDlFailNext] = @skinDlHash;
+        @skinDlFailNext = (@skinDlFailNext + 1) mod 16;
+    }
+    if(argument0 != ""){
+        @skin_dl_notice(argument0);
+    }
+}
+@skinDlState = 0;
+@skinDlHash = "";
+@skinDlHint = "";
+@skinDlCount = 0;
+@skinDlIdx = 0;
+@skinDlPos = 0;
+__ONLINE_buffer_clear(@dlBuffer);
+return 0;
+
+///// script @skin_dl_finish
+// All files received: re-hash the assembled directory and compare against
+// the requested hash (integrity check - a mismatch wipes the package and
+// reports failure). On success the skin is registered into the library,
+// inserted before the hidden "Unknown" slot so it becomes menu-visible, and
+// every remote player waiting on this hash is re-evaluated.
+@skFHash = @skin_hash_dir("iwposkins" + chr(92) + @skinDlDir + chr(92));
+if(@skFHash != @skinDlHash){
+    @skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+    return 0;
+}
+// Verified on disk: no longer a partial, so clear the crash-cleanup marker
+// BEFORE registering (a crash after this point leaves a complete package).
+ini_open("@config.ini");
+ini_write_string("config", "skinDlTmp", "");
+ini_close();
+// Make room right before the hidden Unknown slot (kept last) or append.
+@skFIdx = @skinCount;
+if(@skinUnknown >= 0){
+    @skFIdx = @skinUnknown;
+    @skinDir[@skinCount] = @skinDir[@skFIdx];
+    @skinName[@skinCount] = @skinName[@skFIdx];
+    @skinMaker[@skinCount] = @skinMaker[@skFIdx];
+    @skinSource[@skinCount] = @skinSource[@skFIdx];
+    @skinHash[@skinCount] = @skinHash[@skFIdx];
+    @skinParsed[@skinCount] = @skinParsed[@skFIdx];
+    for(@skSt = 0; @skSt < 7; @skSt += 1){
+        @skinHas[@skinCount, @skSt] = @skinHas[@skFIdx, @skSt];
+        @skinFrames[@skinCount, @skSt] = @skinFrames[@skFIdx, @skSt];
+        @skinFw[@skinCount, @skSt] = @skinFw[@skFIdx, @skSt];
+        @skinOx[@skinCount, @skSt] = @skinOx[@skFIdx, @skSt];
+        @skinOy[@skinCount, @skSt] = @skinOy[@skFIdx, @skSt];
+    }
+    @skinUnknown = @skinCount;
+}
+// Initialize the new visible slot (field set mirrors @skin_scan; the hash is
+// pre-filled so @skin_ensure_hash never recomputes it).
+@skinDir[@skFIdx] = @skinDlDir;
+@skinName[@skFIdx] = "";
+@skinMaker[@skFIdx] = "";
+@skinSource[@skFIdx] = "";
+@skinHash[@skFIdx] = @skinDlHash;
+@skinParsed[@skFIdx] = 0;
+for(@skSt = 0; @skSt < 7; @skSt += 1){
+    @skinHas[@skFIdx, @skSt] = 0;
+    @skinFrames[@skFIdx, @skSt] = 0;
+    @skinFw[@skFIdx, @skSt] = 32;
+    @skinOx[@skFIdx, @skSt] = 17;
+    @skinOy[@skFIdx, @skSt] = 23;
+}
+@skin_parse(@skFIdx);
+@skinVisCount += 1;
+@skinCount += 1;
+// Re-apply to every remote player waiting on this hash (state 1 = pending
+// the hash scan, 3 = explicitly missing). NOTE: scripts share the caller's
+// scope, and @skin_apply_remote writes @skI/@skP - this loop must use
+// variables no called script touches.
+for(@dlK = 0; @dlK < instance_number(@onlinePlayer); @dlK += 1){
+    @dlP = instance_find(@onlinePlayer, @dlK);
+    if(@dlP.@skinHash == @skinDlHash){
+        if(@dlP.@skinState == 1 || @dlP.@skinState == 3){
+            @skin_apply_remote(@dlP);
+        }
+    }
+}
+@skin_dl_notice("Skin downloaded: " + @skinName[@skFIdx]);
+@skinDlState = 0;
+@skinDlHash = "";
+@skinDlHint = "";
+@skinDlDir = "";
+@skinDlCount = 0;
+@skinDlIdx = 0;
+@skinDlPos = 0;
+__ONLINE_buffer_clear(@dlBuffer);
+return 1;
+
+///// script @skin_dl_step
+// Per-step driver, called from worldEndStep after the reconnect early-exit
+// (the wait timer therefore never ticks while the socket is being
+// re-established; the (re)connect path requeues any in-flight transfer).
+if(@skinDlState == 0){
+    @skin_dl_begin();
+    return 0;
+}
+@skinDlWait -= 1;
+if(@skinDlWait <= 0){
+    // The server went silent (rate-limiter drop or connection trouble).
+    @skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+    return 0;
+}
+return 1;

@@ -257,6 +257,21 @@ for (i = 1; i <= n; i += 1) {
 global.@md5_len += n;
 return 1;
 
+///// script @md5_update_byte
+// Internal: feed a single byte value (0-255) into the stream. Used for the
+// name/content separator in @skin_hash_dir instead of
+// @md5_update_string(chr(0)): GMS strings cannot hold byte 0 (chr(0) is an
+// EMPTY string there), which silently dropped the separator and produced a
+// different package hash than GM8 for identical files.
+global.@md5_buf[global.@md5_buflen] = argument0;
+global.@md5_buflen += 1;
+if (global.@md5_buflen == 64) {
+    @md5_transform();
+    global.@md5_buflen = 0;
+}
+global.@md5_len += 1;
+return 1;
+
 ///// script @md5_update_file
 // Internal: feed the raw bytes of file argument0 into the stream.
 // Returns 1 on success, 0 when the file does not exist or cannot be read.
@@ -353,7 +368,7 @@ return @md5_finish_hex();
 
 ///// script @skin_hash_dir
 // argument0: directory path ending with a backslash. Returns the normalized
-// package hash: md5 over (file name + chr(0) + file bytes) for every regular
+// package hash: md5 over (file name + byte 0 + file bytes) for every regular
 // file directly inside the directory, with names sorted by byte order
 // (ascending ord, compared byte by byte). Subdirectories are skipped.
 // Returns "" when a file cannot be read. Pure GML on both GM8 and GMS.
@@ -396,11 +411,11 @@ for (i = 1; i < count; i += 1) {
     }
     global.@md5_names[j] = tmp;
 }
-// stream name + chr(0) + file bytes for each file, in sorted order
+// stream name + byte 0 + file bytes for each file, in sorted order
 @md5_begin();
 for (i = 0; i < count; i += 1) {
     @md5_update_string(global.@md5_names[i]);
-    @md5_update_string(chr(0));
+    @md5_update_byte(0);
     if (!@md5_update_file(argument0 + global.@md5_names[i])) return "";
 }
 return @md5_finish_hex();

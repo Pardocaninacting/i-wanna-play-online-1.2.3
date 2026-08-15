@@ -239,6 +239,38 @@ for(@scI = 0; @scI < 16; @scI += 1){
 for(@skH = 0; @skH < 8; @skH += 1){
     @skinHint[@skH] = "";
 }
+// S3 auto-download: one package at a time, driven per-step from worldEndStep
+// (queue -> SKIN_GET manifest -> SKIN_FILE chunks -> hash verify -> library
+// insert). @dlBuffer accumulates the current file's bytes and is flushed per
+// file; on GMS the chunks stream straight to disk via file_bin_* instead (see
+// the STUDIO branch in worldEndStep's SKIN_FILE case). @skinDlFile is that
+// stream's handle (-1 = none). @skinDlTmp mirrors the in-flight directory
+// name in the ini so a crash/game_restart mid-download can be wiped at the
+// next boot.
+@dlBuffer = __ONLINE_buffer_create();
+@skinDlFile = -1;
+@skinDlState = 0;
+@skinDlWait = 0;
+@skinDlHash = "";
+@skinDlHint = "";
+@skinDlDir = "";
+@skinDlCount = 0;
+@skinDlIdx = 0;
+@skinDlPos = 0;
+@skinDlQCount = 0;
+@skinDlFailNext = 0;
+@skinDlTmp = "";
+for(@skI = 0; @skI < 8; @skI += 1){
+    @skinDlQ[@skI] = "";
+    @skinDlQHint[@skI] = "";
+}
+for(@skI = 0; @skI < 16; @skI += 1){
+    @skinDlFail[@skI] = "";
+}
+for(@skI = 0; @skI < 32; @skI += 1){
+    @skinDlName[@skI] = "";
+    @skinDlFSize[@skI] = 0;
+}
 @skinMap = ds_map_create();
 @skinMapHint = ds_map_create();
 global.@rskCount = 0;
@@ -258,18 +290,64 @@ global.@skinOn = 0;
 // so a fixed pass over the 4096 slot cap would be dead cost on every
 // game_restart.
 // game_restart keeps sprite_add resources alive, so the previously loaded skin
-// sprites (selection AND menu preview) must be freed before the mirror arrays
-// below are reset. Dynamically added sprites always land at or beyond the
-// built-in sprite count, so a range sweep needs no persistent id bookkeeping
-// at all. Do NOT use variable_global_exists for this: on GM8.0 it always
-// returns true (verified on fish), which made the old flag guard fire on the
-// FIRST boot and sprite_delete the game's own sprite 0 (the still-
-// uninitialized mirror arrays read as 0) - run animation froze and the
-// skinless fallback draw errored "Trying to draw non-existing sprite".
+// sprites (selection, menu preview AND remote slots) must be freed before the
+// mirror arrays below are reset. Only the sprites @skin_spr_save recorded are
+// freed: a blind sweep over the whole dynamic-sprite range also deletes
+// sprites the GAME created at runtime (yuuutu keeps a 1x1 pixel sprite right
+// at the base index; deleting it made every draw that used it fail, which
+// starved the draw phase and left the step loop spinning at ~2000 Hz).
+// The record is id,width,height,frames per sprite and is only acted on when
+// EVERY entry still matches - true after a game_restart, false on a fresh
+// launch where the list is just a leftover from the previous process and the
+// ids either do not exist yet or belong to unrelated game sprites (id alone
+// is not enough: sprite_add hands out the same ids every run).
+// Do NOT use variable_global_exists to detect the restart instead: on GM8.0
+// it always returns true (verified on fish).
 @skSprBase = %arg7;
 if(@skSprBase > 0){
-    for(@skDel = @skSprBase; @skDel < @skSprBase + 8192; @skDel += 1){
-        if(sprite_exists(@skDel)) sprite_delete(@skDel);
+    ini_open("@config.ini");
+    @skSprList = ini_read_string("config", "skinSprIds", "");
+    ini_write_string("config", "skinSprIds", "");
+    ini_close();
+    @skSprN = 0;
+    @skSprFld = 0;
+    @skSprOk = (string_length(@skSprList) > 0);
+    while(string_length(@skSprList) > 0){
+        @skSprPos = string_pos(",", @skSprList);
+        if(@skSprPos <= 0){
+            @skSprOk = false;
+            break;
+        }
+        @skSprTok = string_copy(@skSprList, 1, @skSprPos - 1);
+        @skSprList = string_delete(@skSprList, 1, @skSprPos);
+        if(string_length(@skSprTok) <= 0 || string_digits(@skSprTok) != @skSprTok){
+            @skSprOk = false;
+            break;
+        }
+        @skSprVal[@skSprFld] = real(@skSprTok);
+        @skSprFld += 1;
+        if(@skSprFld >= 4){
+            @skSprFld = 0;
+            @skDel = @skSprVal[0];
+            if(@skDel < @skSprBase || !sprite_exists(@skDel)){
+                @skSprOk = false;
+                break;
+            }
+            if(sprite_get_width(@skDel) != @skSprVal[1] || sprite_get_height(@skDel) != @skSprVal[2] || sprite_get_number(@skDel) != @skSprVal[3]){
+                @skSprOk = false;
+                break;
+            }
+            @skSprId[@skSprN] = @skDel;
+            @skSprN += 1;
+        }
+    }
+    if(@skSprFld != 0){
+        @skSprOk = false;
+    }
+    if(@skSprOk){
+        for(@skSprI = 0; @skSprI < @skSprN; @skSprI += 1){
+            sprite_delete(@skSprId[@skSprI]);
+        }
     }
 }
 for(@skSt = 0; @skSt < 7; @skSt += 1){
@@ -333,6 +411,7 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		@skinAutoDL = ini_read_real("config", "skinAutoDL", 1);
 		@skinSavedHash = ini_read_string("config", "skin", "");
 		@skinSavedDir = ini_read_string("config", "skinDir", "");
+		@skinDlTmp = ini_read_string("config", "skinDlTmp", "");
 		@syncEnabled = ini_read_real("sync", "sync_enabled", @syncEnabled);
 		@syncEntryCount = ini_read_real("sync", "entryCount", @syncEntryCount);
 		if(@syncEntryCount < 0) @syncEntryCount = 0;
@@ -348,6 +427,17 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		}
 		ini_close();
 	}
+}
+// SKINS: wipe a stale half-downloaded package left by a crash/game_restart
+// mid-download (the in-flight directory is recorded in the ini at download
+// start and cleared once the finished package verifies). Must run before
+// @skin_scan() so the partial folder never enters the library.
+if(@skinDlTmp != ""){
+	@skin_dl_wipe(@skinDlTmp);
+	ini_open("@config.ini");
+	ini_write_string("config", "skinDlTmp", "");
+	ini_close();
+	@skinDlTmp = "";
 }
 if (!@cfgRead && file_exists(@serverPath)) {
 	@file = file_text_open_read(@serverPath);
@@ -767,6 +857,9 @@ if(@skinUnknown >= 0){
         global.@rskHash[0] = "<unknown>";
         global.@rskCount = 1;
         global.@rskUnknown = 1;
+        // @skin_slot_load already saved, but @rskCount was still 0 back then
+        // so slot 0 was skipped: re-save now that the slot counts.
+        @skin_spr_save();
     }
 }
 // S2: (re)apply remote skins to players restored from tempOnline above (the

@@ -615,6 +615,174 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				}
 			}
 			break;
+		case 15:
+			// SKIN MANIFEST (auto-download): 16-byte hash echo, u8 status
+			// (0 ok / 1 not found), then u8 fileCount + [stringNT name,
+			// u32 size] x count. Stray replies are dropped unread.
+			if(@skinDlState == 1){
+				@skMHex = "";
+				for(@skB = 0; @skB < 16; @skB += 1){
+					#if not GMNET
+						@skByte = __ONLINE_buffer_read_uint8(@buffer);
+					#endif
+					#if GMNET
+						@skByte = __ONLINE_buffer_read_u8(@buffer);
+					#endif
+					@skMHex += string_char_at("0123456789abcdef", (@skByte div 16) + 1) + string_char_at("0123456789abcdef", (@skByte mod 16) + 1);
+				}
+				#if not GMNET
+					@skMStatus = __ONLINE_buffer_read_uint8(@buffer);
+				#endif
+				#if GMNET
+					@skMStatus = __ONLINE_buffer_read_u8(@buffer);
+				#endif
+				if(@skMHex != @skinDlHash){
+					@skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+					break;
+				}
+				if(@skMStatus != 0){
+					// Not in the server library (e.g. a private skin).
+					@skin_dl_fail("Skin not on server (" + string_copy(@skinDlHash, 1, 8) + ")");
+					break;
+				}
+				#if not GMNET
+					@skinDlCount = __ONLINE_buffer_read_uint8(@buffer);
+				#endif
+				#if GMNET
+					@skinDlCount = __ONLINE_buffer_read_u8(@buffer);
+				#endif
+				if(@skinDlCount < 1 || @skinDlCount > 32){
+					@skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+					break;
+				}
+				@skMOk = true;
+				@skMTotal = 0;
+				for(@i = 0; @i < @skinDlCount; @i += 1){
+					@skinDlName[@i] = __ONLINE_buffer_read_string(@buffer);
+					#if not GMNET
+						@skinDlFSize[@i] = __ONLINE_buffer_read_uint32(@buffer);
+					#endif
+					#if GMNET
+						@skinDlFSize[@i] = __ONLINE_buffer_read_u32(@buffer);
+					#endif
+					if(!@skin_dl_name_ok(@skinDlName[@i])) @skMOk = false;
+					if(@skinDlFSize[@i] > 1048576) @skMOk = false;
+					@skMTotal += @skinDlFSize[@i];
+				}
+				if(!@skMOk || @skMTotal > 4194304){
+					@skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+					break;
+				}
+				@skinDlIdx = 0;
+				@skinDlPos = 0;
+				__ONLINE_buffer_clear(@dlBuffer);
+				@skin_dl_send_req(16, @skinDlHash, @skinDlName[0]);
+				@skinDlState = 2;
+				@skinDlWait = room_speed * 15;
+			}
+			break;
+		case 17:
+			// SKIN FILE (auto-download): 16-byte hash echo, stringNT name,
+			// u8 status, u32 totalSize, u32 offset, u16 chunkLen, raw bytes.
+			// Chunks arrive in order; the file is flushed to disk when its
+			// byte count is complete, then the next file is requested.
+			if(@skinDlState == 2){
+				@skFHex = "";
+				for(@skB = 0; @skB < 16; @skB += 1){
+					#if not GMNET
+						@skByte = __ONLINE_buffer_read_uint8(@buffer);
+					#endif
+					#if GMNET
+						@skByte = __ONLINE_buffer_read_u8(@buffer);
+					#endif
+					@skFHex += string_char_at("0123456789abcdef", (@skByte div 16) + 1) + string_char_at("0123456789abcdef", (@skByte mod 16) + 1);
+				}
+				@skFName = __ONLINE_buffer_read_string(@buffer);
+				#if not GMNET
+					@skFStatus = __ONLINE_buffer_read_uint8(@buffer);
+				#endif
+				#if GMNET
+					@skFStatus = __ONLINE_buffer_read_u8(@buffer);
+				#endif
+				if(@skFHex != @skinDlHash || @skFStatus != 0 || @skFName != @skinDlName[@skinDlIdx]){
+					@skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+					break;
+				}
+				#if not GMNET
+					@skFTotal = __ONLINE_buffer_read_uint32(@buffer);
+					@skFOff = __ONLINE_buffer_read_uint32(@buffer);
+					@skFLen = __ONLINE_buffer_read_uint16(@buffer);
+				#endif
+				#if GMNET
+					@skFTotal = __ONLINE_buffer_read_u32(@buffer);
+					@skFOff = __ONLINE_buffer_read_u32(@buffer);
+					@skFLen = __ONLINE_buffer_read_u16(@buffer);
+				#endif
+				if(@skFTotal != @skinDlFSize[@skinDlIdx] || @skFOff != @skinDlPos || @skFLen > 16384){
+					@skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+					break;
+				}
+				if(@skFOff + @skFLen > @skFTotal){
+					@skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+					break;
+				}
+				#if STUDIO
+					// GMS: stream the file straight to disk with file_bin_* instead of
+					// flushing @dlBuffer through the DLL. The DLL write resolves relative
+					// paths against the process CWD (the exe dir), while directory_create
+					// is sandboxed into the per-user writable area - the dir the DLL sees
+					// does not exist, so the write silently fails. file_bin_* share the
+					// directory_create sandbox, and the readers (file_find/sprite_add)
+					// check the writable area, so writer and readers agree.
+					if(@skFOff == 0){
+						@skinDlFile = file_bin_open("iwposkins" + chr(92) + @skinDlDir + chr(92) + @skFName, 1);
+					}
+				#endif
+				for(@skB = 0; @skB < @skFLen; @skB += 1){
+					#if not GMNET
+						@skByte = __ONLINE_buffer_read_uint8(@buffer);
+					#endif
+					#if GMNET
+						@skByte = __ONLINE_buffer_read_u8(@buffer);
+					#endif
+					#if STUDIO
+						file_bin_write_byte(@skinDlFile, @skByte);
+					#endif
+					#if not STUDIO
+						#if not GMNET
+							__ONLINE_buffer_write_uint8(@dlBuffer, @skByte);
+						#endif
+						#if GMNET
+							__ONLINE_buffer_write_u8(@dlBuffer, @skByte);
+						#endif
+					#endif
+				}
+				@skinDlPos += @skFLen;
+				@skinDlWait = room_speed * 15;
+				if(@skinDlPos >= @skFTotal){
+					#if STUDIO
+						file_bin_close(@skinDlFile);
+						@skinDlFile = -1;
+					#endif
+					#if not STUDIO
+						#if not GMNET
+							__ONLINE_buffer_write_to_file(@dlBuffer, "iwposkins" + chr(92) + @skinDlDir + chr(92) + @skFName);
+						#endif
+						#if GMNET
+							__ONLINE_buffer_save(@dlBuffer, "iwposkins" + chr(92) + @skinDlDir + chr(92) + @skFName);
+						#endif
+					#endif
+					__ONLINE_buffer_clear(@dlBuffer);
+					@skinDlIdx += 1;
+					@skinDlPos = 0;
+					if(@skinDlIdx >= @skinDlCount){
+						@skin_dl_finish();
+					}else{
+						@skin_dl_send_req(16, @skinDlHash, @skinDlName[@skinDlIdx]);
+					}
+				}
+			}
+			break;
 		default:
 			break;
 	}
@@ -738,6 +906,11 @@ switch(@socketState){
 				@udpRetryCount = 0;
 				@udpGraceFrames = room_speed*3;
 			}
+			// SKINS: a fresh connection invalidates any in-flight skin download
+			// (its request died with the old socket) - requeue it silently.
+			if(@skinDlState != 0){
+				@skin_dl_requeue();
+			}
 			@connected = true;
 		}
 		break;
@@ -816,6 +989,9 @@ if(@skinHashScan < @skinCount){
 		}
 	}
 }
+// SKINS: auto-download driver (unknown remote skin -> fetch manifest and
+// file chunks from the server library, verify the hash, then register).
+@skin_dl_step();
 // PERIODIC HEARTBEAT
 @hbCounter += 1;
 if(@hbCounter >= room_speed * 5){
@@ -2581,6 +2757,13 @@ if(@settingsOpen && @keybindEditing < 0){
         if(@kbRow[5] == @skinVisCount && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_enter))){
             @skinAutoDL = 1 - @skinAutoDL;
             @skinAutoDLChanged = true;
+            if(@skinAutoDL == 1){
+                // Re-enabled: forget the one-per-hash notice/download marks so
+                // the next roster replay re-triggers unknown skins as downloads.
+                for(@skH = 0; @skH < 8; @skH += 1){
+                    @skinHint[@skH] = "";
+                }
+            }
             @kbAct = 1;
         }
         if(@kbRow[5] < @skinVisCount && keyboard_check_pressed(vk_enter)){
