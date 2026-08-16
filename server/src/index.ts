@@ -804,7 +804,8 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             // relayed to same-game peers that understand skins, sender id
             // prepended. No info logging (too noisy).
             if (!supportsSkins(player)) { quitPlayer(player, "bullet_version"); return; }
-            if (msg.remaining() < 3 || msg.remaining() > 300) { quitPlayer(player, "bullet_bad_size"); return; }
+            // Largest legal payload: count(1) + room(2) + 8*20 = 163 bytes.
+            if (msg.remaining() < 3 || msg.remaining() > 163) { quitPlayer(player, "bullet_bad_size"); return; }
             {
                 const count = msg.readUInt8();
                 if (count < 1 || count > 8 || msg.remaining() !== 2 + 20 * count) {
@@ -824,7 +825,6 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 // the opcode byte); readBuffer(remaining) yields exactly the
                 // room + per-bullet body that gets relayed.
                 const body = msg.readBuffer(msg.remaining());
-                if (body.length !== 2 + 20 * count) { quitPlayer(player, "bullet_bad_size"); return; }
                 const notify = new SmartBuffer();
                 notify.writeUInt8(TcpMsg.BULLET_NOTIFY);
                 notify.writeStringNT(player.id);
@@ -910,13 +910,24 @@ createServer((socket: Socket) => {
             // Reset the window FIRST so accumulated counts from previous
             // bursts don't kill an otherwise-quiet player as soon as a 1 s
             // gap appears.
+            // BULLET is exempt from this message-level limit: it is a
+            // high-frequency channel (one message per frame while firing,
+            // up to 60/s at 60fps) with its OWN drop-not-kick limiter
+            // (600/10s) inside the BULLET case. Counting it here would kick
+            // legitimately fast firing players.
             const now = Date.now();
             if (now - player.msgWindowStart > 1000) {
                 player.msgCount = 0;
                 player.msgWindowStart = now;
             }
-            player.msgCount++;
-            if (player.msgCount > TCP_RATE_LIMIT) { quitPlayer(player, "tcp_rate_limit"); break; }
+            // Peek the opcode without consuming it (smart-buffer has no peek).
+            const savedOffset = msg.readOffset;
+            const peekOp = msg.readUInt8();
+            msg.readOffset = savedOffset;
+            if (peekOp !== TcpMsg.BULLET) {
+                player.msgCount++;
+                if (player.msgCount > TCP_RATE_LIMIT) { quitPlayer(player, "tcp_rate_limit"); break; }
+            }
             try {
                 handleTcpMessage(player, msg);
             } catch (e) {

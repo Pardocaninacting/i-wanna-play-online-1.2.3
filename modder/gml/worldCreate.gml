@@ -8,6 +8,13 @@
 // (7th arg: player object list init code, PLAYER_LIST only, already __ONLINE_-prefixed)
 // (8th arg: built-in sprite count = base index for runtime sprite_add sweeps,
 //  0 when skins are disabled)
+// (9th/10th arg: S4 bullet-sharing constants - bullet object index and
+//  bullet sprite index; -1 disables. Inlined HERE (before @bullet_init runs
+//  later in this template) because addCreateCode appends the constant block
+//  AFTER the template body, and GM8 reads an unassigned global as 0, which
+//  would defeat the -1 disabled state.)
+global.@bulletObj = %arg9;
+global.@bulletSpr = %arg10;
 if(!instance_exists(@userInterface)){
 	instance_create(0, 0, @userInterface);
 }

@@ -45,8 +45,11 @@ export class GMLCode {
 		let gml: string = await fs.readFile(path.join(__dirname, "gml", `${filename}.gml`), "latin1");
 		gml = gml.replace(/@/g, GMLCode.prefix);
 		gml = gml.replace(/\t/g, "");
+		// The negative lookahead keeps %arg1 from eating the prefix of %arg10+:
+		// without it, substituting %arg1 rewrites %arg10 into <arg1>0 before the
+		// i=10 pass runs (the C# RenderTemplate uses literal Replace and is safe).
 		for(let i: number = 0; i < args.length; ++i)
-			gml = gml.replace(new RegExp(`%arg${i}`, "g"), args[i].toString('latin1'));
+			gml = gml.replace(new RegExp(`%arg${i}(?![0-9])`, "g"), args[i].toString('latin1'));
 		gml = GMLCode.parseGML(gml.split(/\r\n|\r|\n/g))[0].join("\r\n");
 		return Buffer.from(gml,'latin1');
 	}
@@ -60,7 +63,7 @@ export class GMLCode {
 		gml = gml.replace(/@/g, GMLCode.prefix);
 		gml = gml.replace(/\t/g, "");
 		for(let i: number = 0; i < args.length; ++i)
-			gml = gml.replace(new RegExp(`%arg${i}`, "g"), args[i].toString('latin1'));
+			gml = gml.replace(new RegExp(`%arg${i}(?![0-9])`, "g"), args[i].toString('latin1'));
 		gml = GMLCode.parseGML(gml.split(/\r\n|\r|\n/g))[0].join("\r\n");
 		return Buffer.from(gml, 'latin1');
 	}

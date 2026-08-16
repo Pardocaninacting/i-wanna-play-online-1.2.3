@@ -136,30 +136,38 @@ with(@bullet){
             }
         }
         if(!@bIn){
-            if(instance_exists(@bWorld)){
-                with(@bWorld){
-                    if(ds_map_exists(@bMap, other.@bKey)){
-                        ds_map_delete(@bMap, other.@bKey);
-                    }
-                }
+            // Remove the registry entry via the world context directly
+            // (other = the @bullet_apply caller) - more reliable than the
+            // proxy's own @bWorld reference.
+            if(ds_map_exists(other.@bMap, @bKey)){
+                ds_map_delete(other.@bMap, @bKey);
             }
             instance_destroy();
         }
     }
 }
-// 2) Update existing proxies / create missing ones.
+// 2) Update existing proxies / create missing ones. A map entry whose
+// instance is gone is STALE (the proxy died through a path that could not
+// reach the map, e.g. its @bWorld reference was invalid): GM instance ids
+// get reused, so a stale key would make a brand-new bullet with the same id
+// invisible forever. Drop the stale entry and fall through to creation.
 for(@bi = 0; @bi < @bCount; @bi += 1){
     @bkey = @bOwner + "|" + string(@bRI[@bi]);
+    @bid = -1;
     if(ds_map_exists(@bMap, @bkey)){
         @bid = ds_map_find_value(@bMap, @bkey);
-        if(instance_exists(@bid)){
-            with(@bid){
-                x = other.@bRX[other.@bi];
-                y = other.@bRY[other.@bi];
-                @bAngle = other.@bRD[other.@bi];
-                @bAlive = 4;
-                @bSlot = other.@bSlot;
-            }
+        if(!instance_exists(@bid)){
+            ds_map_delete(@bMap, @bkey);
+            @bid = -1;
+        }
+    }
+    if(@bid >= 0){
+        with(@bid){
+            x = other.@bRX[other.@bi];
+            y = other.@bRY[other.@bi];
+            @bAngle = other.@bRD[other.@bi];
+            @bAlive = 4;
+            @bSlot = other.@bSlot;
         }
     }else{
         if(ds_map_size(@bMap) < 64){

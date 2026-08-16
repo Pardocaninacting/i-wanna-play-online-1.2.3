@@ -53,7 +53,7 @@ const build = async function(): Promise<string> {
 		await Utils.copyDir(path.join(__dirname, "gml"), path.join(dataDir, "gml")),
 		await Utils.copyDir(path.join(__dirname, "lib"), path.join(dataDir, "lib")),
 		// Per-game define overrides (readGameDefines reads ../games/<gameName>.ini).
-		await fs.copy(path.join(__dirname, "games"), path.join(unpackedDir, "games"), { filter: (src: string, dst: string) => !src.includes("node_modules") }),
+		await fs.copy(path.join(__dirname, "games"), path.join(unpackedDir, "games")),
 	]);
 	const readmeFilename: string = path.join(unpackedDir, "README.txt");
 	const readme: Array<string> = (await fs.readFile(readmeFilename, "utf8")).split(/\r\n|\r|\n/g);
