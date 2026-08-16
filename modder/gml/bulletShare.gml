@@ -36,7 +36,11 @@ return 1;
 // bullets exist. Full snapshot; receivers diff against it. The message is
 // queued with __ONLINE_socket_write_message and flushed by the existing
 // per-frame socket update.
-if(@bActive && @connected && __ONLINE_socket_get_state(@socket) == 2){
+// @protocolVersion >= 3 gates the SEND side too (defensive: older servers
+// would kick on the unknown opcode; current clients are all v3, but the
+// guard keeps this script safe if the client ever runs against an old
+// protocol level).
+if(@bActive && @connected && @protocolVersion >= 3 && __ONLINE_socket_get_state(@socket) == 2){
     @bCount = instance_number(global.@bulletObj);
     if(@bCount >= 1 && @bCount <= 8){
         __ONLINE_buffer_clear(@buffer);
@@ -74,10 +78,11 @@ return 0;
 ///// script @bullet_recv
 // case 19 (BULLET_NOTIFY) handler: read the per-bullet state into the shared
 // arrays (@bRI/@bRX/@bRY/@bRD/@bRS), then diff the proxy registry.
-// argument0: sender playerId, argument1: bullet count.
+// argument0: sender playerId, argument1: bullet count. @bRS (speed) is read
+// to advance the cursor but not used yet (reserved for interpolation).
 @bOwner = argument0;
 @bCount = argument1;
-if(!@bActive){
+if(!@bActive || @bCount < 1 || @bCount > 8){
     return 0;
 }
 for(@bi = 0; @bi < @bCount; @bi += 1){
@@ -106,7 +111,7 @@ return 1;
 // (registry capped at 64 proxies to protect GM8 instance counts).
 @bOwner = argument0;
 @bCount = argument1;
-if(!@bActive){
+if(!@bActive || @bCount < 1 || @bCount > 8){
     return 0;
 }
 // Sender's skin slot: resolved remote skins render their bullet.png; pending/
