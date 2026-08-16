@@ -13,8 +13,8 @@
 //  later in this template) because addCreateCode appends the constant block
 //  AFTER the template body, and GM8 reads an unassigned global as 0, which
 //  would defeat the -1 disabled state.)
-global.@bulletObj = %arg9;
-global.@bulletSpr = %arg10;
+global.@bulletObj = %arg8;
+global.@bulletSpr = %arg9;
 if(!instance_exists(@userInterface)){
 	instance_create(0, 0, @userInterface);
 }
