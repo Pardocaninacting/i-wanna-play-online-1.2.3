@@ -219,6 +219,101 @@ export const buildSkinSpriteMap = function(sprites: Array<Sprite>, defines: Map<
 	return lines.join("\r\n");
 }
 
+// S4: resolve the game's bullet object index for bullet sharing. Priority:
+// 1. the iwpo.bullet_object=<objectName> define; 2. the object whose DEFAULT
+// sprite is the resolved bullet sprite (mapSpr[6], re-resolved with the same
+// candidate table); 3. -1 (sharing disabled at runtime, every bulletShare
+// entry inert). Deterministic; exported for verification harnesses.
+export const resolveBulletObject = function(objects: Array<GMObject>, sprites: Array<Sprite>, defines: Map<string, string>): number {
+	const findSpriteByName = function(name: string): number {
+		const target: string = name.toLowerCase();
+		for(let i: number = 0; i < sprites.length; ++i)
+			if(sprites[i] && sprites[i].name.toString('ascii').toLowerCase() === target)
+				return i;
+		return -1;
+	}
+	// Re-resolve the bullet sprite exactly like buildSkinSpriteMap does.
+	let bulletSpr: number = -1;
+	const mapDefine: string = "iwpo.skins.map.bullet";
+	if(defines.has(mapDefine)){
+		const defineValue: string = (defines.get(mapDefine) as string).trim();
+		if(defineValue !== "")
+			bulletSpr = findSpriteByName(defineValue);
+	}
+	if(bulletSpr < 0){
+		for(const candidate of SKIN_SPRITE_CANDIDATES.bullet){
+			bulletSpr = findSpriteByName(candidate);
+			if(bulletSpr >= 0)
+				break;
+		}
+	}
+	let bulletObj: number = -1;
+	const objDefine: string = "iwpo.bullet_object";
+	if(defines.has(objDefine)){
+		const defineValue: string = (defines.get(objDefine) as string).trim();
+		if(defineValue === ""){
+			// Empty value = explicitly disable bullet sharing.
+			console.log(`[bullets] ${objDefine}= (empty) -> bullet sharing disabled`);
+			return -1;
+		}
+		for(let i: number = 0; i < objects.length; ++i){
+			if(objects[i] && objects[i].name.toString('ascii').toLowerCase() === defineValue.toLowerCase()){
+				bulletObj = i;
+				break;
+			}
+		}
+		if(bulletObj < 0)
+			console.warn(`[bullets] ${objDefine}=${defineValue}: no such object, falling back to default-sprite matching`);
+	}
+	if(bulletObj < 0 && bulletSpr >= 0){
+		const hits: Array<number> = [];
+		for(let i: number = 0; i < objects.length; ++i)
+			if(objects[i] && objects[i].spriteIndex === bulletSpr)
+				hits.push(i);
+		if(hits.length > 0){
+			bulletObj = hits[0];
+			if(hits.length > 1)
+				console.warn(`[bullets] ${hits.length} objects share the bullet sprite: ${hits.map(i => objects[i].name.toString('ascii')).join(", ")}; using ${objects[hits[0]].name.toString('ascii')} (override with ${objDefine})`);
+		}
+	}
+	return bulletObj;
+}
+
+// S4: emit the world-Create constant block consumed by the bulletShare GML
+// (global.__ONLINE_bulletObj / global.__ONLINE_bulletSpr). Runs after the
+// object table is deserialized.
+export const buildBulletMap = function(objects: Array<GMObject>, sprites: Array<Sprite>, defines: Map<string, string>): string {
+	const findSpriteByName = function(name: string): number {
+		const target: string = name.toLowerCase();
+		for(let i: number = 0; i < sprites.length; ++i)
+			if(sprites[i] && sprites[i].name.toString('ascii').toLowerCase() === target)
+				return i;
+		return -1;
+	}
+	let bulletSpr: number = -1;
+	const mapDefine: string = "iwpo.skins.map.bullet";
+	if(defines.has(mapDefine)){
+		const defineValue: string = (defines.get(mapDefine) as string).trim();
+		if(defineValue !== "")
+			bulletSpr = findSpriteByName(defineValue);
+	}
+	if(bulletSpr < 0){
+		for(const candidate of SKIN_SPRITE_CANDIDATES.bullet){
+			bulletSpr = findSpriteByName(candidate);
+			if(bulletSpr >= 0)
+				break;
+		}
+	}
+	const bulletObj: number = resolveBulletObject(objects, sprites, defines);
+	const lines: Array<string> = ["// [iwpo] bullet sharing (generated at convert time)"];
+	lines.push(`global.__ONLINE_bulletObj = ${bulletObj}; global.__ONLINE_bulletSpr = ${bulletSpr};`);
+	if(bulletObj >= 0)
+		console.log(`[bullets] bullet object -> ${objects[bulletObj].name.toString('ascii')} (index ${bulletObj}, sprite ${bulletSpr})`);
+	else
+		console.log(`[bullets] no bullet object resolved; bullet sharing disabled`);
+	return lines.join("\r\n");
+}
+
 const isIdentChar = function(ch: string): boolean {
 	return ch !== undefined && /[A-Za-z0-9_]/.test(ch);
 }
@@ -745,7 +840,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// are injected unconditionally — worldCreate/worldEndStep call them in every
 	// converted game); playerDrawInject.gml is only needed with skins enabled.
 	// Abort before any asset rewriting instead of deep into the conversion.
-	for(const skinFile of (skinsEnabled ? ["md5", "skinLib", "playerDrawInject"] : ["md5", "skinLib"])){
+	for(const skinFile of (skinsEnabled ? ["md5", "skinLib", "bulletShare", "playerDrawInject"] : ["md5", "skinLib", "bulletShare"])){
 		if(!await fs.exists(path.join(__dirname, "gml", `${skinFile}.gml`)))
 			throw new Error(`Skin system GML missing: gml/${skinFile}.gml. md5.gml and skinLib.gml must always be present in the gml/ folder; playerDrawInject.gml too unless converting with iwpo.no_skins=true.`);
 	}
@@ -755,17 +850,22 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// the section is deserialized when skins are enabled. Sprites are never
 	// written back — with skins disabled keep the old cheap skip.
 	let skinMapCode: string = "";
+	// S4: bullet-sharing constants (global.__ONLINE_bulletObj / _bulletSpr).
+	// Written as -1/-1 when skins are disabled (the bullet library needs the
+	// sprite table, which is skipped in that mode; -1 disables sharing).
+	let bulletMapCode: string = "";
 	// Built-in sprite count, baked into worldCreate as the base index for the
 	// restart-time dynamic-sprite sweep (0 disables the sweep). The converter
 	// never writes sprites back, so this count stays valid in the output game.
 	let skinSpriteBase: number = 0;
+	let skinSprites: Array<Sprite> = null;
 	if(skinsEnabled){
-		const sprites: Array<Sprite> = getAssets(exe, Sprite.deserialize) as Array<Sprite>;
+		skinSprites = getAssets(exe, Sprite.deserialize) as Array<Sprite>;
 		if(process.env.IWPO_SKIN_LIST_SPRITES)
-			for(let si: number = 0; si < sprites.length; ++si)
-				if(sprites[si]) console.log(`[sprite ${si}] ${(sprites[si] as Sprite).name.toString('latin1')}`);
-		skinMapCode = buildSkinSpriteMap(sprites, defines);
-		skinSpriteBase = sprites.length;
+			for(let si: number = 0; si < skinSprites.length; ++si)
+				if(skinSprites[si]) console.log(`[sprite ${si}] ${(skinSprites[si] as Sprite).name.toString('latin1')}`);
+		skinMapCode = buildSkinSpriteMap(skinSprites, defines);
+		skinSpriteBase = skinSprites.length;
 	}else{
 		getAssetRefs(exe); // skip sprites section (no modification needed)
 	}
@@ -806,6 +906,15 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const objectsOffsets: [number, number] = [exe.readOffset, 0];
 	let objects: Array<GMObject> = getAssets(exe, GMObject.deserialize) as Array<GMObject>;
 	objectsOffsets[1] = exe.readOffset;
+	// S4: bullet-object resolution needs both the sprite table and the object
+	// table, so it runs here (after both are deserialized). The constant block
+	// is ALWAYS emitted (-1/-1 with skins disabled): GM8 reads an unassigned
+	// global as 0, which would silently enable sharing against object 0.
+	if(skinsEnabled){
+		bulletMapCode = buildBulletMap(objects, skinSprites as Array<Sprite>, defines);
+	}else{
+		bulletMapCode = "// [iwpo] bullet sharing (skins disabled)\r\nglobal.__ONLINE_bulletObj = -1; global.__ONLINE_bulletSpr = -1;";
+	}
 	if(objects.some(obj => obj && obj.name.toString('ascii').startsWith("__ONLINE_")))
 		throw new Error("This game is already an online version");
 	const gameWorld: GMObject = await findAssetInteractive(objects, ["world", "World", "objWorld", "oWorld"], "object world") as GMObject;
@@ -1347,7 +1456,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		// __ONLINE_gbk_trunc below). Section names already carry the __ONLINE_
 		// prefix, applied by the render pipeline's @ substitution.
 		const skinScriptNames: Set<string> = new Set<string>();
-		for(const packFile of ["md5", "skinLib"]){
+		for(const packFile of ["md5", "skinLib", "bulletShare"]){
 			const sections: Array<{name: string, code: Buffer}> = splitMarkedScripts(await renderSkinGml(packFile));
 			if(sections.length === 0)
 				throw new Error(`Skin system GML gml/${packFile}.gml has no "///// script <name>" sections`);
@@ -1396,6 +1505,10 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// __ONLINE_ names in full — it never passes through the @ substitution.
 	if(skinsEnabled && skinMapCode !== "")
 		world.addCreateCode(Buffer.from(skinMapCode, 'ascii'));
+	// S4: the bullet-sharing constants (bullet object / bullet sprite indices)
+	// run after the sprite map; -1/-1 keeps every bulletShare entry inert.
+	if(bulletMapCode !== "")
+		world.addCreateCode(Buffer.from(bulletMapCode, 'ascii'));
 	// Opt-in compatibility path: keep EndStep as the default, but allow Step
 	// injection plus world-driven helper ticks for GM8.2/yuuutu edge cases.
 	const addTickRaw = function(obj: GMObject, gml: Buffer, tickEventName: TickEventName): void {
@@ -1461,6 +1574,22 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	objects.push(chatbox);
 	objects.push(playerSaved);
 	objects.push(ui);
+	// S4: bullet-sharing proxy object. Sprite/depth/mask are copied from the
+	// game's bullet object at convert time (static; object_set_* would be a
+	// runtime dependency we do not need), so @bullet_init only creates the
+	// registry map. Draw/EndStep templates carry the player/world names and
+	// the per-game hit action (iwpo.bullet.hit, empty = no collision action).
+	const bulletObjIdx: number = skinsEnabled ? resolveBulletObject(objects, skinSprites as Array<Sprite>, defines) : -1;
+	const bulletProxy: GMObject = newObject(Buffer.from("__ONLINE_bullet", 'ascii'), true, bulletObjIdx >= 0 ? objects[bulletObjIdx].depth : 0, false);
+	if(bulletObjIdx >= 0){
+		bulletProxy.spriteIndex = objects[bulletObjIdx].spriteIndex;
+		bulletProxy.maskIndex = objects[bulletObjIdx].maskIndex;
+	}
+	bulletProxy.addCreateCode(await GMLCode.getGML("bulletShareCreate"));
+	const bulletHitCode: string = defines.has("iwpo.bullet.hit") ? (defines.get("iwpo.bullet.hit") as string) : "";
+	bulletProxy.addEndStepCode(await GMLCode.getGML("bulletShareEndStep", player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(bulletHitCode, 'ascii')));
+	bulletProxy.addDrawCode(await GMLCode.getGML("bulletShareDraw", world.name));
+	objects.push(bulletProxy);
 	replaceChunk(exe, objectsOffsets, putAssets(exe, objects));
 	objects = null;
 	const saveGame: Script = await findAssetInteractive(scripts, ["save_save", "savegame", "saveGame", "SaveGame", "savedata_save", "scrSaveGame", "SaveFile", "ScsaveGame", "SCR_savegame", "saveSaveData"], "script saveGame", true, "iwpo.saveGame") as Script;

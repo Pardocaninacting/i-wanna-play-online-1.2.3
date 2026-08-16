@@ -223,10 +223,22 @@ static class Program
         var chatbox = CreateObject(Prefix + "chatbox", true, -11, true);
         var playerSaved = CreateObject(Prefix + "playerSaved", true, -10, false);
         var ui = CreateObject(Prefix + "userInterface", true, -2147483648, true);
+        // S4: bullet-sharing proxy object. Sprite/depth/mask are copied from the
+        // game's bullet object at convert time (static), so @bullet_init only
+        // creates the registry map. The proxy is created unconditionally; it
+        // stays inert (no instances) when no bullet object was resolved.
+        var bulletSourceObj = ResolveBulletObject();
+        var bulletProxy = CreateObject(Prefix + "bullet", true, bulletSourceObj?.Depth ?? 0, false);
+        if (bulletSourceObj != null)
+        {
+            bulletProxy.Sprite = bulletSourceObj.Sprite;
+            bulletProxy.TextureMaskId = bulletSourceObj.TextureMaskId;
+        }
         Data.GameObjects.Add(onlinePlayer);
         Data.GameObjects.Add(chatbox);
         Data.GameObjects.Add(playerSaved);
         Data.GameObjects.Add(ui);
+        Data.GameObjects.Add(bulletProxy);
 
         // Compile and import GML
         var importGroup = new CodeImportGroup(Data) { AutoCreateAssets = false };
@@ -238,7 +250,11 @@ static class Program
         // the skin library can rely on them at Create time: the real mapping when
         // skins are enabled, defaults -1/0 otherwise (the menu preview reads the
         // slots even with iwpo.no_skins, so they must never be uninitialised).
-        worldCreateCode = (skinsEnabled ? BuildSpriteMapCode() : BuildSpriteMapDefaultsCode()) + "\r\n" + worldCreateCode;
+        // S4: the bullet-sharing constants are emitted the same way (ALWAYS
+        // assigned, -1/-1 disables sharing: GMS errors on reading an unassigned
+        // global and GM8 would read 0).
+        worldCreateCode = (skinsEnabled ? BuildSpriteMapCode() : BuildSpriteMapDefaultsCode())
+            + "\r\n" + BuildBulletMapCode() + "\r\n" + worldCreateCode;
         importGroup.QueueAppend(
             world.EventHandlerFor(EventType.Create, Data),
             worldCreateCode);
@@ -288,6 +304,18 @@ static class Program
         importGroup.QueueReplace(
             playerSaved.EventHandlerFor(EventType.Draw, EventSubtypeDraw.Draw, Data),
             RenderTemplate(activeFlags, "playerSavedDraw"));
+
+        // S4: bullet-sharing proxy events. The hit action is the raw
+        // iwpo.bullet.hit code (empty = no collision action).
+        importGroup.QueueReplace(
+            bulletProxy.EventHandlerFor(EventType.Create, Data),
+            RenderTemplate(activeFlags, "bulletShareCreate"));
+        importGroup.QueueReplace(
+            bulletProxy.EventHandlerFor(EventType.Step, EventSubtypeStep.EndStep, Data),
+            RenderTemplate(activeFlags, "bulletShareEndStep", player.Name.Content, player2Name, GetDefine("iwpo.bullet.hit") ?? ""));
+        importGroup.QueueReplace(
+            bulletProxy.EventHandlerFor(EventType.Draw, EventSubtypeDraw.Draw, Data),
+            RenderTemplate(activeFlags, "bulletShareDraw", world.Name.Content));
 
         if (sharedSaveSupported)
             QueueSharedSavePatch(importGroup, sharedSavePatch);
@@ -1101,6 +1129,90 @@ static class Program
         return sb.ToString();
     }
 
+    // --- Bullet sharing (S4) ---
+
+    // Resolves the game's bullet object. Priority: the iwpo.bullet_object
+    // define; otherwise the object whose DEFAULT sprite is the bullet sprite
+    // (re-resolved with the skin map's slot-6 candidate table); null disables
+    // sharing. Matches the GM8 converter's resolveBulletObject.
+    static UndertaleGameObject ResolveBulletObject()
+    {
+        var defineValue = GetDefine("iwpo.bullet_object");
+        if (defineValue != null)
+        {
+            if (defineValue.Trim() == "")
+            {
+                // Empty value = explicitly disable bullet sharing.
+                Console.WriteLine("Bullet sharing: iwpo.bullet_object= (empty) -> disabled");
+                return null;
+            }
+            var obj = FindObject(defineValue);
+            if (obj != null) return obj;
+            Console.WriteLine($"Bullet sharing: iwpo.bullet_object={defineValue}: no such object, falling back to default-sprite matching");
+        }
+        UndertaleSprite bulletSprite = null;
+        var mapDefine = GetDefine("iwpo.skins.map.bullet");
+        if (mapDefine != null)
+        {
+            bulletSprite = FindSpriteByName(mapDefine);
+            if (bulletSprite is null)
+                throw new Exception($"No sprite named '{mapDefine}' (from iwpo.skins.map.bullet) found.");
+        }
+        else
+        {
+            foreach (var candidate in SpriteStateCandidates[6])
+            {
+                bulletSprite = FindSpriteByName(candidate);
+                if (bulletSprite != null) break;
+            }
+        }
+        if (bulletSprite is null) return null;
+        var matches = Data.GameObjects.Where(o => o?.Sprite == bulletSprite).ToList();
+        if (matches.Count > 1)
+            Console.WriteLine($"Bullet sharing: {matches.Count} objects share the bullet sprite: {string.Join(", ", matches.Select(o => o.Name.Content))}; using {matches[0].Name.Content} (override with iwpo.bullet_object)");
+        return matches.Count > 0 ? matches[0] : null;
+    }
+
+    // Emits the global.__ONLINE_bulletObj / global.__ONLINE_bulletSpr constant
+    // assignments consumed by the bulletShare templates. ALWAYS emitted
+    // (-1/-1 when skins are disabled or no bullet object was resolved): GMS
+    // errors on reading an unassigned global, and GM8 would read 0.
+    static string BuildBulletMapCode()
+    {
+        // The native bullet sprite for the proxy draw fallback, resolved like
+        // skin map slot 6 (independent of the bullet object's default sprite).
+        var sprIndex = -1;
+        string sprName = null;
+        var mapDefine = GetDefine("iwpo.skins.map.bullet");
+        UndertaleSprite bulletSprite = null;
+        if (mapDefine != null)
+        {
+            bulletSprite = FindSpriteByName(mapDefine);
+            if (bulletSprite is null)
+                throw new Exception($"No sprite named '{mapDefine}' (from iwpo.skins.map.bullet) found.");
+        }
+        else
+        {
+            foreach (var candidate in SpriteStateCandidates[6])
+            {
+                bulletSprite = FindSpriteByName(candidate);
+                if (bulletSprite != null) break;
+            }
+        }
+        if (bulletSprite != null)
+        {
+            sprIndex = Data.Sprites.IndexOf(bulletSprite);
+            sprName = bulletSprite.Name.Content;
+        }
+        var bulletObj = ResolveBulletObject();
+        var objIndex = bulletObj is null ? -1 : Data.GameObjects.IndexOf(bulletObj);
+        if (bulletObj != null)
+            Console.WriteLine($"Bullet sharing: object -> {bulletObj.Name.Content} (index {objIndex}, sprite {sprIndex} {sprName})");
+        else
+            Console.WriteLine("Bullet sharing: no bullet object resolved; disabled");
+        return $"// Bullet sharing (generated by the converter)\r\nglobal.__ONLINE_bulletObj = {objIndex}; global.__ONLINE_bulletSpr = {sprIndex};";
+    }
+
     // Renders a skin template, reporting a clear error when the shared GML file
     // has not been delivered to the gml directory yet.
     static string RenderSkinTemplate(ISet<string> activeFlags, string templateName)
@@ -1158,7 +1270,7 @@ static class Program
     // Creates one script asset per marked section of the md5/skinLib templates.
     static void InjectSkinScriptAssets(CodeImportGroup importGroup, ISet<string> activeFlags)
     {
-        foreach (var templateName in new[] { "md5", "skinLib" })
+        foreach (var templateName in new[] { "md5", "skinLib", "bulletShare" })
         {
             var rendered = RenderSkinTemplate(activeFlags, templateName);
             foreach (var section in SplitMarkedScripts(rendered, templateName))

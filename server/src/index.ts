@@ -65,6 +65,9 @@ interface TcpPlayer {
     skinDlReqs: number;
     skinDlBytes: number;
     skinDlLimited: boolean;
+    /** Bullet-share rate limiting window (BULLET, high-frequency). */
+    bulletWindowStart: number;
+    bulletCount: number;
 }
 
 /* ── State ─────────────────────────────────────────── */
@@ -794,6 +797,54 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             }
             break;
 
+        case TcpMsg.BULLET:
+            // Bullet sharing: u8 count(1..8), u16 room, then per bullet
+            // i32 id, i32 x, i32 y, f32 direction, f32 speed. High-frequency
+            // relay (one message per frame while the sender has bullets) —
+            // relayed to same-game peers that understand skins, sender id
+            // prepended. No info logging (too noisy).
+            if (!supportsSkins(player)) { quitPlayer(player, "bullet_version"); return; }
+            if (msg.remaining() < 3 || msg.remaining() > 300) { quitPlayer(player, "bullet_bad_size"); return; }
+            {
+                const count = msg.readUInt8();
+                if (count < 1 || count > 8 || msg.remaining() !== 2 + 20 * count) {
+                    quitPlayer(player, "bullet_bad_size");
+                    return;
+                }
+                // Per-player rate limit: ~1 msg/frame/player is legit; drop the
+                // burst instead of kicking (a lost relay just skips a frame).
+                const now = Date.now();
+                if (now - player.bulletWindowStart >= 10000) {
+                    player.bulletWindowStart = now;
+                    player.bulletCount = 0;
+                }
+                player.bulletCount += 1;
+                if (player.bulletCount > 600) break;
+                // NOTE: SmartBuffer.toBuffer() returns the WHOLE buffer (incl.
+                // the opcode byte); readBuffer(remaining) yields exactly the
+                // room + per-bullet body that gets relayed.
+                const body = msg.readBuffer(msg.remaining());
+                if (body.length !== 2 + 20 * count) { quitPlayer(player, "bullet_bad_size"); return; }
+                const notify = new SmartBuffer();
+                notify.writeUInt8(TcpMsg.BULLET_NOTIFY);
+                notify.writeStringNT(player.id);
+                notify.writeUInt8(count);
+                notify.writeBuffer(body); // room + per-bullet state
+                const framed = frameMessage(notify.toBuffer());
+                notify.destroy();
+                let relayCount = 0;
+                for (const p of tcpPlayers) {
+                    if (p.id === player.id || p.game !== player.game || player.game === "") continue;
+                    if (p.quitted || !supportsSkins(p)) continue;
+                    p.socket.write(framed);
+                    relayCount++;
+                }
+                if (relayCount > 0 && process.env.DSH_BULLET_DEBUG) {
+                    log.debug(`BULLET ${player.id} -> ${relayCount} peers (count=${count})`);
+                }
+            }
+            break;
+
         default:
             quitPlayer(player, "unknown_opcode");
     }
@@ -827,6 +878,8 @@ createServer((socket: Socket) => {
         skinDlReqs: 0,
         skinDlBytes: 0,
         skinDlLimited: false,
+        bulletWindowStart: 0,
+        bulletCount: 0,
     };
 
     tcpPlayers.push(player);

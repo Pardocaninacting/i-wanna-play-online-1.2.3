@@ -18,6 +18,8 @@ export enum TcpMsg {
     SKIN_MANIFEST = 15, // S→C: 16-byte hash, u8 status (0=ok, 1=not found/invalid); when ok: u8 fileCount, [stringNT name, u32 size] × count.
     SKIN_FILE_REQ = 16, // C→S: 16-byte hash + stringNT file name (must be one of the manifest entries). Protocol v3+.
     SKIN_FILE   = 17, // S→C: 16-byte hash, stringNT name, u8 status; when ok: u32 totalSize, u32 offset, u16 chunkLen, chunkLen raw bytes (16 KiB chunks, in order).
+    BULLET      = 18, // C→S: u8 count(1..8), u16 room, [i32 id, i32 x, i32 y, f32 direction, f32 speed] × count. Bullet sharing, gated like skins (protocol v3+).
+    BULLET_NOTIFY = 19, // S→C: stringNT senderId, u8 count, u16 room, [i32 id, i32 x, i32 y, f32 direction, f32 speed] × count.
 }
 
 export enum UdpMsg {

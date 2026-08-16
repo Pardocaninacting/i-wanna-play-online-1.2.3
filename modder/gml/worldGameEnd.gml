@@ -134,6 +134,8 @@ if(@objListEdited){
 }
 ds_list_destroy(@obj_list);
 #endif
+// S4: bullet sharing cleanup (destroy proxies + registry map).
+@bullet_cleanup();
 ds_map_destroy(@teamMap);
 __ONLINE_buffer_destroy(@buffer);
 __ONLINE_buffer_destroy(@dlBuffer);

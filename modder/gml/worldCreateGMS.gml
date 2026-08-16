@@ -750,3 +750,7 @@ if(@skinUnknown >= 0){
 for(@skI = 0; @skI < instance_number(@onlinePlayer); @skI += 1){
     @skin_apply_remote(instance_find(@onlinePlayer, @skI));
 }
+// S4: bullet sharing init (no-op when the converter could not resolve a
+// bullet object; @bActive stays 0 and every entry is inert).
+@bActive = 0;
+@bullet_init();

@@ -783,6 +783,29 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				}
 			}
 			break;
+		case 19:
+			// BULLET NOTIFY (S4 bullet sharing): stringNT senderId, u8 count,
+			// u16 room, [i32 id, i32 x, i32 y, f32 direction, f32 speed] x
+			// count. Full snapshot of the sender's bullets; only applied in
+			// the same GM room. Stray replies (inactive sharing, other room,
+			// bad count) are dropped unread.
+			if(@bActive){
+				@bOwner = __ONLINE_buffer_read_string(@buffer);
+				#if not GMNET
+					@bCount = __ONLINE_buffer_read_uint8(@buffer);
+					@bPRoom = __ONLINE_buffer_read_uint16(@buffer);
+				#endif
+				#if GMNET
+					@bCount = __ONLINE_buffer_read_u8(@buffer);
+					@bPRoom = __ONLINE_buffer_read_u16(@buffer);
+				#endif
+				if(@bCount >= 1 && @bCount <= 8){
+					if(@bPRoom == room){
+						@bullet_recv(@bOwner, @bCount);
+					}
+				}
+			}
+			break;
 		default:
 			break;
 	}
@@ -992,6 +1015,10 @@ if(@skinHashScan < @skinCount){
 // SKINS: auto-download driver (unknown remote skin -> fetch manifest and
 // file chunks from the server library, verify the hash, then register).
 @skin_dl_step();
+// S4: bullet sharing broadcast (one BULLET message per frame while 1..8
+// local bullets exist; the message is queued and flushed with the socket
+// update below, so no extra flush is needed here).
+@bullet_update();
 // PERIODIC HEARTBEAT
 @hbCounter += 1;
 if(@hbCounter >= room_speed * 5){
