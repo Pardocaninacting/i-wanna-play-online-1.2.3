@@ -317,6 +317,24 @@ static class Program
             bulletProxy.EventHandlerFor(EventType.Draw, EventSubtypeDraw.Draw, Data),
             RenderTemplate(activeFlags, "bulletShareDraw", world.Name.Content));
 
+        // S4 local-bullet re-skin: give the GAME's bullet object a Draw event
+        // so the local player's own bullets render the selected skin's
+        // bullet.png. Only when the object had no Draw event (the injected
+        // template redraws the native sprite as its fallback, since adding a
+        // Draw event suppresses the engine's automatic sprite draw). Objects
+        // that already draw themselves keep their custom draw.
+        if (bulletSourceObj != null && FindEventCode(bulletSourceObj, EventType.Draw) == null)
+        {
+            importGroup.QueueReplace(
+                bulletSourceObj.EventHandlerFor(EventType.Draw, EventSubtypeDraw.Draw, Data),
+                RenderTemplate(activeFlags, "bulletSelfDraw"));
+            Console.WriteLine($"Bullet sharing: local bullet re-skin Draw injected on {bulletSourceObj.Name.Content}");
+        }
+        else if (bulletSourceObj != null)
+        {
+            Console.WriteLine($"Bullet sharing: {bulletSourceObj.Name.Content} has its own Draw event; local bullet re-skin skipped");
+        }
+
         if (sharedSaveSupported)
             QueueSharedSavePatch(importGroup, sharedSavePatch);
 

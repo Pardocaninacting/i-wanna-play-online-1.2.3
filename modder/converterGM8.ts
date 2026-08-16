@@ -1590,6 +1590,21 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	bulletProxy.addEndStepCode(await GMLCode.getGML("bulletShareEndStep", player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(bulletHitCode, 'ascii')));
 	bulletProxy.addDrawCode(await GMLCode.getGML("bulletShareDraw", world.name));
 	objects.push(bulletProxy);
+	// S4 local-bullet re-skin: give the GAME's bullet object a Draw event so
+	// the local player's own bullets render the selected skin's bullet.png.
+	// Only when the object had no Draw event (a Draw event suppresses the
+	// engine's automatic sprite draw, so the injected template redraws the
+	// native sprite as its fallback). Objects that already draw themselves
+	// are left alone (their custom draw wins).
+	if(bulletObjIdx >= 0){
+		const bulletGameObj: GMObject = objects[bulletObjIdx];
+		if(bulletGameObj.hasEvent(8, 0)){
+			console.log(`[bullets] ${bulletGameObj.name.toString('ascii')} has its own Draw event; local bullet re-skin skipped`);
+		}else{
+			bulletGameObj.addDrawCode(await GMLCode.getGML("bulletSelfDraw"));
+			console.log(`[bullets] ${bulletGameObj.name.toString('ascii')}: local bullet re-skin Draw injected`);
+		}
+	}
 	replaceChunk(exe, objectsOffsets, putAssets(exe, objects));
 	objects = null;
 	const saveGame: Script = await findAssetInteractive(scripts, ["save_save", "savegame", "saveGame", "SaveGame", "savedata_save", "scrSaveGame", "SaveFile", "ScsaveGame", "SCR_savegame", "saveSaveData"], "script saveGame", true, "iwpo.saveGame") as Script;
