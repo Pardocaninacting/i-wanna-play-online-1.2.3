@@ -207,15 +207,185 @@ if(@skHasIni){
 }
 return 1;
 
+///// script @skin_cache_load
+// P0/P3: load the on-disk hash cache (iwposkins/skincache.txt) into memory
+// once per world Create. Format: 3 lines per entry - dirname, hash (32 hex),
+// fingerprint. The reverse hash->dirname lookup scans the in-memory table
+// (the table is small); no second on-disk index is needed. A plain text file
+// instead of ini: GM8.0 has NO ini_key_first/next (GM8.1+ only), and the
+// file_text_* family exists on every supported engine. Reading 196 entries
+// costs one open/read/close (~1-3ms) ONCE per game_restart; it replaces up to
+// 196 x 25ms of pure-GML MD5. An unreadable/absent cache simply leaves the
+// table empty (lookups fall back to hashing).
+@skinCacheN = 0;
+@skinCacheChanged = 0;
+if(!file_exists("iwposkins" + chr(92) + "skincache.txt")){
+    return 0;
+}
+@skcF = file_text_open_read("iwposkins" + chr(92) + "skincache.txt");
+if(@skcF == -1){
+    return 0;
+}
+while(!file_text_eof(@skcF) && @skinCacheN < 4096){
+    @skcD = file_text_read_string(@skcF);
+    file_text_readln(@skcF);
+    @skcH = file_text_read_string(@skcF);
+    file_text_readln(@skcF);
+    @skcP = file_text_read_string(@skcF);
+    file_text_readln(@skcF);
+    // Sanity: a hash must be exactly 32 hex chars; anything else means the
+    // file is truncated/corrupt, skip the entry (trailing blank lines read
+    // back as empty strings and fail this too).
+    if(string_length(@skcD) > 0 && string_length(@skcH) == 32){
+        @skinCacheDir[@skinCacheN] = @skcD;
+        @skinCacheHash[@skinCacheN] = @skcH;
+        @skinCacheFp[@skinCacheN] = @skcP;
+        @skinCacheN += 1;
+    }
+}
+file_text_close(@skcF);
+return @skinCacheN;
+
+///// script @skin_cache_fp
+// argument0: skin index. Computes the cheap fingerprint of the folder:
+// "<fileCount>|<name>:<size>;..." over direct regular files. File sizes are
+// read with file_size (no open); the list is sorted by the engine's string
+// order for LOCAL determinism (the cache is per-machine, no cross-engine
+// byte equality needed - the hash itself stays cross-engine). A changed
+// file name/count/size changes the fingerprint and forces a re-hash; a
+// content change that keeps every size identical is accepted as a miss
+// (acceptable collision; selecting a skin re-hashes anyway).
+@skcI = argument0;
+if(@skcI < 0 || @skcI >= @skinCount){
+    return "";
+}
+@skcPath = "iwposkins" + chr(92) + @skinDir[@skcI] + chr(92);
+@skcN = 0;
+@skcName = file_find_first(@skcPath + "*.*", 0);
+while(@skcName != "" && @skcN < 64){
+    if(!directory_exists(@skcPath + @skcName)){
+        @skcNames[@skcN] = @skcName;
+        @skcN += 1;
+    }
+    @skcName = file_find_next();
+}
+file_find_close();
+// insertion sort by the engine's string order (local determinism only)
+for(@skcI2 = 1; @skcI2 < @skcN; @skcI2 += 1){
+    @skcTmp = @skcNames[@skcI2];
+    @skcJ = @skcI2;
+    while(@skcJ > 0 && @skcNames[@skcJ - 1] > @skcTmp){
+        @skcNames[@skcJ] = @skcNames[@skcJ - 1];
+        @skcJ -= 1;
+    }
+    @skcNames[@skcJ] = @skcTmp;
+}
+@skcFp = string(@skcN) + "|";
+for(@skcI2 = 0; @skcI2 < @skcN; @skcI2 += 1){
+    // GM8.0 has no file_size (8.1+); file_bin_open+file_bin_size is the
+    // proven-8.0 way (md5.gml already reads files through file_bin_*).
+    @skcSize = -1;
+    @skcFull = @skcPath + @skcNames[@skcI2];
+    if(file_exists(@skcFull)){
+        @skcFs = file_bin_open(@skcFull, 0);
+        if(@skcFs >= 0){
+            @skcSize = file_bin_size(@skcFs);
+            file_bin_close(@skcFs);
+        }
+    }
+    @skcFp += @skcNames[@skcI2] + ":" + string(@skcSize) + ";";
+}
+return @skcFp;
+
+///// script @skin_cache_lookup
+// argument0: skin index. Returns the cached hash when the fingerprint still
+// matches, "" otherwise (caller falls back to the real hashing).
+@skcI = argument0;
+@skcFp = @skin_cache_fp(@skcI);
+if(@skcFp == ""){
+    return "";
+}
+for(@skcI2 = 0; @skcI2 < @skinCacheN; @skcI2 += 1){
+    if(@skinCacheDir[@skcI2] == @skinDir[@skcI]){
+        if(@skinCacheFp[@skcI2] == @skcFp){
+            return @skinCacheHash[@skcI2];
+        }
+        return "";
+    }
+}
+return "";
+
+///// script @skin_cache_add
+// argument0: skin index (hash already computed into @skinHash[i]).
+// Adds/updates both cache tables in memory and marks the cache changed; the
+// on-disk flush happens once in @skin_cache_flush (world Game End).
+@skcI = argument0;
+@skcFp = @skin_cache_fp(@skcI);
+if(@skcFp == ""){
+    return 0;
+}
+@skcFound = 0;
+for(@skcI2 = 0; @skcI2 < @skinCacheN; @skcI2 += 1){
+    if(@skinCacheDir[@skcI2] == @skinDir[@skcI]){
+        @skinCacheHash[@skcI2] = @skinHash[@skcI];
+        @skinCacheFp[@skcI2] = @skcFp;
+        @skcFound = 1;
+        break;
+    }
+}
+if(!@skcFound && @skinCacheN < 4096){
+    @skinCacheDir[@skinCacheN] = @skinDir[@skcI];
+    @skinCacheHash[@skinCacheN] = @skinHash[@skcI];
+    @skinCacheFp[@skinCacheN] = @skcFp;
+    @skinCacheN += 1;
+}
+@skinCacheChanged = 1;
+return 1;
+
+///// script @skin_cache_flush
+// world Game End: persist the in-memory tables when anything changed
+// (3-line records, see @skin_cache_load). A full rewrite (~196 records)
+// takes ~1-5ms, which is invisible during the game_restart load that
+// triggers this event.
+if(!@skinCacheChanged){
+    return 0;
+}
+@skinCacheChanged = 0;
+@skcF = file_text_open_write("iwposkins" + chr(92) + "skincache.txt");
+if(@skcF == -1){
+    return 0;
+}
+for(@skcI2 = 0; @skcI2 < @skinCacheN; @skcI2 += 1){
+    file_text_write_string(@skcF, @skinCacheDir[@skcI2]);
+    file_text_writeln(@skcF);
+    file_text_write_string(@skcF, @skinCacheHash[@skcI2]);
+    file_text_writeln(@skcF);
+    file_text_write_string(@skcF, @skinCacheFp[@skcI2]);
+    file_text_writeln(@skcF);
+}
+file_text_close(@skcF);
+return 1;
+
 ///// script @skin_ensure_hash
 // argument0: skin index. Computes @skinHash[i] on first use (folder md5 via
 // the md5 pack). Hashing is expensive; callers should only ask when needed.
+// P0/P3: a matching on-disk cache entry (same dirname + file fingerprint)
+// short-circuits the MD5 entirely - the per-death game_restart cost goes
+// from N x 25ms to one ini parse.
 @skI = argument0;
 if(@skI < 0 || @skI >= @skinCount){
     return 0;
 }
 if(@skinHash[@skI] == ""){
-    @skinHash[@skI] = @skin_hash_dir("iwposkins" + chr(92) + @skinDir[@skI] + chr(92));
+    @skcHit = @skin_cache_lookup(@skI);
+    if(@skcHit != ""){
+        @skinHash[@skI] = @skcHit;
+    }else{
+        @skinHash[@skI] = @skin_hash_dir("iwposkins" + chr(92) + @skinDir[@skI] + chr(92));
+        if(@skinHash[@skI] != ""){
+            @skin_cache_add(@skI);
+        }
+    }
 }
 return 1;
 
@@ -233,10 +403,41 @@ if(@skI < 0 || @skI >= @skinCount){
 @skin_parse(@skI);
 @skin_ensure_hash(@skI);
 @skin_sec_names();
+// P4: adopt sprites kept across game_restart when their recorded content hash
+// still equals the hash of the skin being restored; otherwise free them and
+// load normally. The kept set is consumed exactly once (the boot restore is
+// the first select of a world lifetime).
+@skReuseOk = 0;
+if(@skReuseArmed){
+    if(@skReuseHash == @skinHash[@skI]){
+        @skReuseOk = 1;
+    }else{
+        for(@skR = 0; @skR < 7; @skR += 1){
+            if(@skReuseSpr[@skR] >= 0){
+                if(sprite_exists(@skReuseSpr[@skR])){
+                    sprite_delete(@skReuseSpr[@skR]);
+                }
+            }
+        }
+    }
+    @skReuseArmed = 0;
+    @skReuseHash = "";
+}
 @skBase = "iwposkins" + chr(92) + @skinDir[@skI] + chr(92);
 for(@skSt = 0; @skSt < 7; @skSt += 1){
     @skinSpr[@skSt] = -1;
-    if(@skinHas[@skI, @skSt]){
+    if(@skReuseOk){
+        @skinSpr[@skSt] = @skReuseSpr[@skSt];
+        if(@skinSpr[@skSt] >= 0){
+            if(!sprite_exists(@skinSpr[@skSt])){
+                @skinSpr[@skSt] = -1;
+            }
+        }
+        if(@skinSpr[@skSt] < 0 && @skinHas[@skI, @skSt]){
+            @skPath = @skBase + @skSec[@skSt] + ".png";
+            @skinSpr[@skSt] = sprite_add(@skPath, @skinFrames[@skI, @skSt], 0, 0, @skinOx[@skI, @skSt], @skinOy[@skI, @skSt]);
+        }
+    }else if(@skinHas[@skI, @skSt]){
         @skPath = @skBase + @skSec[@skSt] + ".png";
         // 6-arg form on BOTH engines: GM8.0 rejects the 8-arg (preload) form,
         // same as TheBiob's skin_selector. PNG alpha loads fine either way.
@@ -298,8 +499,27 @@ for(@skSvSlot = 0; @skSvSlot < global.@rskCount; @skSvSlot += 1){
         if(global.@rskSpr[@skSvSlot, @skSvSt] >= 0) @skSvList += @skin_spr_rec(global.@rskSpr[@skSvSlot, @skSvSt]);
     }
 }
+// P4: the selected-skin sprites are recorded WITH their content hash so the
+// next world Create can keep them across game_restart instead of paying
+// 7x sprite_delete + 7x sprite_add (~6-7ms) on every death. Record shape:
+// "hash;id,state,width,height,frames;..." (state 0-6). Validation on the
+// read side re-checks id/width/height/frames, and @skin_select re-checks the
+// hash against the skin being restored, so a stale record can never adopt a
+// wrong sprite.
+@skSelRec = "";
+if(@skinSel >= 0 && @skinSel < @skinCount && @skinHash[@skinSel] != ""){
+    @skSelRec = @skinHash[@skinSel];
+    for(@skSvSt = 0; @skSvSt < 7; @skSvSt += 1){
+        if(@skinSpr[@skSvSt] >= 0){
+            if(sprite_exists(@skinSpr[@skSvSt])){
+                @skSelRec += ";" + string(@skinSpr[@skSvSt]) + "," + string(@skSvSt) + "," + string(sprite_get_width(@skinSpr[@skSvSt])) + "," + string(sprite_get_height(@skinSpr[@skSvSt])) + "," + string(sprite_get_number(@skinSpr[@skSvSt]));
+            }
+        }
+    }
+}
 ini_open("@config.ini");
 ini_write_string("config", "skinSprIds", @skSvList);
+ini_write_string("config", "skinSelSprites", @skSelRec);
 ini_close();
 return 0;
 
@@ -462,7 +682,22 @@ return global.@rskSpr[argument0, argument1];
 
 ///// script @skin_resolve
 // argument0: hash hex. Returns the local skin index among ALREADY-COMPUTED
-// hashes only (never hashes here); -1 when not yet known.
+// hashes only (never hashes here); -1 when not yet known. P3: the in-memory
+// cache table answers hash->dirname in O(1)-ish; a hit fills @skinHash[i]
+// WITHOUT hashing (the cached hash came from a verified computation), so a
+// peer with a renamed folder (hint miss) resolves instantly instead of
+// queueing a 25ms MD5 scan.
+for(@skcI2 = 0; @skcI2 < @skinCacheN; @skcI2 += 1){
+    if(@skinCacheHash[@skcI2] == argument0){
+        for(@skI = 0; @skI < @skinCount; @skI += 1){
+            if(@skinDir[@skI] == @skinCacheDir[@skcI2]){
+                @skinHash[@skI] = argument0;
+                return @skI;
+            }
+        }
+        return -1;
+    }
+}
 for(@skI = 0; @skI < @skinCount; @skI += 1){
     if(@skinHash[@skI] != ""){
         if(@skinHash[@skI] == argument0){

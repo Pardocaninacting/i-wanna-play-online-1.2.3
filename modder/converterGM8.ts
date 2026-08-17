@@ -29,6 +29,9 @@ import iconv from "iconv-lite"
 
 const HTTP_DLL_FILENAME: string = "http_dll_2_3.dll";
 const HTTP_DLL_X86_PROJECT_DIR: string = path.join(__dirname, "native", "http_dll_2_3_x86");
+// P2: written next to the converted exe; the runtime only defines the md5_dir
+// export when this marker exists (see the httpdll_init generation).
+const MD5DIR_MARKER_FILENAME: string = "__ONLINE_md5dir.ok";
 
 const EnsureX86HttpDllBuilt = async function(): Promise<void> {
 	const outputDll: string = path.join(__dirname, "lib", HTTP_DLL_FILENAME);
@@ -1079,6 +1082,12 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// means gm82buf-only games get full socket support from http_dll for free.
 	{
 		GMLCode.addVariables("HTTPDLL_INIT");
+		// P2: the md5.gml native fast path is guarded by #if MD5DIR. GM8 always
+		// registers the flag: the wrapper script __ONLINE_md5_dir exists in every
+		// build, and the runtime flag global.__ONLINE_md5DirOk (set from the
+		// external_define result in __ONLINE_httpdll_init) keeps an old DLL
+		// without the md5_dir export on the pure-GML fallback.
+		GMLCode.addVariables("MD5DIR");
 		const HTTP_DLL_NAME: string = "http_dll_2_3.dll";
 		interface DllFunc { name: string; dllName: string; ret: string; args: Array<string>; }
 		// Map GML-visible function names to http_dll DLL export names + signatures
@@ -1127,6 +1136,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "udpsocket_send", dllName: "udpsocket_send", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_receive", dllName: "udpsocket_receive", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_get_state", dllName: "udpsocket_get_state", ret: "ty_real", args: ["ty_real"] },
+			{ name: "md5_dir", dllName: "md5_dir", ret: "ty_string", args: ["ty_string"] },
 		] : [
 			// DLL export names used directly (for normal GM8 games)
 			{ name: "buffer_create", dllName: "buffer_create", ret: "ty_real", args: [] },
@@ -1173,6 +1183,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			{ name: "udpsocket_send", dllName: "udpsocket_send", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_receive", dllName: "udpsocket_receive", ret: "ty_real", args: ["ty_real", "ty_real"] },
 			{ name: "udpsocket_get_state", dllName: "udpsocket_get_state", ret: "ty_real", args: ["ty_real"] },
+			{ name: "md5_dir", dllName: "md5_dir", ret: "ty_string", args: ["ty_string"] },
 		];
 		// UTF-8 helpers from http_dll are needed whenever the runtime string mode is UTF-8,
 		// i.e. GM 8.1+ hosts (worldCreate.gml's `#if CJKTEXT` block calls `set_utf8_mode(1)`
@@ -1185,9 +1196,25 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		// Generate init script
 		const initLines: Array<string> = [`var dll; dll = "${HTTP_DLL_NAME}";`];
 		for (const fn of fns) {
+			if (fn.dllName === "md5_dir") {
+				// P2: defining an export that an older http_dll_2_3.dll lacks is a
+				// HARD startup error ("Error defining an external function", fish
+				// verified) - it cannot be tried and caught. Gate the define on the
+				// marker file the converter writes next to the exe, so upgrading
+				// only the exe into an old folder (no marker) silently keeps the
+				// pure-GML hash fallback.
+				initLines.push("global.__od_md5_dir = -1;");
+				initLines.push(`if(file_exists("${MD5DIR_MARKER_FILENAME}")){`);
+				initLines.push(`global.__od_md5_dir = external_define(dll,'md5_dir',dll_cdecl,ty_string,1,ty_string);`);
+				initLines.push("}");
+				continue;
+			}
 			const argTypes: string = fn.args.length > 0 ? "," + fn.args.join(",") : "";
 			initLines.push(`global.__od_${fn.dllName} = external_define(dll,'${fn.dllName}',dll_cdecl,${fn.ret},${fn.args.length}${argTypes});`);
 		}
+		// P2: runtime capability flag for the md5_dir fast path.
+		initLines.push("global.__ONLINE_md5DirOk = 0;");
+		initLines.push("if(global.__od_md5_dir >= 0) global.__ONLINE_md5DirOk = 1;");
 		const initScript: Script = new Script();
 		initScript.name = Buffer.from("__ONLINE_httpdll_init", "ascii");
 		initScript.source = Buffer.from(initLines.join("\r\n"), "ascii");
@@ -1824,4 +1851,9 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	}
 	await EnsureX86HttpDllBuilt();
 	await fs.copyFile(path.join(__dirname, "lib", HTTP_DLL_FILENAME), path.join(outputDir, HTTP_DLL_FILENAME));
+	// P2: capability marker for the md5_dir native fast path. The exe's DLL init
+	// only defines md5_dir when this file exists (defining an export an older
+	// http_dll_2_3.dll lacks is a hard startup error), so exe-only upgrades over
+	// an old folder stay on the pure-GML hash fallback.
+	await fs.writeFile(path.join(outputDir, MD5DIR_MARKER_FILENAME), "1", "utf8");
 }

@@ -136,9 +136,12 @@ ds_list_destroy(@obj_list);
 #endif
 // S4: bullet sharing cleanup (destroy proxies + registry map).
 @bullet_cleanup();
+// P0/P3: persist the skin hash cache (only when it changed this session).
+@skin_cache_flush();
 ds_map_destroy(@teamMap);
 __ONLINE_buffer_destroy(@buffer);
 __ONLINE_buffer_destroy(@dlBuffer);
+__ONLINE_buffer_destroy(@savesBuffer);
 if(@skinDlFile >= 0){
     file_bin_close(@skinDlFile);
     @skinDlFile = -1;

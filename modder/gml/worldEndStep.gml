@@ -975,10 +975,12 @@ if(@skinNetDirty){
 		@skin_net_send();
 	}
 }
-// SKINS: background hash resolution. One skin per step (only while a remote
-// player is waiting on it): hash the next library skin and match it against
-// pending players. Once the library is fully scanned, whatever is still
-// pending is genuinely missing locally.
+// SKINS: background hash resolution, budgeted per frame. Only while a remote
+// player is waiting (state 1) do we hash: with the native md5_dir fast path a
+// single frame can chew through several skins; with the pure-GML fallback the
+// deadline admits at most one 25ms hash per frame and skips hashing entirely
+// on frames that are already late. Once the library is fully scanned,
+// whatever is still pending is genuinely missing locally.
 if(@skinHashScan < @skinCount){
 	@skAnyPending = false;
 	for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
@@ -989,19 +991,25 @@ if(@skinHashScan < @skinCount){
 		}
 	}
 	if(@skAnyPending){
-		@skin_ensure_hash(@skinHashScan);
-		for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
-			@oPlayer = instance_find(@onlinePlayer, @i);
-			if(@oPlayer.@skinState == 1 && @oPlayer.@skinHash == @skinHash[@skinHashScan]){
-				@oPlayer.@skinSlot = @skin_slot_acquire(@skinHashScan, @oPlayer.@skinHash);
-				if(@oPlayer.@skinSlot < 0){
-					@oPlayer.@skinState = 3;
-				}else{
-					@oPlayer.@skinState = 2;
+		// P1: wall-clock deadline (ms); the scan stops when the frame's
+		// budget is spent, so hash work can never stretch a frame beyond
+		// this much extra time.
+		@skDeadline = current_time + 6;
+		while(@skinHashScan < @skinCount && current_time < @skDeadline){
+			@skin_ensure_hash(@skinHashScan);
+			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+				@oPlayer = instance_find(@onlinePlayer, @i);
+				if(@oPlayer.@skinState == 1 && @oPlayer.@skinHash == @skinHash[@skinHashScan]){
+					@oPlayer.@skinSlot = @skin_slot_acquire(@skinHashScan, @oPlayer.@skinHash);
+					if(@oPlayer.@skinSlot < 0){
+						@oPlayer.@skinState = 3;
+					}else{
+						@oPlayer.@skinState = 2;
+					}
 				}
 			}
+			@skinHashScan += 1;
 		}
-		@skinHashScan += 1;
 		if(@skinHashScan >= @skinCount){
 			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
 				@oPlayer = instance_find(@onlinePlayer, @i);
@@ -2227,116 +2235,196 @@ if(@saveHistClearFiles){
 		}
 	}
 }
-// DEFERRED SAVE WRITE
+// DEFERRED SAVE WRITE (frame-sliced). A large history used to be thinned and
+// fully serialized in ONE frame when the dirty timer expired: with up to 500
+// entries that is thousands of GML/DLL calls in a single step - the
+// ~half-second stall that followed every received "xxx saved!" once the
+// history grew. The work now advances a few entries per frame: thinning
+// first (only when over the cap, one excess shift per frame), then
+// serialization into the dedicated @savesBuffer, then one file write.
 if(@saveHistDirty){
 	@saveHistDirtyTimer -= 1;
-	if(@saveHistDirtyTimer <= 0){
-		@saveHistDirty = false;
-		if(@saveHistCount > @saveHistMax){
-			@shNow = date_current_datetime();
-			@shThinWrite = 0;
-			@shThinLastKept = -1;
-			@saveHistFavCount = 0;
-			for(@shI = 0; @shI < @saveHistCount; @shI += 1){
-				@shKeep = false;
-				if(@saveHistFav[@shI]){
-					@shKeep = true;
-					@saveHistFavCount += 1;
-				}else{
-					@shAge = (@shNow - @saveHistTime[@shI]) * 1440;
-					if(@shAge < 0) @shAge = 0;
-					if(@shAge < 60){
-						@shMinGap = 0;
-					}else if(@shAge < 1440){
-						@shMinGap = 5;
-					}else if(@shAge < 10080){
-						@shMinGap = 120;
-					}else{
-						@shMinGap = 720;
-					}
-					if(@shThinLastKept < 0){
-						@shKeep = true;
-					}else{
-						@shGap = (@saveHistTime[@shI] - @shThinLastKept) * 1440;
-						if(@shGap >= @shMinGap){
-							@shKeep = true;
-						}
-					}
-				}
-				if(@shKeep){
-					if(!@saveHistFav[@shI]){
-						@shThinLastKept = @saveHistTime[@shI];
-					}
-					if(@shThinWrite != @shI){
-						@saveHistFav[@shThinWrite] = @saveHistFav[@shI];
-						@saveHistHotkey[@shThinWrite] = @saveHistHotkey[@shI];
-						@saveHistGrav[@shThinWrite] = @saveHistGrav[@shI];
-						@saveHistX[@shThinWrite] = @saveHistX[@shI];
-						@saveHistY[@shThinWrite] = @saveHistY[@shI];
-						@saveHistRoom[@shThinWrite] = @saveHistRoom[@shI];
-						@saveHistTime[@shThinWrite] = @saveHistTime[@shI];
-						@saveHistName[@shThinWrite] = @saveHistName[@shI];
-						@saveHistRoomName[@shThinWrite] = @saveHistRoomName[@shI];
-					}
-					@shThinWrite += 1;
-				}
+	if(@saveHistDirtyTimer <= 0 && @shWritePhase == 0){
+		@shWritePhase = 1;
+		@shWritePos = 0;
+		@shThinWrite = 0;
+		@shThinLastKept = -1;
+		@shTrimActive = false;
+		@saveHistFavCount = 0;
+		@shThinNow = date_current_datetime();
+		if(@saveHistCount <= @saveHistMax){
+			@shWritePhase = 2;
+			@shWritePos = 0;
+			@shWriteStartCount = @saveHistCount;
+			__ONLINE_buffer_clear(@savesBuffer);
+			#if not GMNET
+				__ONLINE_buffer_write_uint16(@savesBuffer, 65535);
+				__ONLINE_buffer_write_uint8(@savesBuffer, 2);
+				__ONLINE_buffer_write_uint16(@savesBuffer, @saveHistCount);
+			#endif
+			#if GMNET
+				__ONLINE_buffer_write_u16(@savesBuffer, 65535);
+				__ONLINE_buffer_write_u8(@savesBuffer, 2);
+				__ONLINE_buffer_write_u16(@savesBuffer, @saveHistCount);
+			#endif
+		}
+	}
+}
+if(@shWritePhase == 1){
+	// thinning: up to 20 entries this frame
+	@shSlice = 0;
+	while(@shWritePos < @saveHistCount && @shSlice < 20){
+		@shI = @shWritePos;
+		@shKeep = false;
+		if(@saveHistFav[@shI]){
+			@shKeep = true;
+			@saveHistFavCount += 1;
+		}else{
+			@shAge = (@shThinNow - @saveHistTime[@shI]) * 1440;
+			if(@shAge < 0) @shAge = 0;
+			if(@shAge < 60){
+				@shMinGap = 0;
+			}else if(@shAge < 1440){
+				@shMinGap = 5;
+			}else if(@shAge < 10080){
+				@shMinGap = 120;
+			}else{
+				@shMinGap = 720;
 			}
-			@saveHistCount = @shThinWrite;
-			for(@shEmrg = 0; @shEmrg < 200 && @saveHistCount > @saveHistMax; @shEmrg += 1){
-				@shFound = -1;
-				for(@shI = 0; @shI < @saveHistCount && @shFound < 0; @shI += 1){
-					if(!@saveHistFav[@shI]) @shFound = @shI;
-				}
-				if(@shFound < 0) @shFound = 0;
-				@saveHistCount -= 1;
-				for(@shI = @shFound; @shI < @saveHistCount; @shI += 1){
-					@saveHistFav[@shI] = @saveHistFav[@shI + 1];
-					@saveHistHotkey[@shI] = @saveHistHotkey[@shI + 1];
-					@saveHistGrav[@shI] = @saveHistGrav[@shI + 1];
-					@saveHistX[@shI] = @saveHistX[@shI + 1];
-					@saveHistY[@shI] = @saveHistY[@shI + 1];
-					@saveHistRoom[@shI] = @saveHistRoom[@shI + 1];
-					@saveHistTime[@shI] = @saveHistTime[@shI + 1];
-					@saveHistName[@shI] = @saveHistName[@shI + 1];
-					@saveHistRoomName[@shI] = @saveHistRoomName[@shI + 1];
+			if(@shThinLastKept < 0){
+				@shKeep = true;
+			}else{
+				@shGap = (@saveHistTime[@shI] - @shThinLastKept) * 1440;
+				if(@shGap >= @shMinGap){
+					@shKeep = true;
 				}
 			}
 		}
-		__ONLINE_buffer_clear(@buffer);
-		#if not GMNET
-			__ONLINE_buffer_write_uint16(@buffer, 65535);
-			__ONLINE_buffer_write_uint8(@buffer, 2);
-			__ONLINE_buffer_write_uint16(@buffer, @saveHistCount);
-			for(@shI = 0; @shI < @saveHistCount; @shI += 1){
-				__ONLINE_buffer_write_uint8(@buffer, @saveHistFav[@shI]);
-				__ONLINE_buffer_write_uint8(@buffer, @saveHistHotkey[@shI]);
-				__ONLINE_buffer_write_uint8(@buffer, @saveHistGrav[@shI]);
-				__ONLINE_buffer_write_int32(@buffer, @saveHistX[@shI]);
-				__ONLINE_buffer_write_float64(@buffer, @saveHistY[@shI]);
-				__ONLINE_buffer_write_int16(@buffer, @saveHistRoom[@shI]);
-				__ONLINE_buffer_write_float64(@buffer, @saveHistTime[@shI]);
-				__ONLINE_buffer_write_string(@buffer, @saveHistName[@shI]);
-				__ONLINE_buffer_write_string(@buffer, @saveHistRoomName[@shI]);
+		if(@shKeep){
+			if(!@saveHistFav[@shI]){
+				@shThinLastKept = @saveHistTime[@shI];
 			}
-			__ONLINE_buffer_write_to_file(@buffer, "@saves");
+			if(@shThinWrite != @shI){
+				@saveHistFav[@shThinWrite] = @saveHistFav[@shI];
+				@saveHistHotkey[@shThinWrite] = @saveHistHotkey[@shI];
+				@saveHistGrav[@shThinWrite] = @saveHistGrav[@shI];
+				@saveHistX[@shThinWrite] = @saveHistX[@shI];
+				@saveHistY[@shThinWrite] = @saveHistY[@shI];
+				@saveHistRoom[@shThinWrite] = @saveHistRoom[@shI];
+				@saveHistTime[@shThinWrite] = @saveHistTime[@shI];
+				@saveHistName[@shThinWrite] = @saveHistName[@shI];
+				@saveHistRoomName[@shThinWrite] = @saveHistRoomName[@shI];
+			}
+			@shThinWrite += 1;
+		}
+		@shWritePos += 1;
+		@shSlice += 1;
+	}
+	if(@shWritePos >= @saveHistCount && !@shTrimActive){
+		@saveHistCount = @shThinWrite;
+		if(@saveHistCount > @saveHistMax){
+			@shTrimActive = true;
+		}else{
+			@shWritePhase = 2;
+			@shWritePos = 0;
+			@shWriteStartCount = @saveHistCount;
+			__ONLINE_buffer_clear(@savesBuffer);
+			#if not GMNET
+				__ONLINE_buffer_write_uint16(@savesBuffer, 65535);
+				__ONLINE_buffer_write_uint8(@savesBuffer, 2);
+				__ONLINE_buffer_write_uint16(@savesBuffer, @saveHistCount);
+			#endif
+			#if GMNET
+				__ONLINE_buffer_write_u16(@savesBuffer, 65535);
+				__ONLINE_buffer_write_u8(@savesBuffer, 2);
+				__ONLINE_buffer_write_u16(@savesBuffer, @saveHistCount);
+			#endif
+		}
+	}
+	if(@shTrimActive){
+		// excess trim: one shift per frame until under the cap
+		@shFound = -1;
+		for(@shI = 0; @shI < @saveHistCount && @shFound < 0; @shI += 1){
+			if(!@saveHistFav[@shI]) @shFound = @shI;
+		}
+		if(@shFound < 0) @shFound = 0;
+		@saveHistCount -= 1;
+		for(@shI = @shFound; @shI < @saveHistCount; @shI += 1){
+			@saveHistFav[@shI] = @saveHistFav[@shI + 1];
+			@saveHistHotkey[@shI] = @saveHistHotkey[@shI + 1];
+			@saveHistGrav[@shI] = @saveHistGrav[@shI + 1];
+			@saveHistX[@shI] = @saveHistX[@shI + 1];
+			@saveHistY[@shI] = @saveHistY[@shI + 1];
+			@saveHistRoom[@shI] = @saveHistRoom[@shI + 1];
+			@saveHistTime[@shI] = @saveHistTime[@shI + 1];
+			@saveHistName[@shI] = @saveHistName[@shI + 1];
+			@saveHistRoomName[@shI] = @saveHistRoomName[@shI + 1];
+		}
+		if(@saveHistCount <= @saveHistMax){
+			@shTrimActive = false;
+			@shWritePhase = 2;
+			@shWritePos = 0;
+			@shWriteStartCount = @saveHistCount;
+			__ONLINE_buffer_clear(@savesBuffer);
+			#if not GMNET
+				__ONLINE_buffer_write_uint16(@savesBuffer, 65535);
+				__ONLINE_buffer_write_uint8(@savesBuffer, 2);
+				__ONLINE_buffer_write_uint16(@savesBuffer, @saveHistCount);
+			#endif
+			#if GMNET
+				__ONLINE_buffer_write_u16(@savesBuffer, 65535);
+				__ONLINE_buffer_write_u8(@savesBuffer, 2);
+				__ONLINE_buffer_write_u16(@savesBuffer, @saveHistCount);
+			#endif
+		}
+	}
+}
+if(@shWritePhase == 2){
+	// serialization: up to 12 entries this frame, then one file write
+	@shSlice = 0;
+	while(@shWritePos < @saveHistCount && @shSlice < 12){
+		@shI = @shWritePos;
+		#if not GMNET
+			__ONLINE_buffer_write_uint8(@savesBuffer, @saveHistFav[@shI]);
+			__ONLINE_buffer_write_uint8(@savesBuffer, @saveHistHotkey[@shI]);
+			__ONLINE_buffer_write_uint8(@savesBuffer, @saveHistGrav[@shI]);
+			__ONLINE_buffer_write_int32(@savesBuffer, @saveHistX[@shI]);
+			__ONLINE_buffer_write_float64(@savesBuffer, @saveHistY[@shI]);
+			__ONLINE_buffer_write_int16(@savesBuffer, @saveHistRoom[@shI]);
+			__ONLINE_buffer_write_float64(@savesBuffer, @saveHistTime[@shI]);
+			__ONLINE_buffer_write_string(@savesBuffer, @saveHistName[@shI]);
+			__ONLINE_buffer_write_string(@savesBuffer, @saveHistRoomName[@shI]);
 		#endif
 		#if GMNET
-			__ONLINE_buffer_write_u16(@buffer, 65535);
-			__ONLINE_buffer_write_u8(@buffer, 2);
-			__ONLINE_buffer_write_u16(@buffer, @saveHistCount);
-			for(@shI = 0; @shI < @saveHistCount; @shI += 1){
-				__ONLINE_buffer_write_u8(@buffer, @saveHistFav[@shI]);
-				__ONLINE_buffer_write_u8(@buffer, @saveHistHotkey[@shI]);
-				__ONLINE_buffer_write_u8(@buffer, @saveHistGrav[@shI]);
-				__ONLINE_buffer_write_i32(@buffer, @saveHistX[@shI]);
-				__ONLINE_buffer_write_double(@buffer, @saveHistY[@shI]);
-				__ONLINE_buffer_write_i16(@buffer, @saveHistRoom[@shI]);
-				__ONLINE_buffer_write_double(@buffer, @saveHistTime[@shI]);
-				__ONLINE_buffer_write_string(@buffer, @saveHistName[@shI]);
-				__ONLINE_buffer_write_string(@buffer, @saveHistRoomName[@shI]);
-			}
-			__ONLINE_buffer_save(@buffer, "@saves");
+			__ONLINE_buffer_write_u8(@savesBuffer, @saveHistFav[@shI]);
+			__ONLINE_buffer_write_u8(@savesBuffer, @saveHistHotkey[@shI]);
+			__ONLINE_buffer_write_u8(@savesBuffer, @saveHistGrav[@shI]);
+			__ONLINE_buffer_write_i32(@savesBuffer, @saveHistX[@shI]);
+			__ONLINE_buffer_write_double(@savesBuffer, @saveHistY[@shI]);
+			__ONLINE_buffer_write_i16(@savesBuffer, @saveHistRoom[@shI]);
+			__ONLINE_buffer_write_double(@savesBuffer, @saveHistTime[@shI]);
+			__ONLINE_buffer_write_string(@savesBuffer, @saveHistName[@shI]);
+			__ONLINE_buffer_write_string(@savesBuffer, @saveHistRoomName[@shI]);
 		#endif
+		@shWritePos += 1;
+		@shSlice += 1;
+	}
+	if(@shWritePos >= @saveHistCount){
+		#if not GMNET
+			__ONLINE_buffer_write_to_file(@savesBuffer, "@saves");
+		#endif
+		#if GMNET
+			__ONLINE_buffer_save(@savesBuffer, "@saves");
+		#endif
+		@shWritePhase = 0;
+		@saveHistDirty = false;
+		// A save that arrived mid-serialization grew the history past the
+		// header we already wrote: schedule a fresh full write next frame
+		// instead of persisting a truncated count.
+		if(@saveHistCount != @shWriteStartCount){
+			@saveHistDirty = true;
+			@saveHistDirtyTimer = 0;
+		}
 	}
 }
 // RATING SUBMIT

@@ -30,6 +30,10 @@ else{
 #endif
 @connected = false;
 @buffer = __ONLINE_buffer_create();
+// P6: dedicated buffer for the frame-sliced @saves serialization (the shared
+// @buffer is cleared by every message read, so a multi-frame write cannot
+// accumulate in it).
+@savesBuffer = __ONLINE_buffer_create();
 @selfID = "";
 @name = "";
 @selfGameID = "%arg0";
@@ -125,6 +129,11 @@ if(!@objListLoaded){
 @saveHistClearFiles = false;
 @saveHistDirty = false;
 @saveHistDirtyTimer = 0;
+// P6: phased frame-sliced save-history write (0 idle, 1 thinning, 2 serializing).
+@shWritePhase = 0;
+@shWritePos = 0;
+@shWriteStartCount = 0;
+@shTrimActive = false;
 @saveHistFilter = 0;
 @keyChatLog = 85;
 @ratingSubmitting = false;
@@ -311,11 +320,92 @@ global.@skinOn = 0;
 // Do NOT use variable_global_exists to detect the restart instead: on GM8.0
 // it always returns true (verified on fish).
 @skSprBase = %arg7;
+// P4: reuse-armed state. @skReuseSpr[st] holds a sprite kept across
+// game_restart (st = state 0-6, -1 = none); @skin_select consumes the set
+// exactly once and re-checks the recorded hash before adopting it.
+@skReuseArmed = 0;
+@skReuseHash = "";
 if(@skSprBase > 0){
     ini_open("@config.ini");
     @skSprList = ini_read_string("config", "skinSprIds", "");
     ini_write_string("config", "skinSprIds", "");
+    @skSelRecRaw = ini_read_string("config", "skinSelSprites", "");
+    ini_write_string("config", "skinSelSprites", "");
+    @skSavedHashEarly = ini_read_string("config", "skin", "");
     ini_close();
+    // P4: parse the selected-skin sprite record. Arm reuse only when every
+    // entry validates AND the recorded hash equals the hash the config still
+    // asks for - the kept sprites are then excluded from the deletion sweep
+    // below. "hash;id,state,width,height,frames;..." state 0-6, no dups.
+    for(@skSt = 0; @skSt < 7; @skSt += 1){
+        @skReuseSpr[@skSt] = -1;
+    }
+    if(string_length(@skSelRecRaw) > 0){
+        @skSelOk = 1;
+        @skSelPos = string_pos(";", @skSelRecRaw);
+        if(@skSelPos <= 0){
+            @skSelOk = 0;
+        }else{
+            @skSelHash = string_copy(@skSelRecRaw, 1, @skSelPos - 1);
+            @skSelRest = string_delete(@skSelRecRaw, 1, @skSelPos);
+            if(@skSelHash == "" || @skSelHash != @skSavedHashEarly){
+                @skSelOk = 0;
+            }else{
+                @skSelCnt = 0;
+                while(string_length(@skSelRest) > 0 && @skSelOk){
+                    @skSelPos = string_pos(";", @skSelRest);
+                    if(@skSelPos <= 0){
+                        // last record: no trailing separator
+                        @skSelTok = @skSelRest;
+                        @skSelRest = "";
+                    }else{
+                        @skSelTok = string_copy(@skSelRest, 1, @skSelPos - 1);
+                        @skSelRest = string_delete(@skSelRest, 1, @skSelPos);
+                    }
+                    @skFldN = 0;
+                    @skTokLeft = @skSelTok;
+                    while(string_length(@skTokLeft) > 0){
+                        @skComma = string_pos(",", @skTokLeft);
+                        if(@skComma <= 0){
+                            @skFVal[@skFldN] = real(@skTokLeft);
+                            @skTokLeft = "";
+                        }else{
+                            @skFVal[@skFldN] = real(string_copy(@skTokLeft, 1, @skComma - 1));
+                            @skTokLeft = string_delete(@skTokLeft, 1, @skComma);
+                        }
+                        @skFldN += 1;
+                    }
+                    if(@skFldN != 5){
+                        @skSelOk = 0;
+                        break;
+                    }
+                    @skSelId = @skFVal[0];
+                    @skSelSt = @skFVal[1];
+                    if(@skSelId < @skSprBase || @skSelSt < 0 || @skSelSt > 6 || !sprite_exists(@skSelId)){
+                        @skSelOk = 0;
+                        break;
+                    }
+                    if(sprite_get_width(@skSelId) != @skFVal[2] || sprite_get_height(@skSelId) != @skFVal[3] || sprite_get_number(@skSelId) != @skFVal[4]){
+                        @skSelOk = 0;
+                        break;
+                    }
+                    if(@skReuseSpr[@skSelSt] >= 0){
+                        @skSelOk = 0;
+                        break;
+                    }
+                    @skReuseSpr[@skSelSt] = @skSelId;
+                    @skSelCnt += 1;
+                }
+                if(@skSelCnt < 1){
+                    @skSelOk = 0;
+                }
+            }
+        }
+        if(@skSelOk){
+            @skReuseArmed = 1;
+            @skReuseHash = @skSelHash;
+        }
+    }
     @skSprN = 0;
     @skSprFld = 0;
     @skSprOk = (string_length(@skSprList) > 0);
@@ -353,7 +443,19 @@ if(@skSprBase > 0){
     }
     if(@skSprOk){
         for(@skSprI = 0; @skSprI < @skSprN; @skSprI += 1){
-            sprite_delete(@skSprId[@skSprI]);
+            // P4: skip sprites the reuse set keeps.
+            @skKeep = 0;
+            if(@skReuseArmed){
+                for(@skR = 0; @skR < 7; @skR += 1){
+                    if(@skReuseSpr[@skR] == @skSprId[@skSprI]){
+                        @skKeep = 1;
+                        break;
+                    }
+                }
+            }
+            if(!@skKeep){
+                sprite_delete(@skSprId[@skSprI]);
+            }
         }
     }
 }
@@ -827,6 +929,9 @@ if(@fwBerlin >= 0){
 // the hit, so it must NOT run on the normal path: with ~200 skins installed
 // it cost seconds on every game_restart (fish restarts on every load).
 @skin_scan();
+// P0/P3: hash cache - one ini parse replaces up to 196 x 25ms of MD5 per
+// game_restart (per death in games that restart on load).
+@skin_cache_load();
 @skinFound = -1;
 if(@skinSavedDir != ""){
     for(@skI = 0; @skI < @skinCount; @skI += 1){

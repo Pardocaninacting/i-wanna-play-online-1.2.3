@@ -18,6 +18,10 @@ if(!instance_exists(@userInterface)){
 @connected = false;
 set_utf8_mode(1);
 @buffer = buffer_create();
+// P6: dedicated buffer for the frame-sliced @saves serialization (the shared
+// @buffer is cleared by every message read, so a multi-frame write cannot
+// accumulate in it).
+@savesBuffer = buffer_create();
 @selfID = "";
 @name = "";
 @selfGameID = "%arg0";
@@ -89,6 +93,11 @@ set_utf8_mode(1);
 @saveHistClearFiles = false;
 @saveHistDirty = false;
 @saveHistDirtyTimer = 0;
+// P6: phased frame-sliced save-history write (0 idle, 1 thinning, 2 serializing).
+@shWritePhase = 0;
+@shWritePos = 0;
+@shWriteStartCount = 0;
+@shTrimActive = false;
 @saveHistFilter = 0;
 @keyChatLog = 85;
 @ratingSubmitting = false;
@@ -190,6 +199,10 @@ for(@scI = 0; @scI < 16; @scI += 1){
 // defaulted here - that would clobber the converter-provided values).
 @skinCount = 0;
 @skinSel = -1;
+// P4: sprite-slot reuse across game_restart is a GM8-only optimization; GMS
+// keeps these unarmed so @skin_select's shared code path loads normally.
+@skReuseArmed = 0;
+@skReuseHash = "";
 @skinLoaded = -1;
 @skinAutoDL = 1;
 @skinSavedHash = "";
@@ -704,6 +717,9 @@ __ONLINE_cjk_init();
 // the hit, so it must NOT run on the normal path: with ~200 skins installed
 // it cost seconds on every game_restart.
 @skin_scan();
+// P0/P3: hash cache - one ini parse replaces up to 196 x 25ms of MD5 per
+// game_restart (per death in games that restart on load).
+@skin_cache_load();
 @skinFound = -1;
 if(@skinSavedDir != ""){
     for(@skI = 0; @skI < @skinCount; @skI += 1){

@@ -193,16 +193,31 @@ static class Program
         if (!sharedSaveSupported)
             Console.WriteLine("Shared save hooks: disabled (scripts could not be decompiled)");
 
-        // Add extension
+        // Add extension. P2: probe the shipped http_dll binary for the md5_dir
+        // export (architecture-independent PE export-table walk) - only then the
+        // native package-hash fast path (hmd5_dir native + MD5DIR template flag)
+        // is enabled; otherwise the pure-GML walk stays.
+        var md5DirAvailable = DllExportsFunction(
+            Path.Combine(Config.ResourceDirectory, Config.UseX64NativeHttpDll ? "http_dll_2_3_x64.dll" : "http_dll_2_3.dll"),
+            "md5_dir");
+        if (md5DirAvailable)
+        {
+            activeFlags.Add("MD5DIR");
+            Console.WriteLine("HTTP DLL md5_dir export: available (native package hash fast path)");
+        }
+        else
+        {
+            Console.WriteLine("HTTP DLL md5_dir export: missing (pure-GML hash fallback)");
+        }
         if (Config.UseX64NativeHttpDll)
         {
-            AddNativeX64ExtensionIfMissing();
+            AddNativeX64ExtensionIfMissing(md5DirAvailable);
         }
         else
         {
             AddExtensionIfMissing(Path.Combine(Config.ResourceDirectory, "http_dll"));
-            // Add set_utf8_mode to x86 extension (not in the binary definition file)
-            AddSetUtf8ModeToExtension();
+            // Add set_utf8_mode + md5_dir to x86 extension (not in the binary definition file)
+            AddSetUtf8ModeToExtension(md5DirAvailable);
         }
 
         // Add sounds
@@ -258,6 +273,7 @@ static class Program
         // @bullet_init (called inside worldCreateGMS) reads the real values.
         worldCreateCode = (skinsEnabled ? BuildSpriteMapCode() : BuildSpriteMapDefaultsCode())
             + "\r\n" + (skinsEnabled ? BuildBulletMapCode(bulletSourceObj) : "// Bullet sharing (skins disabled)\r\nglobal.__ONLINE_bulletObj = -1; global.__ONLINE_bulletSpr = -1;")
+            + "\r\n" + $"global.__ONLINE_md5DirOk = {(md5DirAvailable ? 1 : 0)};\r\n"
             + "\r\n" + worldCreateCode;
         importGroup.QueueAppend(
             world.EventHandlerFor(EventType.Create, Data),
@@ -502,7 +518,7 @@ static class Program
         AddExtensionProductIdIfEligible();
     }
 
-    static void AddNativeX64ExtensionIfMissing()
+    static void AddNativeX64ExtensionIfMissing(bool md5DirAvailable)
     {
         if (Data.Extensions.ByName("Http Dll 2.3") != null)
             return;
@@ -566,12 +582,14 @@ static class Program
         DefineNative(file, ref functionId, "udpsocket_send", "udpsocket_send", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "set_utf8_mode", "set_utf8_mode", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "strip_non_bmp", "strip_non_bmp", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
+        if (md5DirAvailable)
+            DefineNative(file, ref functionId, "hmd5_dir", "md5_dir", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
 
         Data.Extensions.Add(extension);
         AddExtensionProductIdIfEligible();
     }
 
-    static void AddSetUtf8ModeToExtension()
+    static void AddSetUtf8ModeToExtension(bool md5DirAvailable)
     {
         var ext = Data.Extensions.ByName("Http Dll 2.3");
         if (ext == null || ext.Files.Count == 0)
@@ -581,11 +599,99 @@ static class Program
         uint functionId = 200;
         DefineNative(file, ref functionId, "set_utf8_mode", "set_utf8_mode", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "strip_non_bmp", "strip_non_bmp", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
+        if (md5DirAvailable)
+            DefineNative(file, ref functionId, "hmd5_dir", "md5_dir", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
     }
 
     static void DefineNative(UndertaleExtensionFile file, ref uint functionId, string name, string extName, UndertaleExtensionVarType returnType, params UndertaleExtensionVarType[] arguments)
     {
         file.Functions.DefineExtensionFunction(Data.Functions, Data.Strings, functionId++, 0xC, name, returnType, extName, arguments);
+    }
+
+    // P2: architecture-independent check that a DLL binary exports the given
+    // function (the x86 DLL cannot be LoadLibrary'd from this x64 process, so a
+    // plain PE export-table walk is the reliable way). Returns false on any
+    // parse trouble.
+    static bool DllExportsFunction(string dllPath, string funcName)
+    {
+        try
+        {
+            var data = File.ReadAllBytes(dllPath);
+            if (data.Length < 0x40 || data[0] != 'M' || data[1] != 'Z')
+                return false;
+            var peOff = BitConverter.ToInt32(data, 0x3C);
+            if (peOff <= 0 || peOff + 24 > data.Length || data[peOff] != 'P' || data[peOff + 1] != 'E')
+                return false;
+            var numSections = BitConverter.ToUInt16(data, peOff + 6);
+            var optSize = BitConverter.ToUInt16(data, peOff + 20);
+            var optOff = peOff + 24;
+            if (optOff + optSize > data.Length)
+                return false;
+            // 16-bit optional-header magic: 0x10B = PE32, 0x20B = PE32+. The
+            // low byte alone is 0x0B for both, so read the full UInt16.
+            var optMagic = BitConverter.ToUInt16(data, optOff);
+            var pe32Plus = optMagic == 0x20B;
+            var dataDirOff = optOff + (pe32Plus ? 112 : 96);
+            if (dataDirOff + 4 > data.Length)
+                return false;
+            var exportRva = BitConverter.ToInt32(data, dataDirOff); // first dir = exports
+            if (exportRva == 0)
+                return false;
+            var secOff = optOff + optSize;
+            int va = 0, raw = 0;
+            for (var s = 0; s < numSections; s++)
+            {
+                var sh = secOff + s * 40;
+                if (sh + 40 > data.Length)
+                    return false;
+                var vsize = BitConverter.ToInt32(data, sh + 8);
+                var vaddr = BitConverter.ToInt32(data, sh + 12);
+                var rawsize = BitConverter.ToInt32(data, sh + 16);
+                var rawptr = BitConverter.ToInt32(data, sh + 20);
+                if (exportRva >= vaddr && exportRva < vaddr + Math.Max(vsize, rawsize))
+                {
+                    va = vaddr;
+                    raw = rawptr;
+                    break;
+                }
+            }
+            if (raw == 0)
+                return false;
+            var expOff = exportRva - va + raw;
+            if (expOff + 40 > data.Length)
+                return false;
+            var numNames = BitConverter.ToInt32(data, expOff + 24);
+            var addrNames = BitConverter.ToInt32(data, expOff + 32);
+            if (numNames <= 0 || numNames > 65536)
+                return false;
+            var namesOff = addrNames - va + raw;
+            var funcBytes = System.Text.Encoding.ASCII.GetBytes(funcName);
+            for (var n = 0; n < numNames; n++)
+            {
+                if (namesOff + 4 > data.Length)
+                    return false;
+                var nameRva = BitConverter.ToInt32(data, namesOff);
+                namesOff += 4;
+                var noff = nameRva - va + raw;
+                if (noff <= 0 || noff >= data.Length)
+                    continue;
+                var len = 0;
+                while (noff + len < data.Length && data[noff + len] != 0 && len < 256)
+                    len++;
+                if (len != funcBytes.Length)
+                    continue;
+                var eq = true;
+                for (var k = 0; k < len; k++)
+                    if (data[noff + k] != funcBytes[k]) { eq = false; break; }
+                if (eq)
+                    return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     static void AddExtensionProductIdIfEligible()
@@ -1406,6 +1512,7 @@ static class Program
         gml = gml.Replace(Prefix + "udpsocket_", "udpsocket_");
         gml = gml.Replace(Prefix + "socket_", "socket_");
         gml = gml.Replace(Prefix + "buffer_", "hbuffer_");
+        gml = gml.Replace(Prefix + "md5_dir", "hmd5_dir");
         gml = Regex.Replace(gml, @"\bbuffer_", "hbuffer_");
         if (templateName == "worldEndStep")
         {

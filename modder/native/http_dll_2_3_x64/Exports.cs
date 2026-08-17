@@ -1,9 +1,11 @@
 using System.Buffers.Binary;
 using System.Collections.Generic;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 
 internal static class NativeState
@@ -1430,6 +1432,61 @@ public static class Exports
     public static IntPtr AnsiToUtf8(IntPtr value)
     {
         return NativeStrings.ConvertAnsiToUtf8(value);
+    }
+
+    // P2: native package hash. Byte-identical to the pure-GML @skin_hash_dir
+    // (md5.gml): md5 over (file name bytes + 0x00 + raw file bytes) for every
+    // regular file directly inside the directory, names sorted by byte order.
+    // Non-ASCII file names are refused ("" -> the GML caller falls back to the
+    // pure-GML walk, whose ANSI/UTF-8 byte semantics differ per engine string
+    // mode). Any IO error returns "" as well.
+    [UnmanagedCallersOnly(EntryPoint = "md5_dir", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static IntPtr Md5Dir(IntPtr path)
+    {
+        try
+        {
+            var dir = NativeStrings.Read(path);
+            if (string.IsNullOrEmpty(dir) || !Directory.Exists(dir))
+                return NativeStrings.Write(string.Empty);
+            var names = new List<string>();
+            foreach (var full in Directory.GetFiles(dir))
+            {
+                var name = Path.GetFileName(full);
+                foreach (var c in name)
+                    if (c > 0x7F)
+                        return NativeStrings.Write(string.Empty);
+                names.Add(name);
+            }
+            // GML sorts by raw byte order; for the ASCII subset ordinal order
+            // is the same.
+            names.Sort(string.CompareOrdinal);
+            using var md5 = MD5.Create();
+            var ascii = Encoding.ASCII;
+            var zero = new byte[1];
+            foreach (var name in names)
+            {
+                var nameBytes = ascii.GetBytes(name);
+                md5.TransformBlock(nameBytes, 0, nameBytes.Length, null, 0);
+                md5.TransformBlock(zero, 0, 1, null, 0);
+                byte[] data;
+                try
+                {
+                    data = File.ReadAllBytes(Path.Combine(dir, name));
+                }
+                catch
+                {
+                    return NativeStrings.Write(string.Empty);
+                }
+                if (data.Length > 0)
+                    md5.TransformBlock(data, 0, data.Length, null, 0);
+            }
+            md5.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            return NativeStrings.Write(Convert.ToHexString(md5.Hash!).ToLowerInvariant());
+        }
+        catch
+        {
+            return NativeStrings.Write(string.Empty);
+        }
     }
 
     [UnmanagedCallersOnly(EntryPoint = "input_box", CallConvs = new[] { typeof(CallConvCdecl) })]

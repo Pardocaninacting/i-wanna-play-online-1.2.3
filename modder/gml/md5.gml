@@ -372,7 +372,17 @@ return @md5_finish_hex();
 // file directly inside the directory, with names sorted by byte order
 // (ascending ord, compared byte by byte). Subdirectories are skipped.
 // Returns "" when a file cannot be read. Pure GML on both GM8 and GMS.
-var name, count, i, j, tmp, a, la, lb, lt, k, ka, kb, cmp;
+// P2: when the http_dll md5_dir export is available (native, byte-identical
+// semantics), it answers first; any "" falls through to the pure-GML walk.
+var name, count, i, j, tmp, a, la, lb, lt, k, ka, kb, cmp, @skNHash;
+#if MD5DIR
+if(global.@md5DirOk){
+    @skNHash = __ONLINE_md5_dir(argument0);
+    if(@skNHash != ""){
+        return @skNHash;
+    }
+}
+#endif
 count = 0;
 name = file_find_first(argument0 + "*.*", 0);
 while (name != "") {
