@@ -137,6 +137,8 @@ if(instance_exists(%arg0)){
 					@saveHistName[@shIdx] = @name;
 					@saveHistRoomName[@shIdx] = room_get_name(room);
 					@saveHistTime[@shIdx] = date_current_datetime();
+					// P6: invalidates an in-flight sliced write (see @shMutation in worldEndStep).
+					@shMutation += 1;
 					if(!@saveHistDirty){
 						@saveHistDirtyTimer = room_speed * 3;
 					}

@@ -2228,6 +2228,10 @@ if(@saveHistClearFiles){
 		}
 	}
 	@saveHistCount = @shThinWrite;
+	// Clear-non-favorites compacts the array in place; bump the mutation
+	// counter so an in-flight P6 scan/serialize (whose @shKeepIdx[] or
+	// buffer addresses pre-clear positions) is invalidated and restarted.
+	@shMutation += 1;
 	@saveHistPage = 0;
 	if(@saveHistCount > 0){
 		@saveHistDirty = true;
@@ -2250,15 +2254,18 @@ if(@saveHistClearFiles){
 // @shKeepIdx[] and the in-place compaction happens once when the scan
 // completes, so a game_restart/Game End takeover or the history UI never
 // observes a half-compacted array (duplicate rows, misapplied actions).
-// Phase 2 re-checks a monotonic mutation counter (@shMutation, bumped by
-// every add/delete/fav/hotkey change) BEFORE the file write: a stale buffer
-// is discarded and rewritten next frame instead of persisting a truncated or
-// header/body-mismatched @saves.
+// Both phases re-check a monotonic mutation counter (@shMutation, bumped by
+// every add/delete/fav/hotkey change): phase 1 before compacting, since
+// @shKeepIdx[] then still addresses pre-mutation positions, and phase 2
+// BEFORE the file write. A stale pass is dropped and restarted next frame
+// instead of scrambling the history or persisting a header/body-mismatched
+// @saves.
 if(@saveHistDirty){
 	@saveHistDirtyTimer -= 1;
 	if(@saveHistDirtyTimer <= 0 && @shWritePhase == 0){
 		@shWritePhase = 1;
 		@shWritePos = 0;
+		@shWriteStartMut = @shMutation;
 		@shThinWrite = 0;
 		@shThinLastKept = -1;
 		@shTrimActive = false;
@@ -2323,42 +2330,51 @@ if(@shWritePhase == 1){
 		@shSlice += 1;
 	}
 	if(@shWritePos >= @saveHistCount && !@shTrimActive){
-		// compact once: pure array assignments (~4500 ops worst case) are
-		// never the bottleneck - the buffer/DLL serialization is. Kept
-		// positions are strictly increasing and >= their target, so the
-		// in-place copy reads each source before it can be overwritten.
-		for(@shW = 0; @shW < @shThinWrite; @shW += 1){
-			@shS = @shKeepIdx[@shW];
-			if(@shS != @shW){
-				@saveHistFav[@shW] = @saveHistFav[@shS];
-				@saveHistHotkey[@shW] = @saveHistHotkey[@shS];
-				@saveHistGrav[@shW] = @saveHistGrav[@shS];
-				@saveHistX[@shW] = @saveHistX[@shS];
-				@saveHistY[@shW] = @saveHistY[@shS];
-				@saveHistRoom[@shW] = @saveHistRoom[@shS];
-				@saveHistTime[@shW] = @saveHistTime[@shS];
-				@saveHistName[@shW] = @saveHistName[@shS];
-				@saveHistRoomName[@shW] = @saveHistRoomName[@shS];
-			}
-		}
-		@saveHistCount = @shThinWrite;
-		if(@saveHistCount > @saveHistMax){
-			@shTrimActive = true;
+		if(@shMutation != @shWriteStartMut){
+			// an add/delete/fav during the multi-frame scan re-indexes the
+			// history, so @shKeepIdx[] no longer addresses the entries it
+			// was built from: compacting now would scramble or drop rows.
+			@shWritePhase = 0;
+			@saveHistDirty = true;
+			@saveHistDirtyTimer = 0;
 		}else{
-			@shWritePhase = 2;
-			@shWritePos = 0;
-			@shWriteStartMut = @shMutation;
-			__ONLINE_buffer_clear(@savesBuffer);
-			#if not GMNET
-				__ONLINE_buffer_write_uint16(@savesBuffer, 65535);
-				__ONLINE_buffer_write_uint8(@savesBuffer, 2);
-				__ONLINE_buffer_write_uint16(@savesBuffer, @saveHistCount);
-			#endif
-			#if GMNET
-				__ONLINE_buffer_write_u16(@savesBuffer, 65535);
-				__ONLINE_buffer_write_u8(@savesBuffer, 2);
-				__ONLINE_buffer_write_u16(@savesBuffer, @saveHistCount);
-			#endif
+			// compact once: pure array assignments (~4500 ops worst case) are
+			// never the bottleneck - the buffer/DLL serialization is. Kept
+			// positions are strictly increasing and >= their target, so the
+			// in-place copy reads each source before it can be overwritten.
+			for(@shW = 0; @shW < @shThinWrite; @shW += 1){
+				@shS = @shKeepIdx[@shW];
+				if(@shS != @shW){
+					@saveHistFav[@shW] = @saveHistFav[@shS];
+					@saveHistHotkey[@shW] = @saveHistHotkey[@shS];
+					@saveHistGrav[@shW] = @saveHistGrav[@shS];
+					@saveHistX[@shW] = @saveHistX[@shS];
+					@saveHistY[@shW] = @saveHistY[@shS];
+					@saveHistRoom[@shW] = @saveHistRoom[@shS];
+					@saveHistTime[@shW] = @saveHistTime[@shS];
+					@saveHistName[@shW] = @saveHistName[@shS];
+					@saveHistRoomName[@shW] = @saveHistRoomName[@shS];
+				}
+			}
+			@saveHistCount = @shThinWrite;
+			if(@saveHistCount > @saveHistMax){
+				@shTrimActive = true;
+			}else{
+				@shWritePhase = 2;
+				@shWritePos = 0;
+				@shWriteStartMut = @shMutation;
+				__ONLINE_buffer_clear(@savesBuffer);
+				#if not GMNET
+					__ONLINE_buffer_write_uint16(@savesBuffer, 65535);
+					__ONLINE_buffer_write_uint8(@savesBuffer, 2);
+					__ONLINE_buffer_write_uint16(@savesBuffer, @saveHistCount);
+				#endif
+				#if GMNET
+					__ONLINE_buffer_write_u16(@savesBuffer, 65535);
+					__ONLINE_buffer_write_u8(@savesBuffer, 2);
+					__ONLINE_buffer_write_u16(@savesBuffer, @saveHistCount);
+				#endif
+			}
 		}
 	}
 	if(@shTrimActive){

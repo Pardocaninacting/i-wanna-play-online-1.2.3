@@ -132,7 +132,6 @@ if(!@objListLoaded){
 // P6: phased frame-sliced save-history write (0 idle, 1 thinning, 2 serializing).
 @shWritePhase = 0;
 @shWritePos = 0;
-@shWriteStartCount = 0;
 @shWriteStartMut = 0;
 @shTrimActive = false;
 @shMutation = 0;
