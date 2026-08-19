@@ -507,12 +507,19 @@ for(@skSvSlot = 0; @skSvSlot < global.@rskCount; @skSvSlot += 1){
 // hash against the skin being restored, so a stale record can never adopt a
 // wrong sprite.
 @skSelRec = "";
-if(@skinSel >= 0 && @skinSel < @skinCount && @skinHash[@skinSel] != ""){
-    @skSelRec = @skinHash[@skinSel];
-    for(@skSvSt = 0; @skSvSt < 7; @skSvSt += 1){
-        if(@skinSpr[@skSvSt] >= 0){
-            if(sprite_exists(@skinSpr[@skSvSt])){
-                @skSelRec += ";" + string(@skinSpr[@skSvSt]) + "," + string(@skSvSt) + "," + string(sprite_get_width(@skinSpr[@skSvSt])) + "," + string(sprite_get_height(@skinSpr[@skSvSt])) + "," + string(sprite_get_number(@skinSpr[@skSvSt]));
+// GM8.0 does NOT short-circuit boolean && - nesting the guards is required so
+// @skinHash[@skinSel] is never evaluated with @skinSel < 0 (no skin selected
+// -> Negative array index crash on menu preview open / boot with skin= empty).
+if(@skinSel >= 0){
+    if(@skinSel < @skinCount){
+        if(@skinHash[@skinSel] != ""){
+            @skSelRec = @skinHash[@skinSel];
+            for(@skSvSt = 0; @skSvSt < 7; @skSvSt += 1){
+                if(@skinSpr[@skSvSt] >= 0){
+                    if(sprite_exists(@skinSpr[@skSvSt])){
+                        @skSelRec += ";" + string(@skinSpr[@skSvSt]) + "," + string(@skSvSt) + "," + string(sprite_get_width(@skinSpr[@skSvSt])) + "," + string(sprite_get_height(@skinSpr[@skSvSt])) + "," + string(sprite_get_number(@skinSpr[@skSvSt]));
+                    }
+                }
             }
         }
     }
