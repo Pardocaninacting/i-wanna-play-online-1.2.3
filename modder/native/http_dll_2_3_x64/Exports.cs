@@ -1455,6 +1455,15 @@ public static class Exports
                 foreach (var c in name)
                     if (c > 0x7F)
                         return NativeStrings.Write(string.Empty);
+                // The engine's file_find_first(mask, 0) never yields Hidden or
+                // System entries (verified in-game: a Hidden/System file inside
+                // a skin dir is not enumerated, while ReadOnly/Archive/Normal
+                // are). The native walk must mirror that exact set - otherwise
+                // a pure-GML fallback client and a native client hash the same
+                // package differently and can never match (silent split).
+                var attrs = File.GetAttributes(full);
+                if ((attrs & (FileAttributes.Hidden | FileAttributes.System)) != 0)
+                    continue;
                 names.Add(name);
             }
             // GML sorts by raw byte order; for the ASCII subset ordinal order
