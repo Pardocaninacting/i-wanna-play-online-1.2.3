@@ -292,6 +292,7 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				if(@save_enabled){
 				@shIdx = @saveHistCount;
 				@saveHistCount += 1;
+				@shMutation += 1;
 				@saveHistFav[@shIdx] = 0;
 				@saveHistHotkey[@shIdx] = 0;
 				@saveHistGrav[@shIdx] = @sGravity;
@@ -991,11 +992,13 @@ if(@skinHashScan < @skinCount){
 		}
 	}
 	if(@skAnyPending){
-		// P1: wall-clock deadline (ms); the scan stops when the frame's
-		// budget is spent, so hash work can never stretch a frame beyond
-		// this much extra time.
+		// P1: wall-clock deadline (ms) + hard per-frame iteration cap. GM8's
+		// current_time is GetTickCount-based (~15.6ms granularity), so the
+		// deadline alone can let one frame chew several ticks; the cap keeps
+		// the frame cost bounded regardless of clock granularity.
 		@skDeadline = current_time + 6;
-		while(@skinHashScan < @skinCount && current_time < @skDeadline){
+		@skScanCap = 0;
+		while(@skinHashScan < @skinCount && current_time < @skDeadline && @skScanCap < 24){
 			@skin_ensure_hash(@skinHashScan);
 			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
 				@oPlayer = instance_find(@onlinePlayer, @i);
@@ -1009,6 +1012,7 @@ if(@skinHashScan < @skinCount){
 				}
 			}
 			@skinHashScan += 1;
+			@skScanCap += 1;
 		}
 		if(@skinHashScan >= @skinCount){
 			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
@@ -2242,6 +2246,14 @@ if(@saveHistClearFiles){
 // history grew. The work now advances a few entries per frame: thinning
 // first (only when over the cap, one excess shift per frame), then
 // serialization into the dedicated @savesBuffer, then one file write.
+// The thin scan is NON-destructive: it only records kept positions into
+// @shKeepIdx[] and the in-place compaction happens once when the scan
+// completes, so a game_restart/Game End takeover or the history UI never
+// observes a half-compacted array (duplicate rows, misapplied actions).
+// Phase 2 re-checks a monotonic mutation counter (@shMutation, bumped by
+// every add/delete/fav/hotkey change) BEFORE the file write: a stale buffer
+// is discarded and rewritten next frame instead of persisting a truncated or
+// header/body-mismatched @saves.
 if(@saveHistDirty){
 	@saveHistDirtyTimer -= 1;
 	if(@saveHistDirtyTimer <= 0 && @shWritePhase == 0){
@@ -2255,7 +2267,7 @@ if(@saveHistDirty){
 		if(@saveHistCount <= @saveHistMax){
 			@shWritePhase = 2;
 			@shWritePos = 0;
-			@shWriteStartCount = @saveHistCount;
+			@shWriteStartMut = @shMutation;
 			__ONLINE_buffer_clear(@savesBuffer);
 			#if not GMNET
 				__ONLINE_buffer_write_uint16(@savesBuffer, 65535);
@@ -2271,7 +2283,7 @@ if(@saveHistDirty){
 	}
 }
 if(@shWritePhase == 1){
-	// thinning: up to 20 entries this frame
+	// thinning: scan up to 20 entries this frame, recording kept positions
 	@shSlice = 0;
 	while(@shWritePos < @saveHistCount && @shSlice < 20){
 		@shI = @shWritePos;
@@ -2304,30 +2316,38 @@ if(@shWritePhase == 1){
 			if(!@saveHistFav[@shI]){
 				@shThinLastKept = @saveHistTime[@shI];
 			}
-			if(@shThinWrite != @shI){
-				@saveHistFav[@shThinWrite] = @saveHistFav[@shI];
-				@saveHistHotkey[@shThinWrite] = @saveHistHotkey[@shI];
-				@saveHistGrav[@shThinWrite] = @saveHistGrav[@shI];
-				@saveHistX[@shThinWrite] = @saveHistX[@shI];
-				@saveHistY[@shThinWrite] = @saveHistY[@shI];
-				@saveHistRoom[@shThinWrite] = @saveHistRoom[@shI];
-				@saveHistTime[@shThinWrite] = @saveHistTime[@shI];
-				@saveHistName[@shThinWrite] = @saveHistName[@shI];
-				@saveHistRoomName[@shThinWrite] = @saveHistRoomName[@shI];
-			}
+			@shKeepIdx[@shThinWrite] = @shI;
 			@shThinWrite += 1;
 		}
 		@shWritePos += 1;
 		@shSlice += 1;
 	}
 	if(@shWritePos >= @saveHistCount && !@shTrimActive){
+		// compact once: pure array assignments (~4500 ops worst case) are
+		// never the bottleneck - the buffer/DLL serialization is. Kept
+		// positions are strictly increasing and >= their target, so the
+		// in-place copy reads each source before it can be overwritten.
+		for(@shW = 0; @shW < @shThinWrite; @shW += 1){
+			@shS = @shKeepIdx[@shW];
+			if(@shS != @shW){
+				@saveHistFav[@shW] = @saveHistFav[@shS];
+				@saveHistHotkey[@shW] = @saveHistHotkey[@shS];
+				@saveHistGrav[@shW] = @saveHistGrav[@shS];
+				@saveHistX[@shW] = @saveHistX[@shS];
+				@saveHistY[@shW] = @saveHistY[@shS];
+				@saveHistRoom[@shW] = @saveHistRoom[@shS];
+				@saveHistTime[@shW] = @saveHistTime[@shS];
+				@saveHistName[@shW] = @saveHistName[@shS];
+				@saveHistRoomName[@shW] = @saveHistRoomName[@shS];
+			}
+		}
 		@saveHistCount = @shThinWrite;
 		if(@saveHistCount > @saveHistMax){
 			@shTrimActive = true;
 		}else{
 			@shWritePhase = 2;
 			@shWritePos = 0;
-			@shWriteStartCount = @saveHistCount;
+			@shWriteStartMut = @shMutation;
 			__ONLINE_buffer_clear(@savesBuffer);
 			#if not GMNET
 				__ONLINE_buffer_write_uint16(@savesBuffer, 65535);
@@ -2364,7 +2384,7 @@ if(@shWritePhase == 1){
 			@shTrimActive = false;
 			@shWritePhase = 2;
 			@shWritePos = 0;
-			@shWriteStartCount = @saveHistCount;
+			@shWriteStartMut = @shMutation;
 			__ONLINE_buffer_clear(@savesBuffer);
 			#if not GMNET
 				__ONLINE_buffer_write_uint16(@savesBuffer, 65535);
@@ -2410,20 +2430,24 @@ if(@shWritePhase == 2){
 		@shSlice += 1;
 	}
 	if(@shWritePos >= @saveHistCount){
-		#if not GMNET
-			__ONLINE_buffer_write_to_file(@savesBuffer, "@saves");
-		#endif
-		#if GMNET
-			__ONLINE_buffer_save(@savesBuffer, "@saves");
-		#endif
-		@shWritePhase = 0;
-		@saveHistDirty = false;
-		// A save that arrived mid-serialization grew the history past the
-		// header we already wrote: schedule a fresh full write next frame
-		// instead of persisting a truncated count.
-		if(@saveHistCount != @shWriteStartCount){
+		// Any mutation since the header was written (add/delete/fav/hotkey
+		// during serialization) makes the buffered body stale: discard it
+		// and schedule a fresh full write next frame. Checked BEFORE the
+		// file write, so a kill/crash can never leave a truncated or
+		// header/body-mismatched @saves on disk.
+		if(@shMutation != @shWriteStartMut){
+			@shWritePhase = 0;
 			@saveHistDirty = true;
 			@saveHistDirtyTimer = 0;
+		}else{
+			#if not GMNET
+				__ONLINE_buffer_write_to_file(@savesBuffer, "@saves");
+			#endif
+			#if GMNET
+				__ONLINE_buffer_save(@savesBuffer, "@saves");
+			#endif
+			@shWritePhase = 0;
+			@saveHistDirty = false;
 		}
 	}
 }
@@ -2705,6 +2729,7 @@ if(@settingsOpen && @keybindEditing < 0){
 							@saveHistFavCount += 1;
 						}
 					}
+					@shMutation += 1;
 					if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
 					@saveHistDirty = true;
 				}
@@ -2721,6 +2746,7 @@ if(@settingsOpen && @keybindEditing < 0){
 							}
 							@saveHistHotkey[@kbVisCur] = @kbHot;
 						}
+						@shMutation += 1;
 						if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
 						@saveHistDirty = true;
 						@kbAct = 1;
@@ -2728,21 +2754,26 @@ if(@settingsOpen && @keybindEditing < 0){
 				}
 			}
 			if(keyboard_check_pressed(vk_delete)){
-				if(@kbVisCur >= 0 && !@saveHistFav[@kbVisCur]){
-					for(@kbI = @kbVisCur; @kbI < @saveHistCount - 1; @kbI += 1){
-						@saveHistFav[@kbI] = @saveHistFav[@kbI + 1];
-						@saveHistHotkey[@kbI] = @saveHistHotkey[@kbI + 1];
-						@saveHistGrav[@kbI] = @saveHistGrav[@kbI + 1];
-						@saveHistX[@kbI] = @saveHistX[@kbI + 1];
-						@saveHistY[@kbI] = @saveHistY[@kbI + 1];
-						@saveHistRoom[@kbI] = @saveHistRoom[@kbI + 1];
-						@saveHistName[@kbI] = @saveHistName[@kbI + 1];
-						@saveHistRoomName[@kbI] = @saveHistRoomName[@kbI + 1];
-						@saveHistTime[@kbI] = @saveHistTime[@kbI + 1];
+				// Nested guard: GM8.0 does not short-circuit && - a combined
+				// condition would index @saveHistFav[-1] when @kbVisCur < 0.
+				if(@kbVisCur >= 0){
+					if(!@saveHistFav[@kbVisCur]){
+						for(@kbI = @kbVisCur; @kbI < @saveHistCount - 1; @kbI += 1){
+							@saveHistFav[@kbI] = @saveHistFav[@kbI + 1];
+							@saveHistHotkey[@kbI] = @saveHistHotkey[@kbI + 1];
+							@saveHistGrav[@kbI] = @saveHistGrav[@kbI + 1];
+							@saveHistX[@kbI] = @saveHistX[@kbI + 1];
+							@saveHistY[@kbI] = @saveHistY[@kbI + 1];
+							@saveHistRoom[@kbI] = @saveHistRoom[@kbI + 1];
+							@saveHistName[@kbI] = @saveHistName[@kbI + 1];
+							@saveHistRoomName[@kbI] = @saveHistRoomName[@kbI + 1];
+							@saveHistTime[@kbI] = @saveHistTime[@kbI + 1];
+						}
+						@saveHistCount -= 1;
+						@shMutation += 1;
+						if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
+						@saveHistDirty = true;
 					}
-					@saveHistCount -= 1;
-					if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
-					@saveHistDirty = true;
 				}
 				@kbAct = 1;
 			}

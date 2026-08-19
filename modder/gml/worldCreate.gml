@@ -133,7 +133,9 @@ if(!@objListLoaded){
 @shWritePhase = 0;
 @shWritePos = 0;
 @shWriteStartCount = 0;
+@shWriteStartMut = 0;
 @shTrimActive = false;
+@shMutation = 0;
 @saveHistFilter = 0;
 @keyChatLog = 85;
 @ratingSubmitting = false;
@@ -367,12 +369,21 @@ if(@skSprBase > 0){
                     while(string_length(@skTokLeft) > 0){
                         @skComma = string_pos(",", @skTokLeft);
                         if(@skComma <= 0){
-                            @skFVal[@skFldN] = real(@skTokLeft);
+                            @skTok1 = @skTokLeft;
                             @skTokLeft = "";
                         }else{
-                            @skFVal[@skFldN] = real(string_copy(@skTokLeft, 1, @skComma - 1));
+                            @skTok1 = string_copy(@skTokLeft, 1, @skComma - 1);
                             @skTokLeft = string_delete(@skTokLeft, 1, @skComma);
                         }
+                        // Digits guard (parity with the skinSprIds parser):
+                        // GM8.0 real("abc") on a hand-edited/corrupt record is
+                        // a hard error popup.
+                        if(string_length(@skTok1) < 1 || string_digits(@skTok1) != @skTok1){
+                            @skSelOk = 0;
+                            @skFldN = 99;
+                            break;
+                        }
+                        @skFVal[@skFldN] = real(@skTok1);
                         @skFldN += 1;
                     }
                     if(@skFldN != 5){
@@ -929,8 +940,8 @@ if(@fwBerlin >= 0){
 // the hit, so it must NOT run on the normal path: with ~200 skins installed
 // it cost seconds on every game_restart (fish restarts on every load).
 @skin_scan();
-// P0/P3: hash cache - one ini parse replaces up to 196 x 25ms of MD5 per
-// game_restart (per death in games that restart on load).
+// P0/P3: hash cache - one txt-cache read replaces up to 196 x 25ms of MD5
+// per game_restart (per death in games that restart on load).
 @skin_cache_load();
 @skinFound = -1;
 if(@skinSavedDir != ""){
@@ -956,6 +967,21 @@ if(@skinFound >= 0){
     @skin_select(@skinFound);
 }else if(@skinSavedHash != "" || @skinSavedDir != ""){
     // The saved skin no longer exists: forget it on disk as well.
+    // P4: the reuse-armed sprites are consumed only by @skin_select - this
+    // branch never reaches it, so free the kept set explicitly (otherwise
+    // the 7 sprites leak forever; the next @skin_spr_save no longer lists
+    // them and they can never be reclaimed).
+    if(@skReuseArmed){
+        for(@skR = 0; @skR < 7; @skR += 1){
+            if(@skReuseSpr[@skR] >= 0){
+                if(sprite_exists(@skReuseSpr[@skR])){
+                    sprite_delete(@skReuseSpr[@skR]);
+                }
+            }
+        }
+        @skReuseArmed = 0;
+        @skReuseHash = "";
+    }
     @skinSavedHash = "";
     @skinSavedDir = "";
     ini_open("@config.ini");

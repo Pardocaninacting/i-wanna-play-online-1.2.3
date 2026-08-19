@@ -29,9 +29,66 @@ import iconv from "iconv-lite"
 
 const HTTP_DLL_FILENAME: string = "http_dll_2_3.dll";
 const HTTP_DLL_X86_PROJECT_DIR: string = path.join(__dirname, "native", "http_dll_2_3_x86");
-// P2: written next to the converted exe; the runtime only defines the md5_dir
-// export when this marker exists (see the httpdll_init generation).
-const MD5DIR_MARKER_FILENAME: string = "__ONLINE_md5dir.ok";
+
+// P2: architecture-independent PE export-table walk. Returns whether the DLL
+// binary at dllPath exports funcName. The runtime external_define on a missing
+// export is a hard startup error (GM8), so the converter verifies the export
+// at build time instead of hoping the marker/shipped DLL line up.
+export const dllExportsFunction = function (dllPath: string, funcName: string): boolean {
+	try {
+		const data: Buffer = fs.readFileSync(dllPath);
+		if (data.length < 0x40 || data[0] !== 0x4D || data[1] !== 0x5A) return false;
+		const peOff = data.readUInt32LE(0x3C);
+		if (peOff <= 0 || peOff + 24 > data.length || data.toString("ascii", peOff, peOff + 2) !== "PE") return false;
+		const numSections = data.readUInt16LE(peOff + 6);
+		const optSize = data.readUInt16LE(peOff + 20);
+		const optOff = peOff + 24;
+		if (optOff + optSize > data.length) return false;
+		// 16-bit optional-header magic: 0x10B = PE32, 0x20B = PE32+; the low
+		// byte alone is 0x0B for both.
+		const pe32Plus = data.readUInt16LE(optOff) === 0x20B;
+		const dataDirOff = optOff + (pe32Plus ? 112 : 96);
+		if (dataDirOff + 4 > data.length) return false;
+		const exportRva = data.readUInt32LE(dataDirOff);
+		if (exportRva === 0) return false;
+		const secOff = optOff + optSize;
+		let va = 0, raw = 0;
+		for (let s = 0; s < numSections; s++) {
+			const sh = secOff + s * 40;
+			if (sh + 40 > data.length) return false;
+			const vsize = data.readUInt32LE(sh + 8);
+			const vaddr = data.readUInt32LE(sh + 12);
+			const rawsize = data.readUInt32LE(sh + 16);
+			const rawptr = data.readUInt32LE(sh + 20);
+			if (exportRva >= vaddr && exportRva < vaddr + Math.max(vsize, rawsize)) {
+				va = vaddr;
+				raw = rawptr;
+				break;
+			}
+		}
+		if (raw === 0) return false;
+		const expOff = exportRva - va + raw;
+		if (expOff + 40 > data.length) return false;
+		const numNames = data.readUInt32LE(expOff + 24);
+		const addrNames = data.readUInt32LE(expOff + 32);
+		if (numNames <= 0 || numNames > 65536) return false;
+		let namesOff = addrNames - va + raw;
+		for (let n = 0; n < numNames; n++) {
+			if (namesOff + 4 > data.length) return false;
+			const nameRva = data.readUInt32LE(namesOff);
+			namesOff += 4;
+			const noff = nameRva - va + raw;
+			if (noff <= 0 || noff >= data.length) continue;
+			let end = noff;
+			while (end < data.length && data[end] !== 0 && end - noff < 256) end++;
+			if (end - noff !== funcName.length) continue;
+			if (data.toString("ascii", noff, end) === funcName) return true;
+		}
+		return false;
+	} catch {
+		return false;
+	}
+};
 
 const EnsureX86HttpDllBuilt = async function(): Promise<void> {
 	const outputDll: string = path.join(__dirname, "lib", HTTP_DLL_FILENAME);
@@ -1081,12 +1138,21 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// http_dll's table; the game's extension functions stay untouched. This also
 	// means gm82buf-only games get full socket support from http_dll for free.
 	{
+		// P2: verify the shipped DLL actually exports md5_dir before wiring the
+		// native fast path. external_define on a missing export is a HARD
+		// startup error ("Error defining an external function", fish verified),
+		// so the define is only generated when the export provably exists; an
+		// old DLL in lib/ (or a failed rebuild) silently keeps the pure-GML
+		// hash fallback instead of producing a broken exe.
+		await EnsureX86HttpDllBuilt();
+		const md5DirExportPresent = dllExportsFunction(path.join(__dirname, "lib", HTTP_DLL_FILENAME), "md5_dir");
+		console.log(`HTTP DLL md5_dir export: ${md5DirExportPresent ? "available" : "missing"} (native package hash ${md5DirExportPresent ? "enabled" : "falls back to pure GML"})`);
 		GMLCode.addVariables("HTTPDLL_INIT");
 		// P2: the md5.gml native fast path is guarded by #if MD5DIR. GM8 always
 		// registers the flag: the wrapper script __ONLINE_md5_dir exists in every
 		// build, and the runtime flag global.__ONLINE_md5DirOk (set from the
-		// external_define result in __ONLINE_httpdll_init) keeps an old DLL
-		// without the md5_dir export on the pure-GML fallback.
+		// external_define result in __ONLINE_httpdll_init) keeps a build whose
+		// DLL lacked the export on the pure-GML fallback.
 		GMLCode.addVariables("MD5DIR");
 		const HTTP_DLL_NAME: string = "http_dll_2_3.dll";
 		interface DllFunc { name: string; dllName: string; ret: string; args: Array<string>; }
@@ -1197,16 +1263,13 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		const initLines: Array<string> = [`var dll; dll = "${HTTP_DLL_NAME}";`];
 		for (const fn of fns) {
 			if (fn.dllName === "md5_dir") {
-				// P2: defining an export that an older http_dll_2_3.dll lacks is a
-				// HARD startup error ("Error defining an external function", fish
-				// verified) - it cannot be tried and caught. Gate the define on the
-				// marker file the converter writes next to the exe, so upgrading
-				// only the exe into an old folder (no marker) silently keeps the
-				// pure-GML hash fallback.
-				initLines.push("global.__od_md5_dir = -1;");
-				initLines.push(`if(file_exists("${MD5DIR_MARKER_FILENAME}")){`);
-				initLines.push(`global.__od_md5_dir = external_define(dll,'md5_dir',dll_cdecl,ty_string,1,ty_string);`);
-				initLines.push("}");
+				// P2: the define is emitted only when the DLL provably exports
+				// md5_dir (verified above by walking the DLL's PE export table).
+				if (md5DirExportPresent) {
+					initLines.push(`global.__od_md5_dir = external_define(dll,'md5_dir',dll_cdecl,ty_string,1,ty_string);`);
+				} else {
+					initLines.push("global.__od_md5_dir = -1;");
+				}
 				continue;
 			}
 			const argTypes: string = fn.args.length > 0 ? "," + fn.args.join(",") : "";
@@ -1851,9 +1914,4 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	}
 	await EnsureX86HttpDllBuilt();
 	await fs.copyFile(path.join(__dirname, "lib", HTTP_DLL_FILENAME), path.join(outputDir, HTTP_DLL_FILENAME));
-	// P2: capability marker for the md5_dir native fast path. The exe's DLL init
-	// only defines md5_dir when this file exists (defining an export an older
-	// http_dll_2_3.dll lacks is a hard startup error), so exe-only upgrades over
-	// an old folder stay on the pure-GML hash fallback.
-	await fs.writeFile(path.join(outputDir, MD5DIR_MARKER_FILENAME), "1", "utf8");
 }

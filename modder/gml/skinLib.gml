@@ -208,21 +208,22 @@ if(@skHasIni){
 return 1;
 
 ///// script @skin_cache_load
-// P0/P3: load the on-disk hash cache (iwposkins/skincache.txt) into memory
-// once per world Create. Format: 3 lines per entry - dirname, hash (32 hex),
-// fingerprint. The reverse hash->dirname lookup scans the in-memory table
-// (the table is small); no second on-disk index is needed. A plain text file
-// instead of ini: GM8.0 has NO ini_key_first/next (GM8.1+ only), and the
-// file_text_* family exists on every supported engine. Reading 196 entries
-// costs one open/read/close (~1-3ms) ONCE per game_restart; it replaces up to
-// 196 x 25ms of pure-GML MD5. An unreadable/absent cache simply leaves the
-// table empty (lookups fall back to hashing).
+// P0/P3: load the on-disk hash cache (iwposkins/__ONLINE_skincache.txt) into
+// memory once per world Create. Format: 3 lines per entry - dirname, hash
+// (32 hex), fingerprint. The reverse hash->dirname lookup scans the
+// in-memory table (the table is small); no second on-disk index is needed.
+// A plain text file instead of ini: GM8.0 has NO ini_key_first/next (GM8.1+
+// only), and the file_text_* family exists on every supported engine.
+// Reading 196 entries costs one open/read/close (~1-3ms) ONCE per
+// game_restart; it replaces up to 196 x 25ms of pure-GML MD5. An
+// unreadable/absent cache simply leaves the table empty (lookups fall back
+// to hashing).
 @skinCacheN = 0;
 @skinCacheChanged = 0;
-if(!file_exists("iwposkins" + chr(92) + "skincache.txt")){
+if(!file_exists("iwposkins" + chr(92) + "@skincache.txt")){
     return 0;
 }
-@skcF = file_text_open_read("iwposkins" + chr(92) + "skincache.txt");
+@skcF = file_text_open_read("iwposkins" + chr(92) + "@skincache.txt");
 if(@skcF == -1){
     return 0;
 }
@@ -274,13 +275,22 @@ file_find_close();
 for(@skcI2 = 1; @skcI2 < @skcN; @skcI2 += 1){
     @skcTmp = @skcNames[@skcI2];
     @skcJ = @skcI2;
-    while(@skcJ > 0 && @skcNames[@skcJ - 1] > @skcTmp){
+    // GM8.0 && does not short-circuit: a combined condition would evaluate
+    // @skcNames[-1] once @skcJ reaches 0 (mixed-case package, or FAT/exFAT/
+    // network enumeration order) -> Negative array index crash. Break-guard.
+    while(@skcJ > 0){
+        if(@skcNames[@skcJ - 1] <= @skcTmp) break;
         @skcNames[@skcJ] = @skcNames[@skcJ - 1];
         @skcJ -= 1;
     }
     @skcNames[@skcJ] = @skcTmp;
 }
 @skcFp = string(@skcN) + "|";
+if(@skcN >= 64){
+    // The 64-file cap may have truncated the list: make the fingerprint
+    // distinguishable from a package with exactly 64 files.
+    @skcFp += "cap;";
+}
 for(@skcI2 = 0; @skcI2 < @skcN; @skcI2 += 1){
     // GM8.0 has no file_size (8.1+); file_bin_open+file_bin_size is the
     // proven-8.0 way (md5.gml already reads files through file_bin_*).
@@ -298,10 +308,20 @@ for(@skcI2 = 0; @skcI2 < @skcN; @skcI2 += 1){
 return @skcFp;
 
 ///// script @skin_cache_lookup
-// argument0: skin index. Returns the cached hash when the fingerprint still
-// matches, "" otherwise (caller falls back to the real hashing).
+// argument0: skin index, argument1 (optional): precomputed fingerprint (the
+// caller may already have computed it - doing it twice costs 7 file_bin
+// opens on the miss path). Returns the cached hash when the fingerprint
+// still matches, "" otherwise (caller falls back to the real hashing).
 @skcI = argument0;
-@skcFp = @skin_cache_fp(@skcI);
+@skcFp = "";
+if(argument_count >= 2){
+    if(argument1 != ""){
+        @skcFp = argument1;
+    }
+}
+if(@skcFp == ""){
+    @skcFp = @skin_cache_fp(@skcI);
+}
 if(@skcFp == ""){
     return "";
 }
@@ -316,11 +336,20 @@ for(@skcI2 = 0; @skcI2 < @skinCacheN; @skcI2 += 1){
 return "";
 
 ///// script @skin_cache_add
-// argument0: skin index (hash already computed into @skinHash[i]).
+// argument0: skin index (hash already computed into @skinHash[i]),
+// argument1 (optional): precomputed fingerprint (see @skin_cache_lookup).
 // Adds/updates both cache tables in memory and marks the cache changed; the
 // on-disk flush happens once in @skin_cache_flush (world Game End).
 @skcI = argument0;
-@skcFp = @skin_cache_fp(@skcI);
+@skcFp = "";
+if(argument_count >= 2){
+    if(argument1 != ""){
+        @skcFp = argument1;
+    }
+}
+if(@skcFp == ""){
+    @skcFp = @skin_cache_fp(@skcI);
+}
 if(@skcFp == ""){
     return 0;
 }
@@ -351,7 +380,7 @@ if(!@skinCacheChanged){
     return 0;
 }
 @skinCacheChanged = 0;
-@skcF = file_text_open_write("iwposkins" + chr(92) + "skincache.txt");
+@skcF = file_text_open_write("iwposkins" + chr(92) + "@skincache.txt");
 if(@skcF == -1){
     return 0;
 }
@@ -371,19 +400,21 @@ return 1;
 // the md5 pack). Hashing is expensive; callers should only ask when needed.
 // P0/P3: a matching on-disk cache entry (same dirname + file fingerprint)
 // short-circuits the MD5 entirely - the per-death game_restart cost goes
-// from N x 25ms to one ini parse.
+// from N x 25ms to one txt-cache read. The fingerprint is computed ONCE and
+// shared by the lookup and the add.
 @skI = argument0;
 if(@skI < 0 || @skI >= @skinCount){
     return 0;
 }
 if(@skinHash[@skI] == ""){
-    @skcHit = @skin_cache_lookup(@skI);
+    @skcFp = @skin_cache_fp(@skI);
+    @skcHit = @skin_cache_lookup(@skI, @skcFp);
     if(@skcHit != ""){
         @skinHash[@skI] = @skcHit;
     }else{
         @skinHash[@skI] = @skin_hash_dir("iwposkins" + chr(92) + @skinDir[@skI] + chr(92));
         if(@skinHash[@skI] != ""){
-            @skin_cache_add(@skI);
+            @skin_cache_add(@skI, @skcFp);
         }
     }
 }
@@ -690,19 +721,26 @@ return global.@rskSpr[argument0, argument1];
 ///// script @skin_resolve
 // argument0: hash hex. Returns the local skin index among ALREADY-COMPUTED
 // hashes only (never hashes here); -1 when not yet known. P3: the in-memory
-// cache table answers hash->dirname in O(1)-ish; a hit fills @skinHash[i]
-// WITHOUT hashing (the cached hash came from a verified computation), so a
-// peer with a renamed folder (hint miss) resolves instantly instead of
-// queueing a 25ms MD5 scan.
+// cache table answers hash->dirname; the matching folder's CURRENT
+// fingerprint is re-verified before the cached hash is adopted (the cache
+// can be stale after the user edited a package - broadcasting a stale hash
+// would send peers downloading an identity nobody has). A dirname hit whose
+// content no longer matches falls through to the already-computed scan
+// below, so a renamed folder is still resolvable.
 for(@skcI2 = 0; @skcI2 < @skinCacheN; @skcI2 += 1){
     if(@skinCacheHash[@skcI2] == argument0){
         for(@skI = 0; @skI < @skinCount; @skI += 1){
             if(@skinDir[@skI] == @skinCacheDir[@skcI2]){
-                @skinHash[@skI] = argument0;
-                return @skI;
+                // @skin_ensure_hash is fingerprint-checked and cache-backed:
+                // a stale cache entry can never adopt a wrong identity.
+                @skin_ensure_hash(@skI);
+                if(@skinHash[@skI] == argument0){
+                    return @skI;
+                }
+                break;
             }
         }
-        return -1;
+        break;
     }
 }
 for(@skI = 0; @skI < @skinCount; @skI += 1){

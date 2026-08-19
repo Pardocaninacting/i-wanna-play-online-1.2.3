@@ -1378,6 +1378,7 @@ if(@settingsOpen){
 							@saveHistFavCount += 1;
 						}
 					}
+					@shMutation += 1;
 					if(!@saveHistDirty){
 						@saveHistDirtyTimer = room_speed * 3;
 					}
