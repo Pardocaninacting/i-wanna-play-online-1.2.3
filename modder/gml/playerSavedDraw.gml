@@ -1,10 +1,40 @@
 /// ONLINE
+// Screen-space toasts. GM8.0: regular Draw event under a forced window-pixel
+// ortho projection (see _workspace/RESEARCH_GM8_3D_HUD.md). GM8.2 (GM8GUI):
+// native Draw GUI event instead (group 11, repurposed trigger group; GM8.0/8.1
+// runners treat group 11 as never-drawn triggers and keep the GM8.0 path) - regular Draw output is silently invisible
+// in d3d-started rooms (TUNNEL VISION E1 probe), and the GUI pass projection
+// is Y-flipped there, so we always set our own window ortho. GAME_D3D builds
+// additionally wrap the draw in d3d_set_hidden(false)/(true) because a live
+// z-buffer eats our primitives. GMS: this event is attached to Draw GUI,
+// already screen-space.
+#if not STUDIO
+	#if not GM8GUI
+@psFirst = 0;
+if(view_enabled){
+	@psFirst = -1;
+	for(@psVi = 0; @psVi < 8; @psVi += 1){
+		if(@psFirst < 0){
+			if(view_visible[@psVi]) @psFirst = @psVi;
+		}
+	}
+}
+if(view_current != @psFirst) exit;
+d3d_set_projection_ortho(0, 0, window_get_width(), window_get_height(), 0);
+d3d_set_depth(-15999);
+#if GAME_D3D
+d3d_set_hidden(false);
+#endif
+	#endif
+#endif
+#if GM8GUI
+d3d_set_projection_ortho(0, 0, window_get_width(), window_get_height(), 0);
+#if GAME_D3D
+d3d_set_hidden(false);
+#endif
+#endif
 @xx = 20;
 @yy = 20 + @msgSlot * 20;
-if(view_enabled && view_visible[view_current]){
-	@xx += view_xview[view_current];
-	@yy += view_yview[view_current];
-}
 @text = "";
 if(@state == 4) @text = "Online save enabled!";
 else if(@state == 3) @text = "Online save disabled!";
@@ -74,3 +104,8 @@ if(font_exists(0)){
 }
 draw_set_valign(fa_top);
 draw_set_halign(fa_left);
+#if GAME_D3D
+#if not STUDIO
+d3d_set_hidden(true);
+#endif
+#endif

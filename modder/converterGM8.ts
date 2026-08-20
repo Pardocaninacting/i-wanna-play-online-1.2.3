@@ -722,6 +722,13 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	let hasGm82net: boolean = false;
 	let hasGm82buf: boolean = false;
 	let hasGm82snd: boolean = false;
+	// GM8.2 runner detection: the GM8.2 ecosystem ships "Game Maker 8.2 *"
+	// extensions (Core/Network/Buffer/Sound/DirectX9/...). This matters because
+	// GM8.2 repurposed object event group 11 (triggers in GM8.0/8.1) as the
+	// native Draw GUI event — only GM8.2-runner games may receive group-11
+	// injected code. A second signal (native group-11 events with zero trigger
+	// assets) is OR-ed in after the objects section is parsed.
+	let isGM82: boolean = false;
 	let hasGm8FoxWriting: boolean = false;
 	const extNameIs = function(ext: Extension, name: string): boolean {
 		return ext.name.toString('ascii').toLowerCase() === name.toLowerCase();
@@ -739,6 +746,8 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			hasGm82buf = true;
 		if(extNameStartsWith(extensions[i], "Game Maker 8.2 Sound"))
 			hasGm82snd = true;
+		if(extNameStartsWith(extensions[i], "Game Maker 8.2 "))
+			isGM82 = true;
 		if(extNameIs(extensions[i], "Noisyfox's Writing") && extensions[i].folderName.toString('ascii').toLowerCase() === "fw")
 			hasGm8FoxWriting = true;
 		if(extNameIs(extensions[i], "Http Dll 2.3") && extensions[i].folderName.toString('ascii').toLowerCase() === "http_dll_2_3")
@@ -855,6 +864,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Triggers header");
 	let triggers: Array<Trigger> = getAssets(exe, Trigger.deserialize) as Array<Trigger>;
+	const triggerCount: number = triggers.length; // GM8.2 detection signal (see isGM82)
 	triggers = null;
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Constants header");
@@ -961,6 +971,18 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const objectsOffsets: [number, number] = [exe.readOffset, 0];
 	let objects: Array<GMObject> = getAssets(exe, GMObject.deserialize) as Array<GMObject>;
 	objectsOffsets[1] = exe.readOffset;
+	// GM8.2 detection, signal 2: native group-11 events. In GM8.0/8.1 group 11 is
+	// the trigger group, so events there only make sense while trigger assets
+	// exist; group-11 code in a game with zero triggers can only be GM8.2's
+	// repurposed Draw GUI event (e.g. TUNNEL VISION's overlay objects).
+	if(!isGM82 && triggerCount === 0){
+		for(const obj of objects){
+			if(obj && obj.events[11] && obj.events[11].length > 0){
+				isGM82 = true;
+				break;
+			}
+		}
+	}
 	// S4: bullet-object resolution needs both the sprite table and the object
 	// table, so it runs here (after both are deserialized). The constants are
 	// baked into the worldCreate template as %arg9/%arg10 - INLINED BEFORE
@@ -1010,6 +1032,17 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	GMLCode.addVariables("GM8");
 	if (gameConfig.version === GameVersion.GameMaker80) {
 		GMLCode.addVariables("GM80");
+	}
+	if (isGM82) {
+		// GM8.2 repurposed object event group 11 (triggers in GM8.0/8.1) as the
+		// native Draw GUI event: runs once per frame after all regular draws, in
+		// window pixel coordinates. Screen-space HUD lives there because regular
+		// Draw output is silently invisible in d3d-started rooms (TUNNEL VISION
+		// E1 probe: group-8 text never rasterizes, group-11 does). GM8.0/8.1
+		// runners treat group 11 as triggers (never dispatched as a draw event),
+		// so they must keep the regular-Draw path.
+		console.log("[hud] GM8.2 detected; HUD uses the native Draw GUI event (group 11)");
+		GMLCode.addVariables("GM8GUI");
 	}
 	if (cjkBackend === 'gm') {
 		GMLCode.addVariables("CJKTEXT");
@@ -1655,6 +1688,41 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		obj.events = [[], [], [], [], [], [], [], [], [], [], [], []];
 		return obj;
 	}
+	// 3D-HUD research (RESEARCH_GM8_3D_HUD.md): the screen-space HUD runs under a
+	// forced window-pixel ortho projection parked on the near plane. In games that
+	// use d3d themselves the runner's z-buffer can still be live at that point and
+	// eats those primitives (TUNNEL VISION: HUD silently invisible), so GAME_D3D
+	// builds wrap the HUD draw in d3d_set_hidden(false)/(true) - the same pattern
+	// those games' own 2D overlays use (e.g. objHubTransIn). Must run before the
+	// getGML calls below so worldDrawGui/playerSavedDraw pick up the flag.
+	// Lighting/culling could still distort the HUD; no known game needs those
+	// wraps, so for now just warn at convert time.
+	const d3dUse: Set<string> = new Set();
+	const scanD3d = function(code: string): void {
+		if(/\bd3d_start\s*\(|\bd3d_draw_/.test(code)) d3dUse.add("d3d");
+		if(/\bd3d_set_lighting\s*\(\s*(true|1)\b|\bd3d_light_define/.test(code)) d3dUse.add("lighting");
+		if(/\bd3d_set_culling\s*\(\s*(true|1)\b/.test(code)) d3dUse.add("culling");
+		if(/\bd3d_set_fog\s*\(\s*(true|1)\b/.test(code)) d3dUse.add("fog");
+	};
+	for(const scanObj of objects){
+		if(!scanObj || !scanObj.events) continue;
+		for(const scanEvList of scanObj.events){
+			for(const [, scanActions] of scanEvList){
+				for(const scanAction of scanActions){
+					if(scanAction.paramStrings && scanAction.paramStrings[0])
+						scanD3d(scanAction.paramStrings[0].toString('latin1'));
+				}
+			}
+		}
+	}
+	for(const scanScript of scripts){
+		if(scanScript && scanScript.source) scanD3d(scanScript.source.toString('latin1'));
+	}
+	if(d3dUse.has("d3d")) GMLCode.addVariables("GAME_D3D");
+	if(d3dUse.size > 0)
+		console.log(`[hud] game uses ${[...d3dUse].join("/")}` +
+			(d3dUse.has("d3d") ? "; HUD z-buffer wrap enabled" : "; window-ortho HUD prelude active") +
+			(d3dUse.has("lighting") || d3dUse.has("culling") ? " (WARNING: lighting/culling may distort the HUD - needs state wraps)" : ""));
 	const onlinePlayer: GMObject = newObject(Buffer.from("__ONLINE_onlinePlayer", 'ascii'), false, -10, true);
 	onlinePlayer.addCreateCode(await GMLCode.getGML("onlinePlayerCreate"));
 	const onlinePlayerTick: Buffer = await GMLCode.getGML("onlinePlayerEndStep", player.name, player2 ? player2.name : Buffer.from(""), world.name);
@@ -1666,7 +1734,11 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const playerSaved: GMObject = newObject(Buffer.from("__ONLINE_playerSaved",'ascii'), true, -10, false);
 	playerSaved.addCreateCode(await GMLCode.getGML("playerSavedCreate"));
 	const playerSavedTick: Buffer = await GMLCode.getGML("playerSavedEndStep");
-	playerSaved.addDrawCode(await GMLCode.getGML("playerSavedDraw"));
+	const playerSavedDrawGml: Buffer = await GMLCode.getGML("playerSavedDraw");
+	if(isGM82)
+		playerSaved.addDrawGuiCode(playerSavedDrawGml); // screen-space: GM8.2 native Draw GUI (see below)
+	else
+		playerSaved.addDrawCode(playerSavedDrawGml);
 	addTick(world, await GMLCode.getGML("worldEndStep", player.name, player2 ? player2.name : Buffer.from("")), worldTickEventName);
 	if(injectIntoStep){
 		const helperScheduler: Buffer = concatBuffers([
@@ -1684,13 +1756,27 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	world.addGameEndCode(await GMLCode.getGML("worldGameEnd"));
 	const ui: GMObject = newObject(Buffer.from("__ONLINE_userInterface",'ascii'), true, -2147483648, true);
 	const drawGml: Buffer = await GMLCode.getGML("worldDraw");
+	const drawGuiGml: Buffer = await GMLCode.getGML("worldDrawGui");
 	const worldName: string = world.name.toString('ascii');
-	const wrappedDraw: Buffer = concatBuffers([
-		Buffer.from(`if(instance_exists(${worldName})){\r\nwith(instance_find(${worldName}, 0)){\r\n`, 'utf8'),
-		drawGml,
-		Buffer.from(`\r\n}\r\n}\r\n`, 'utf8')
-	]);
-	ui.addDrawCode(wrappedDraw);
+	const wrapWithWorld = function(gml: Buffer): Buffer {
+		return concatBuffers([
+			Buffer.from(`if(instance_exists(${worldName})){\r\nwith(instance_find(${worldName}, 0)){\r\n`, 'utf8'),
+			gml,
+			Buffer.from(`\r\n}\r\n}\r\n`, 'utf8')
+		]);
+	};
+	// World-space overlays first (they need the game's own projection), then the
+	// screen-space HUD. On GM8.2 the HUD goes into the native Draw GUI event
+	// (group 11): regular Draw output is silently invisible in d3d-started rooms
+	// (TUNNEL VISION E1 probe: group-8 text never rasterizes there, group-11
+	// does), and the GUI pass is also what the game's own 2D overlays use.
+	// GM8.0/8.1 runners dispatch group 11 as triggers, so they keep the
+	// regular-Draw path (verified in 2D rooms).
+	ui.addDrawCode(wrapWithWorld(drawGml));
+	if(isGM82)
+		ui.addDrawGuiCode(wrapWithWorld(drawGuiGml));
+	else
+		ui.addDrawCode(wrapWithWorld(drawGuiGml));
 	if(customWorld)
 		objects.push(world); // must stay the first of the new objects; its index was reserved as customWorldObjectId
 	objects.push(onlinePlayer);

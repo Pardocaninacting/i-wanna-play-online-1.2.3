@@ -284,11 +284,20 @@ static class Program
             world.EventHandlerFor(EventType.Step, EventSubtypeStep.EndStep, Data),
             worldEndStepCode);
 
+        // World-space overlays (off-screen arrows, pings) stay in the normal Draw
+        // event; the screen-space HUD goes to Draw GUI, which is projection-proof
+        // by design (research: _workspace/RESEARCH_GM8_3D_HUD.md).
         var drawCode = RenderTemplate(activeFlags, "worldDraw");
         var wrappedDraw = $"if(instance_exists({world.Name.Content})){{\nwith(instance_find({world.Name.Content}, 0)){{\n{drawCode}\n}}\n}}";
         importGroup.QueueReplace(
             ui.EventHandlerFor(EventType.Draw, EventSubtypeDraw.Draw, Data),
             wrappedDraw);
+
+        var drawGuiCode = RenderTemplate(activeFlags, "worldDrawGui");
+        var wrappedDrawGui = $"if(instance_exists({world.Name.Content})){{\nwith(instance_find({world.Name.Content}, 0)){{\n{drawGuiCode}\n}}\n}}";
+        importGroup.QueueReplace(
+            ui.EventHandlerFor(EventType.Draw, EventSubtypeDraw.DrawGUI, Data),
+            wrappedDrawGui);
 
         var worldGameEndCode = RenderTemplate(activeFlags, "worldGameEnd");
         importGroup.QueueAppend(
@@ -322,7 +331,7 @@ static class Program
             playerSaved.EventHandlerFor(EventType.Step, EventSubtypeStep.EndStep, Data),
             RenderTemplate(activeFlags, "playerSavedEndStep"));
         importGroup.QueueReplace(
-            playerSaved.EventHandlerFor(EventType.Draw, EventSubtypeDraw.Draw, Data),
+            playerSaved.EventHandlerFor(EventType.Draw, EventSubtypeDraw.DrawGUI, Data),
             RenderTemplate(activeFlags, "playerSavedDraw"));
 
         // S4: bullet-sharing proxy events. The hit action is the raw
