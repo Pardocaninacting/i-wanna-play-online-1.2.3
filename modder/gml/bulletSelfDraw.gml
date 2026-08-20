@@ -8,8 +8,19 @@
 // game logic are untouched - this changes display only. The skin slot -1
 // reads the selected-skin global mirror (@skin_slot_spr), so a mid-game skin
 // switch re-skins local bullets on the next frame.
+// Facing: skin bullet strips face right. Games that flip via image_xscale
+// carry the sign already; direction-neutral sprites (Domu: image_xscale is
+// always 1, facing lives only in hspeed) get the flip from the travel
+// direction. Keep this formula in sync with @bullet_update's @bFace.
 if(global.@skinOn == 1){
-    if(@skin_draw(6, image_index, x, y, image_xscale, image_yscale, image_angle, image_alpha, -1)){
+    @bsFace = image_xscale;
+    if(hspeed < 0){
+        if(@bsFace > 0) @bsFace = -@bsFace;
+    }
+    if(hspeed > 0){
+        if(@bsFace < 0) @bsFace = -@bsFace;
+    }
+    if(@skin_draw(6, image_index, x, y, @bsFace, image_yscale, image_angle, image_alpha, -1)){
         exit;
     }
 }

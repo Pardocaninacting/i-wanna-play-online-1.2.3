@@ -19,8 +19,26 @@ if(@bAlive <= 0){
     exit;
 }
 if(@bSpd != 0){
-    x += lengthdir_x(@bSpd, @bAngle);
-    y += lengthdir_y(@bSpd, @bAngle);
+    // Dead reckoning, wall-clamped: never extrapolate INTO a solid. A bullet
+    // that dies on a wall on the sender side would otherwise visibly embed
+    // itself for the 1-2 frames until the removal snapshot arrives (16 px per
+    // frame at typical bullet speed). instance_place(..., all) + the solid
+    // flag keeps this game-agnostic (players/proxies are not solid, blocks
+    // are). A frozen proxy still gets re-anchored or removed by the next
+    // snapshot, so a false positive (bullet that would have passed through)
+    // self-corrects within a frame.
+    @bNX = x + lengthdir_x(@bSpd, @bAngle);
+    @bNY = y + lengthdir_y(@bSpd, @bAngle);
+    @bWall = instance_place(@bNX, @bNY, all);
+    if(@bWall == noone){
+        x = @bNX;
+        y = @bNY;
+    }else{
+        if(!@bWall.solid){
+            x = @bNX;
+            y = @bNY;
+        }
+    }
 }
 @bImg += 1;
 #if PLAYER_LIST

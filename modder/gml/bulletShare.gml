@@ -19,20 +19,26 @@
 //   server/src/protocol.ts. Gated like skins (protocolVersion >= 3); clients
 //   with an older protocol silently ignore opcode 19 (default: break).
 // - Wire format v2 (2026-08): the count byte carries a 0x80 flag; when set,
-//   each bullet entry is 28 bytes (id, x, y, direction, speed, image_xscale,
-//   image_angle) instead of 20. Receivers parse BOTH formats (a v1 sender
-//   simply yields xscale=1 / angle=direction, the old visuals); v1 receivers
-//   drop v2 messages because the flagged count fails their 1..8 check. The
-//   server validates both strides and relays the flag bit verbatim, so a
-//   mixed-version room degrades gracefully. Requires the updated server:
-//   an old server rejects the flagged count as bullet_bad_size.
+//   each bullet entry is 28 bytes (id, x, y, direction, speed, face, angle)
+//   instead of 20. `face` is the horizontal flip: the sender's image_xscale
+//   reconciled with the travel direction (hspeed sign) so games whose bullet
+//   sprite is direction-neutral (Domu: image_xscale is always 1) still show
+//   left-moving bullets facing left. Receivers parse BOTH formats (a v1
+//   sender simply yields face=1 / angle=direction, the old visuals); v1
+//   receivers drop v2 messages because the flagged count fails their 1..8
+//   check. The server validates both strides and relays the flag bit
+//   verbatim, so a mixed-version room degrades gracefully. Requires the
+//   updated server: an old server rejects the flagged count as
+//   bullet_bad_size.
 // - Proxies dead-reckon: every EndStep each proxy advances by its synced
 //   speed/direction (player bullets are uniform straight-line movers, e.g.
-//   Domu's hspeed = +/-16), and each incoming snapshot re-anchors the
-//   position. Under a steady 1-message-per-frame flow the extrapolation
-//   exactly reproduces the sender's motion; under jitter it bridges the
-//   gaps instead of freezing, and curved/gravity bullets still get their
-//   per-frame corrections from the snapshots.
+//   Domu's hspeed = +/-16), wall-clamped (a solid at the next position
+//   freezes the proxy in place so bullets never embed into walls during the
+//   1-2 frames until the removal snapshot arrives), and each incoming
+//   snapshot re-anchors the position. Under a steady 1-message-per-frame
+//   flow the extrapolation exactly reproduces the sender's motion; under
+//   jitter it bridges the gaps instead of freezing, and curved/gravity
+//   bullets still get their per-frame corrections from the snapshots.
 
 ///// script @bullet_init
 // worldCreate: create the proxy registry map. The __ONLINE_bullet proxy
@@ -70,13 +76,25 @@ if(@bActive && @connected && @protocolVersion >= 3 && __ONLINE_socket_get_state(
             __ONLINE_buffer_write_u16(@buffer, room);
         #endif
         with(global.@bulletObj){
+            // Facing: the sprite flip the game itself would apply. Games that
+            // flip via image_xscale get it for free; games whose bullet sprite
+            // is direction-neutral (Domu: sPlayerBullet, image_xscale always
+            // 1) face their bullets by travel direction - hspeed sign. The
+            // magnitude of an existing image_xscale is preserved.
+            other.@bFace = image_xscale;
+            if(hspeed < 0){
+                if(other.@bFace > 0) other.@bFace = -other.@bFace;
+            }
+            if(hspeed > 0){
+                if(other.@bFace < 0) other.@bFace = -other.@bFace;
+            }
             #if not GMNET
                 __ONLINE_buffer_write_int32(other.@buffer, id);
                 __ONLINE_buffer_write_int32(other.@buffer, x);
                 __ONLINE_buffer_write_int32(other.@buffer, y);
                 __ONLINE_buffer_write_float32(other.@buffer, direction);
                 __ONLINE_buffer_write_float32(other.@buffer, speed);
-                __ONLINE_buffer_write_float32(other.@buffer, image_xscale);
+                __ONLINE_buffer_write_float32(other.@buffer, other.@bFace);
                 __ONLINE_buffer_write_float32(other.@buffer, image_angle);
             #endif
             #if GMNET
@@ -85,7 +103,7 @@ if(@bActive && @connected && @protocolVersion >= 3 && __ONLINE_socket_get_state(
                 __ONLINE_buffer_write_i32(other.@buffer, y);
                 __ONLINE_buffer_write_float(other.@buffer, direction);
                 __ONLINE_buffer_write_float(other.@buffer, speed);
-                __ONLINE_buffer_write_float(other.@buffer, image_xscale);
+                __ONLINE_buffer_write_float(other.@buffer, other.@bFace);
                 __ONLINE_buffer_write_float(other.@buffer, image_angle);
             #endif
         }
