@@ -1468,14 +1468,16 @@ static class Program
         var modes = SplitMarkedModes(rendered, "playerDrawInject");
         if (!modes.TryGetValue("replace", out var replaceCode) || replaceCode.Length == 0)
             throw new Exception("playerDrawInject.gml is missing its '///// mode replace' section.");
+        if (!modes.TryGetValue("preempt", out var preemptCode) || preemptCode.Length == 0)
+            throw new Exception("playerDrawInject.gml is missing its '///// mode preempt' section.");
         if (!modes.TryGetValue("overlay", out var overlayCode) || overlayCode.Length == 0)
             throw new Exception("playerDrawInject.gml is missing its '///// mode overlay' section.");
-        InjectPlayerDrawEvent(importGroup, player, replaceCode, overlayCode);
+        InjectPlayerDrawEvent(importGroup, player, replaceCode, preemptCode, overlayCode);
         if (player2 != null)
-            InjectPlayerDrawEvent(importGroup, player2, replaceCode, overlayCode);
+            InjectPlayerDrawEvent(importGroup, player2, replaceCode, preemptCode, overlayCode);
     }
 
-    static void InjectPlayerDrawEvent(CodeImportGroup importGroup, UndertaleGameObject obj, string replaceCode, string overlayCode)
+    static void InjectPlayerDrawEvent(CodeImportGroup importGroup, UndertaleGameObject obj, string replaceCode, string preemptCode, string overlayCode)
     {
         var existing = FindEventCode(obj, EventType.Draw);
         if (existing is null)
@@ -1484,12 +1486,21 @@ static class Program
             importGroup.QueueReplace(obj.EventHandlerFor(EventType.Draw, EventSubtypeDraw.Draw, Data), replaceCode);
             Console.WriteLine($"Skin draw inject: {obj.Name.Content} (new Draw event)");
         }
+        else if (GetDefineFlag("iwpo.skins.overlay"))
+        {
+            // Opt-in legacy behaviour: append the overlay section so the skin
+            // draws on top of the game's own drawing.
+            importGroup.QueueAppend(existing, overlayCode);
+            Console.WriteLine($"Skin draw inject: {obj.Name.Content} (appended to existing Draw event, iwpo.skins.overlay)");
+        }
         else
         {
-            // Existing Draw event: append the overlay section so the skin draws on
-            // top of the game's own drawing.
-            importGroup.QueueAppend(existing, overlayCode);
-            Console.WriteLine($"Skin draw inject: {obj.Name.Content} (appended to existing Draw event)");
+            // Default: prepend the preempt section. When a skin applies it
+            // draws the skin and `exit` leaves the whole event, so the game's
+            // own draw is suppressed instead of stacking under the skin.
+            // (QueuePrepend decompiles the original and puts this in front.)
+            importGroup.QueuePrepend(existing, preemptCode + "\r\nif (" + Prefix + "skPre) { exit; }");
+            Console.WriteLine($"Skin draw inject: {obj.Name.Content} (preempting existing Draw event)");
         }
     }
 

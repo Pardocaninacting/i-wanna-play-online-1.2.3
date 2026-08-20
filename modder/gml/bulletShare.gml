@@ -18,6 +18,21 @@
 // - Protocol: opcode 18 BULLET (C->S) / 19 BULLET_NOTIFY (S->C) - see
 //   server/src/protocol.ts. Gated like skins (protocolVersion >= 3); clients
 //   with an older protocol silently ignore opcode 19 (default: break).
+// - Wire format v2 (2026-08): the count byte carries a 0x80 flag; when set,
+//   each bullet entry is 28 bytes (id, x, y, direction, speed, image_xscale,
+//   image_angle) instead of 20. Receivers parse BOTH formats (a v1 sender
+//   simply yields xscale=1 / angle=direction, the old visuals); v1 receivers
+//   drop v2 messages because the flagged count fails their 1..8 check. The
+//   server validates both strides and relays the flag bit verbatim, so a
+//   mixed-version room degrades gracefully. Requires the updated server:
+//   an old server rejects the flagged count as bullet_bad_size.
+// - Proxies dead-reckon: every EndStep each proxy advances by its synced
+//   speed/direction (player bullets are uniform straight-line movers, e.g.
+//   Domu's hspeed = +/-16), and each incoming snapshot re-anchors the
+//   position. Under a steady 1-message-per-frame flow the extrapolation
+//   exactly reproduces the sender's motion; under jitter it bridges the
+//   gaps instead of freezing, and curved/gravity bullets still get their
+//   per-frame corrections from the snapshots.
 
 ///// script @bullet_init
 // worldCreate: create the proxy registry map. The __ONLINE_bullet proxy
@@ -46,12 +61,12 @@ if(@bActive && @connected && @protocolVersion >= 3 && __ONLINE_socket_get_state(
         __ONLINE_buffer_clear(@buffer);
         #if not GMNET
             __ONLINE_buffer_write_uint8(@buffer, 18);
-            __ONLINE_buffer_write_uint8(@buffer, @bCount);
+            __ONLINE_buffer_write_uint8(@buffer, @bCount + 128); // v2 format flag
             __ONLINE_buffer_write_uint16(@buffer, room);
         #endif
         #if GMNET
             __ONLINE_buffer_write_u8(@buffer, 18);
-            __ONLINE_buffer_write_u8(@buffer, @bCount);
+            __ONLINE_buffer_write_u8(@buffer, @bCount + 128); // v2 format flag
             __ONLINE_buffer_write_u16(@buffer, room);
         #endif
         with(global.@bulletObj){
@@ -61,6 +76,8 @@ if(@bActive && @connected && @protocolVersion >= 3 && __ONLINE_socket_get_state(
                 __ONLINE_buffer_write_int32(other.@buffer, y);
                 __ONLINE_buffer_write_float32(other.@buffer, direction);
                 __ONLINE_buffer_write_float32(other.@buffer, speed);
+                __ONLINE_buffer_write_float32(other.@buffer, image_xscale);
+                __ONLINE_buffer_write_float32(other.@buffer, image_angle);
             #endif
             #if GMNET
                 __ONLINE_buffer_write_i32(other.@buffer, id);
@@ -68,6 +85,8 @@ if(@bActive && @connected && @protocolVersion >= 3 && __ONLINE_socket_get_state(
                 __ONLINE_buffer_write_i32(other.@buffer, y);
                 __ONLINE_buffer_write_float(other.@buffer, direction);
                 __ONLINE_buffer_write_float(other.@buffer, speed);
+                __ONLINE_buffer_write_float(other.@buffer, image_xscale);
+                __ONLINE_buffer_write_float(other.@buffer, image_angle);
             #endif
         }
         __ONLINE_socket_write_message(@socket, @buffer);
@@ -77,11 +96,14 @@ return 0;
 
 ///// script @bullet_recv
 // case 19 (BULLET_NOTIFY) handler: read the per-bullet state into the shared
-// arrays (@bRI/@bRX/@bRY/@bRD/@bRS), then diff the proxy registry.
-// argument0: sender playerId, argument1: bullet count. @bRS (speed) is read
-// to advance the cursor but not used yet (reserved for interpolation).
+// arrays (@bRI/@bRX/@bRY/@bRD/@bRS plus the v2 @bRXS/@bRAA).
+// argument0: sender playerId, argument1: bullet count (flag bit already
+// stripped), argument2: wire format (1 = v2 with image_xscale/image_angle,
+// 0 = v1; v1 defaults to xscale 1 and angle = movement direction, which
+// reproduces the old rotate-by-direction visuals).
 @bOwner = argument0;
 @bCount = argument1;
+@bV2 = argument2;
 if(!@bActive || @bCount < 1 || @bCount > 8){
     return 0;
 }
@@ -92,6 +114,10 @@ for(@bi = 0; @bi < @bCount; @bi += 1){
         @bRY[@bi] = __ONLINE_buffer_read_int32(@buffer);
         @bRD[@bi] = __ONLINE_buffer_read_float32(@buffer);
         @bRS[@bi] = __ONLINE_buffer_read_float32(@buffer);
+        if(@bV2){
+            @bRXS[@bi] = __ONLINE_buffer_read_float32(@buffer);
+            @bRAA[@bi] = __ONLINE_buffer_read_float32(@buffer);
+        }
     #endif
     #if GMNET
         @bRI[@bi] = __ONLINE_buffer_read_i32(@buffer);
@@ -99,7 +125,15 @@ for(@bi = 0; @bi < @bCount; @bi += 1){
         @bRY[@bi] = __ONLINE_buffer_read_i32(@buffer);
         @bRD[@bi] = __ONLINE_buffer_read_float(@buffer);
         @bRS[@bi] = __ONLINE_buffer_read_float(@buffer);
+        if(@bV2){
+            @bRXS[@bi] = __ONLINE_buffer_read_float(@buffer);
+            @bRAA[@bi] = __ONLINE_buffer_read_float(@buffer);
+        }
     #endif
+    if(!@bV2){
+        @bRXS[@bi] = 1;
+        @bRAA[@bi] = @bRD[@bi];
+    }
 }
 @bullet_apply(@bOwner, @bCount);
 return 1;
@@ -171,6 +205,9 @@ for(@bi = 0; @bi < @bCount; @bi += 1){
             x = other.@bRX[other.@bi];
             y = other.@bRY[other.@bi];
             @bAngle = other.@bRD[other.@bi];
+            @bSpd = other.@bRS[other.@bi];
+            @bXS = other.@bRXS[other.@bi];
+            @bAA = other.@bRAA[other.@bi];
             @bAlive = 4;
             @bSlot = other.@bSlot;
         }
@@ -182,6 +219,9 @@ for(@bi = 0; @bi < @bCount; @bi += 1){
                     @bOwner = other.@bOwner;
                     @bKey = other.@bkey;
                     @bAngle = other.@bRD[other.@bi];
+                    @bSpd = other.@bRS[other.@bi];
+                    @bXS = other.@bRXS[other.@bi];
+                    @bAA = other.@bRAA[other.@bi];
                     @bAlive = 4;
                     @bSlot = other.@bSlot;
                     @bWorld = other.id;

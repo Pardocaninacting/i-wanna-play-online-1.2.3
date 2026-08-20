@@ -786,10 +786,13 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			break;
 		case 19:
 			// BULLET NOTIFY (S4 bullet sharing): stringNT senderId, u8 count,
-			// u16 room, [i32 id, i32 x, i32 y, f32 direction, f32 speed] x
-			// count. Full snapshot of the sender's bullets; only applied in
-			// the same GM room. Stray replies (inactive sharing, other room,
-			// bad count) are dropped unread.
+			// u16 room, then per-bullet entries. Wire format v2: the count
+			// byte carries a 0x80 flag; flagged entries are 28 bytes (id, x,
+			// y, direction, speed, image_xscale, image_angle), unflagged are
+			// the v1 20 bytes (no flip/rotation data). Full snapshot of the
+			// sender's bullets; only applied in the same GM room. Stray
+			// replies (inactive sharing, other room, bad count) are dropped
+			// unread.
 			if(@bActive){
 				@bOwner = __ONLINE_buffer_read_string(@buffer);
 				#if not GMNET
@@ -800,9 +803,14 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 					@bCount = __ONLINE_buffer_read_u8(@buffer);
 					@bPRoom = __ONLINE_buffer_read_u16(@buffer);
 				#endif
+				@bV2 = 0;
+				if(@bCount >= 128){
+					@bV2 = 1;
+					@bCount -= 128;
+				}
 				if(@bCount >= 1 && @bCount <= 8){
 					if(@bPRoom == room){
-						@bullet_recv(@bOwner, @bCount);
+						@bullet_recv(@bOwner, @bCount, @bV2);
 					}
 				}
 			}

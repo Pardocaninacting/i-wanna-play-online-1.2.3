@@ -1573,27 +1573,54 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		}
 	}
 	if(skinsEnabled){
-		// T2: playerDrawInject.gml carries two `///// mode <name>` sections. Objects
-		// without a Draw event get the replace section; objects that already draw
-		// themselves get the overlay section appended (overlay-after-game-draw is
-		// the GML-side design). addDrawCode appends the code action in both cases.
+		// T2: playerDrawInject.gml carries three `///// mode <name>` sections.
+		// Objects without a Draw event get the replace section. Objects that
+		// already draw themselves default to preempt: their single code action
+		// is textually wrapped so the skin draws INSTEAD of the game's own
+		// draw (GM8 `exit` would only leave the current action, hence the
+		// if-wrap instead of GMS's prepend+exit). Multi-action Draw events
+		// (and iwpo.skins.overlay=1) fall back to the appended overlay.
 		const drawSections: Array<{name: string, code: Buffer}> = splitMarkedSections(await renderSkinGml("playerDrawInject"), "mode");
 		const findDrawMode = function(modeName: string): Buffer {
 			const hits: Array<{name: string, code: Buffer}> = drawSections.filter(section => section.name.toLowerCase() === modeName);
 			return hits.length > 0 ? hits[0].code : null;
 		}
 		const drawReplaceCode: Buffer = findDrawMode("replace");
+		const drawPreemptCode: Buffer = findDrawMode("preempt");
 		const drawOverlayCode: Buffer = findDrawMode("overlay");
-		if(drawReplaceCode === null || drawOverlayCode === null)
-			throw new Error(`Skin system GML gml/playerDrawInject.gml must contain both "///// mode replace" and "///// mode overlay" sections`);
+		if(drawReplaceCode === null || drawPreemptCode === null || drawOverlayCode === null)
+			throw new Error(`Skin system GML gml/playerDrawInject.gml must contain "///// mode replace", "///// mode preempt" and "///// mode overlay" sections`);
+		const overlayRaw: string = defines.has("iwpo.skins.overlay") ? (defines.get("iwpo.skins.overlay") as string).toLowerCase() : "";
+		const forceOverlay: boolean = overlayRaw === "true" || overlayRaw === "1";
 		for(const skinTarget of skinTargetObjects){
 			const skinTargetName: string = skinTarget.name.toString('ascii');
-			if(skinTarget.hasEvent(8, 0)){ // Draw event = category 8, subtype 0
-				skinTarget.addDrawCode(drawOverlayCode);
-				console.log(`[skins] ${skinTargetName}: existing Draw event -> overlay appended`);
-			}else{
+			if(!skinTarget.hasEvent(8, 0)){ // Draw event = category 8, subtype 0
 				skinTarget.addDrawCode(drawReplaceCode);
 				console.log(`[skins] ${skinTargetName}: no Draw event -> replace injected`);
+				continue;
+			}
+			if(forceOverlay){
+				skinTarget.addDrawCode(drawOverlayCode);
+				console.log(`[skins] ${skinTargetName}: existing Draw event -> overlay appended (iwpo.skins.overlay)`);
+				continue;
+			}
+			const drawEntry = skinTarget.events[8].find(element => element[0] == 0 && element[1].length > 0);
+			const drawActions = drawEntry ? drawEntry[1] : [];
+			if(drawActions.length == 1 && drawActions[0].actionKind == 7){
+				// Preempt: wrap the game's own draw code so it only runs when
+				// no skin was drawn. The wrap literal is post-substitution, so
+				// it spells the __ONLINE_ prefix in full.
+				const original: Buffer = drawActions[0].paramStrings[0];
+				drawActions[0].paramStrings[0] = Buffer.concat([
+					drawPreemptCode,
+					Buffer.from("\nif(!__ONLINE_skPre){\n", 'ascii'),
+					original,
+					Buffer.from("\n}", 'ascii'),
+				]);
+				console.log(`[skins] ${skinTargetName}: existing Draw event -> preempt wrap`);
+			}else{
+				skinTarget.addDrawCode(drawOverlayCode);
+				console.log(`[skins] ${skinTargetName}: multi-action/non-code Draw event -> overlay appended (preempt needs a single code action)`);
 			}
 		}
 	}

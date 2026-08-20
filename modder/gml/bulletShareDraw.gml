@@ -1,10 +1,12 @@
 /// ONLINE
 // %arg0: world object name
 // Proxy bullet Draw: draw the sender's skin bullet.png when that skin has
-// one (state 6), otherwise the game's native bullet sprite. Rotation follows
-// the synced direction. The whole draw is gated on the world's visibility
-// (spectator/hidden mode hides remote bullets entirely - both the skin draw
-// AND the native fallback, matching onlinePlayerDraw).
+// one (state 6), otherwise the game's native bullet sprite. Flip/rotation
+// follow the sender's image_xscale/image_angle (synced in the v2 wire
+// format; v1 senders yield xscale 1 + movement-direction rotation). The
+// whole draw is gated on the world's visibility (spectator/hidden mode
+// hides remote bullets entirely - both the skin draw AND the native
+// fallback, matching onlinePlayerDraw).
 // The visibility check reads the world through a with() block, but the
 // @skin_draw call itself runs in THIS proxy's context: its per-frame pacing
 // accumulator (@skinAnPos etc.) lives on the caller instance, so every
@@ -21,7 +23,7 @@ if(instance_exists(%arg0)){
 if(@bVis){
     @bDrew = 0;
     if(@bSlot >= 0){
-        @bDrew = @skin_draw(6, @bImg, x, y, 1, 1, @bAngle, image_alpha, @bSlot);
+        @bDrew = @skin_draw(6, @bImg, x, y, @bXS, 1, @bAA, image_alpha, @bSlot);
     }
     if(!@bDrew){
         if(global.@bulletSpr >= 0){
@@ -29,7 +31,7 @@ if(@bVis){
             if(@bFrames < 1){
                 @bFrames = 1;
             }
-            draw_sprite_ext(global.@bulletSpr, @bImg mod @bFrames, x, y, 1, 1, @bAngle, c_white, image_alpha);
+            draw_sprite_ext(global.@bulletSpr, @bImg mod @bFrames, x, y, @bXS, 1, @bAA, c_white, image_alpha);
         }
     }
 }

@@ -798,17 +798,26 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             break;
 
         case TcpMsg.BULLET:
-            // Bullet sharing: u8 count(1..8), u16 room, then per bullet
-            // i32 id, i32 x, i32 y, f32 direction, f32 speed. High-frequency
-            // relay (one message per frame while the sender has bullets) —
-            // relayed to same-game peers that understand skins, sender id
-            // prepended. No info logging (too noisy).
+            // Bullet sharing: u8 count(1..8, OR'd with 0x80 in wire format
+            // v2), u16 room, then per bullet: i32 id, i32 x, i32 y,
+            // f32 direction, f32 speed (v1, 20 bytes) plus f32 image_xscale,
+            // f32 image_angle (v2, 28 bytes). High-frequency relay (one
+            // message per frame while the sender has bullets) — relayed to
+            // same-game peers that understand skins, sender id prepended.
+            // The 0x80 flag is relayed verbatim: v2 clients parse both
+            // formats, v1 clients drop flagged messages (count > 8 fails
+            // their range check), so mixed-version rooms degrade to
+            // flip-less bullets instead of misparsing. No info logging
+            // (too noisy).
             if (!supportsSkins(player)) { quitPlayer(player, "bullet_version"); return; }
-            // Largest legal payload: count(1) + room(2) + 8*20 = 163 bytes.
-            if (msg.remaining() < 3 || msg.remaining() > 163) { quitPlayer(player, "bullet_bad_size"); return; }
+            // Largest legal payload: count(1) + room(2) + 8*28 = 227 bytes.
+            if (msg.remaining() < 3 || msg.remaining() > 227) { quitPlayer(player, "bullet_bad_size"); return; }
             {
-                const count = msg.readUInt8();
-                if (count < 1 || count > 8 || msg.remaining() !== 2 + 20 * count) {
+                const rawCount = msg.readUInt8();
+                const v2 = (rawCount & 0x80) !== 0;
+                const count = rawCount & 0x7f;
+                const stride = v2 ? 28 : 20;
+                if (count < 1 || count > 8 || msg.remaining() !== 2 + stride * count) {
                     quitPlayer(player, "bullet_bad_size");
                     return;
                 }
@@ -828,7 +837,7 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 const notify = new SmartBuffer();
                 notify.writeUInt8(TcpMsg.BULLET_NOTIFY);
                 notify.writeStringNT(player.id);
-                notify.writeUInt8(count);
+                notify.writeUInt8(rawCount); // keep the v2 flag for the receivers
                 notify.writeBuffer(body); // room + per-bullet state
                 const framed = frameMessage(notify.toBuffer());
                 notify.destroy();
