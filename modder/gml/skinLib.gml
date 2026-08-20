@@ -643,9 +643,17 @@ if(@skSlot < 0){
 if(@skFrames < 1) @skFrames = 1;
 // Per-frame-duration pacing accumulator (see header). GMS errors on reading
 // an undefined instance variable, so initialize on first use (GMS1 removed
-// the classic variable_exists, hence the engine split).
-#if STUDIO
+// the classic variable_exists, hence the engine split). Early GMS1 runners
+// also lack variable_instance_exists itself (load-time "Unable to find
+// function"), so GMS1 tracks initialized caller instances in a global map.
+#if GMS2
 if(!variable_instance_exists(id, "@skinAnPos")){
+#endif
+#if STUDIO
+#if not GMS2
+if(!ds_map_exists(global.@skinAnMap, id)){
+    ds_map_add(global.@skinAnMap, id, 1);
+#endif
 #endif
 #if not STUDIO
 if(!variable_local_exists("@skinAnPos")){

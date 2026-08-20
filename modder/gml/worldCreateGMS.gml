@@ -215,6 +215,15 @@ for(@scI = 0; @scI < 16; @scI += 1){
 @skinPrevTimer = 0;
 @skinVisCount = 0;
 @skinUnknown = -1;
+// Early GMS1 runners lack variable_instance_exists, so @skin_draw tracks
+// initialized caller instances in this map (GMS2 uses the function instead).
+// Created unconditionally: variable_global_exists hard-errors on early GMS1
+// ("trying to index a variable which is not an array") for any name that is
+// registered in the variable table, so it cannot guard the recreate; a map
+// abandoned by a game_restart is just a few KB of dead entries.
+#if not GMS2
+global.@skinAnMap = ds_map_create();
+#endif
 // S2 network exchange (see worldCreate.gml for the full commentary).
 @skinNetDirty = false;
 @skinHashScan = 0;
@@ -266,29 +275,63 @@ global.@skinOn = 0;
 // so a fixed pass over the 4096 slot cap would be dead cost on every
 // game_restart.
 // game_restart keeps sprite_add resources alive; free the previously mirrored
-// skin sprites (selection AND menu preview) before dropping their ids below.
-// GMS errors on reading an undefined global, so gate on the sentinel first.
-if(variable_global_exists("@skinMirInit")){
-    if(global.@skinMirInit){
-        for(@skSt = 0; @skSt < 7; @skSt += 1){
-            if(global.@skinSpr[@skSt] >= 0 && sprite_exists(global.@skinSpr[@skSt])){
-                sprite_delete(global.@skinSpr[@skSt]);
-            }
-            if(global.@skinPrevSpr[@skSt] >= 0 && sprite_exists(global.@skinPrevSpr[@skSt])){
-                sprite_delete(global.@skinPrevSpr[@skSt]);
-            }
+// skin sprites (selection, menu preview AND remote slots) before dropping
+// their ids below. The restart record travels through the config ini exactly
+// like the GM8 path (see worldCreate.gml): variable_global_exists cannot
+// detect the restart because on early GMS1 runners (bytecode 15) it
+// hard-errors ("trying to index a variable which is not an array") for any
+// compile-time-registered global name. Validation is all-or-nothing on
+// id,width,height,frames (this template receives no sprite-base arg, so the
+// GM8 base-index check is the only one dropped).
+ini_open("@config.ini");
+@skSprList = ini_read_string("config", "skinSprIds", "");
+ini_write_string("config", "skinSprIds", "");
+// P4 reuse records are a GM8-only optimization; consume the key so a stale
+// record never lingers across runs.
+ini_write_string("config", "skinSelSprites", "");
+ini_close();
+@skSprN = 0;
+@skSprFld = 0;
+@skSprOk = (string_length(@skSprList) > 0);
+while(string_length(@skSprList) > 0){
+    @skSprPos = string_pos(",", @skSprList);
+    if(@skSprPos <= 0){
+        @skSprOk = false;
+        break;
+    }
+    @skSprTok = string_copy(@skSprList, 1, @skSprPos - 1);
+    @skSprList = string_delete(@skSprList, 1, @skSprPos);
+    // Digits guard (parity with GM8): real("abc") on a corrupt record is a
+    // hard error popup on the classic runners.
+    if(string_length(@skSprTok) <= 0 || string_digits(@skSprTok) != @skSprTok){
+        @skSprOk = false;
+        break;
+    }
+    @skSprVal[@skSprFld] = real(@skSprTok);
+    @skSprFld += 1;
+    if(@skSprFld >= 4){
+        @skSprFld = 0;
+        @skDel = @skSprVal[0];
+        if(!sprite_exists(@skDel)){
+            @skSprOk = false;
+            break;
         }
-        // S2: remote-player slots (incl. the Unknown fallback in slot 0).
-        for(@rskI = 0; @rskI < 32; @rskI += 1){
-            for(@rskSt = 0; @rskSt < 7; @rskSt += 1){
-                if(global.@rskSpr[@rskI, @rskSt] >= 0 && sprite_exists(global.@rskSpr[@rskI, @rskSt])){
-                    sprite_delete(global.@rskSpr[@rskI, @rskSt]);
-                }
-            }
+        if(sprite_get_width(@skDel) != @skSprVal[1] || sprite_get_height(@skDel) != @skSprVal[2] || sprite_get_number(@skDel) != @skSprVal[3]){
+            @skSprOk = false;
+            break;
         }
+        @skSprId[@skSprN] = @skDel;
+        @skSprN += 1;
     }
 }
-global.@skinMirInit = 1;
+if(@skSprFld != 0){
+    @skSprOk = false;
+}
+if(@skSprOk){
+    for(@skSprI = 0; @skSprI < @skSprN; @skSprI += 1){
+        sprite_delete(@skSprId[@skSprI]);
+    }
+}
 for(@skSt = 0; @skSt < 7; @skSt += 1){
     @skinSpr[@skSt] = -1;
     @skinPrevSpr[@skSt] = -1;
