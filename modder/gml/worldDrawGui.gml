@@ -1,22 +1,26 @@
 /// ONLINE
 // SCREEN-SPACE HUD (chat log, player list, settings panel, spectator bar,
 // pick-mode panel). Research: _workspace/RESEARCH_GM8_3D_HUD.md.
-// GM8.0: injected into the UI object's regular Draw event AFTER worldDraw.gml;
-// we force a window-pixel ortho projection so the HUD survives weird views.
+// GM8.0/8.1: injected into the UI object's regular Draw event AFTER
+// worldDraw.gml; we force a view-port ortho projection (survives weird views,
+// window scaling and letterboxed fullscreen) and restore the view projection
+// at the end of the event - the runner only re-applies it at the next view.
 // d3d_set_depth(-15999) parks our primitives on the near plane.
 // GM8.2 (GM8GUI): attached to the native Draw GUI event (group 11, the old
 // trigger group GM8.2 repurposed) instead,
 // which runs once per frame after ALL regular draws. Regular-Draw output is
 // silently invisible in d3d-started rooms (TUNNEL VISION E1 probe: group-8
 // text never rasterizes there, group-11 does). The GUI pass projection is
-// Y-flipped once a game has entered d3d mode, so we always set our own window
-// ortho - the same pattern the game's own 2D overlays use (objHubTransIn:
+// Y-flipped once a game has entered d3d mode, so we always set our own
+// view-port ortho - the same pattern the game's own 2D overlays use
+// (objHubTransIn:
 // d3d_set_hidden(false) -> d3d_set_projection_ortho -> draw -> hidden(true)).
 // GAME_D3D games (converter-detected d3d usage): z-testing may be live, so the
 // HUD draw is wrapped in d3d_set_hidden(false)/(true); 2D-only games keep the
-// untouched-state path. Projection needs no restore: the runner re-applies the
-// view projection at the next view/frame, and per-instance depth is re-applied
-// before every other instance's draw.
+// untouched-state path. Projection needs no restore here: the GUI pass is the
+// frame's last draw and the runner re-applies the view projection at the next
+// view/frame, and per-instance depth is re-applied before every other
+// instance's draw.
 // GMS: attached to the Draw GUI event instead, which is already screen-space
 // (runs once per frame, no view guard needed).
 #if not STUDIO
@@ -34,8 +38,22 @@ if(view_enabled){
 	}
 }
 if(view_current == @hudFirst){
-	@hudWinW = window_get_width();
-	@hudWinH = window_get_height();
+	// Draw in view-port space (not window space): the D3D viewport follows the
+	// port, so this stays correct under window scaling / letterboxed
+	// fullscreen, and the HUD scales together with the game image. The
+	// projection is restored at the end of this event - the runner only
+	// re-applies the view projection at the START of the next view, anything
+	// drawn after us in THIS view (foreground backgrounds, cursor) would
+	// otherwise inherit our ortho.
+	if(view_enabled){
+		@hudView = view_current;
+		@hudWinW = view_wport[view_current];
+		@hudWinH = view_hport[view_current];
+	}else{
+		@hudView = -1;
+		@hudWinW = room_width;
+		@hudWinH = room_height;
+	}
 	if(@hudWinW >= 1){
 		if(@hudWinH >= 1){
 			d3d_set_projection_ortho(0, 0, @hudWinW, @hudWinH, 0);
@@ -53,8 +71,25 @@ if(view_current == @hudFirst){
 #endif
 #if GM8GUI
 	@hudGuiOn = false;
-	@hudWinW = window_get_width();
-	@hudWinH = window_get_height();
+	// Same view-port space as the group-8 path (see above); the GUI pass has no
+	// per-view context, so anchor on view 0. No projection restore needed here:
+	// the GUI pass is the last draw of the frame and the runner re-applies the
+	// view projection at the next view/frame.
+	if(view_enabled){
+		if(view_visible[0]){
+			@hudView = 0;
+			@hudWinW = view_wport[0];
+			@hudWinH = view_hport[0];
+		}else{
+			@hudView = -1;
+			@hudWinW = room_width;
+			@hudWinH = room_height;
+		}
+	}else{
+		@hudView = -1;
+		@hudWinW = room_width;
+		@hudWinH = room_height;
+	}
 	if(@hudWinW >= 1){
 		if(@hudWinH >= 1){
 			d3d_set_projection_ortho(0, 0, @hudWinW, @hudWinH, 0);
@@ -1293,8 +1328,17 @@ if(@settingsOpen){
 	@my = device_mouse_y_to_gui(0);
 	#endif
 	#if not STUDIO
-	@mx = window_mouse_get_x();
-	@my = window_mouse_get_y();
+	// Convert the authoritative room-space mouse into the same view-port space
+	// the prelude established (@hudView < 0 means room space). window_mouse_get
+	// would include letterbox offsets under scaling/fullscreen and disagree
+	// with the HUD rectangles.
+	if(@hudView >= 0){
+		@mx = (mouse_x - view_xview[@hudView]) * view_wport[@hudView] / view_wview[@hudView];
+		@my = (mouse_y - view_yview[@hudView]) * view_hport[@hudView] / view_hview[@hudView];
+	}else{
+		@mx = mouse_x;
+		@my = mouse_y;
+	}
 	#endif
 	if(mouse_check_button_pressed(mb_left)){
 		@tabClicked = false;
@@ -1708,6 +1752,18 @@ if(@debug_pick_player){
 #if GAME_D3D
 	#if not STUDIO
 		d3d_set_hidden(true);
+	#endif
+#endif
+#if not STUDIO
+	#if not GM8GUI
+	// Projection restore (group-8 path only): the runner re-applies the view
+	// projection only at the start of the next view, so anything drawn after
+	// us in this view would otherwise inherit the HUD ortho.
+	if(view_enabled){
+		d3d_set_projection_ortho(view_xview[view_current], view_yview[view_current], view_wview[view_current], view_hview[view_current], view_angle[view_current]);
+	}else{
+		d3d_set_projection_ortho(0, 0, room_width, room_height, 0);
+	}
 	#endif
 #endif
 }

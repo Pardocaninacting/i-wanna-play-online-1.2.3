@@ -1,10 +1,12 @@
 /// ONLINE
-// Screen-space toasts. GM8.0: regular Draw event under a forced window-pixel
-// ortho projection (see _workspace/RESEARCH_GM8_3D_HUD.md). GM8.2 (GM8GUI):
+// Screen-space toasts. GM8.0/8.1: regular Draw event under a forced view-port
+// ortho projection, restored at the end of the event (the runner re-applies
+// the view projection only at the next view; see
+// _workspace/RESEARCH_GM8_3D_HUD.md). GM8.2 (GM8GUI):
 // native Draw GUI event instead (group 11, repurposed trigger group; GM8.0/8.1
 // runners treat group 11 as never-drawn triggers and keep the GM8.0 path) - regular Draw output is silently invisible
 // in d3d-started rooms (TUNNEL VISION E1 probe), and the GUI pass projection
-// is Y-flipped there, so we always set our own window ortho. GAME_D3D builds
+// is Y-flipped there, so we always set our own view-port ortho. GAME_D3D builds
 // additionally wrap the draw in d3d_set_hidden(false)/(true) because a live
 // z-buffer eats our primitives. GMS: this event is attached to Draw GUI,
 // already screen-space.
@@ -20,7 +22,15 @@ if(view_enabled){
 	}
 }
 if(view_current != @psFirst) exit;
-d3d_set_projection_ortho(0, 0, window_get_width(), window_get_height(), 0);
+// View-port space (not window space): survives window scaling / letterboxed
+// fullscreen and scales with the game image. Projection is restored at the
+// end of this event; the runner only re-applies it at the next view, and this
+// object's draws leak to every instance with a lower depth.
+if(view_enabled){
+	d3d_set_projection_ortho(0, 0, view_wport[view_current], view_hport[view_current], 0);
+}else{
+	d3d_set_projection_ortho(0, 0, room_width, room_height, 0);
+}
 d3d_set_depth(-15999);
 #if GAME_D3D
 d3d_set_hidden(false);
@@ -28,7 +38,17 @@ d3d_set_hidden(false);
 	#endif
 #endif
 #if GM8GUI
-d3d_set_projection_ortho(0, 0, window_get_width(), window_get_height(), 0);
+// Same view-port space as the group-8 path; GUI pass has no per-view context,
+// anchor on view 0. No projection restore needed (GUI pass is frame-last).
+if(view_enabled){
+	if(view_visible[0]){
+		d3d_set_projection_ortho(0, 0, view_wport[0], view_hport[0], 0);
+	}else{
+		d3d_set_projection_ortho(0, 0, room_width, room_height, 0);
+	}
+}else{
+	d3d_set_projection_ortho(0, 0, room_width, room_height, 0);
+}
 #if GAME_D3D
 d3d_set_hidden(false);
 #endif
@@ -104,6 +124,17 @@ if(font_exists(0)){
 }
 draw_set_valign(fa_top);
 draw_set_halign(fa_left);
+#if not STUDIO
+	#if not GM8GUI
+// Projection restore (group-8 path only): anything drawn after this object in
+// the same view would otherwise inherit the toast ortho.
+if(view_enabled){
+	d3d_set_projection_ortho(view_xview[view_current], view_yview[view_current], view_wview[view_current], view_hview[view_current], view_angle[view_current]);
+}else{
+	d3d_set_projection_ortho(0, 0, room_width, room_height, 0);
+}
+	#endif
+#endif
 #if GAME_D3D
 #if not STUDIO
 d3d_set_hidden(true);

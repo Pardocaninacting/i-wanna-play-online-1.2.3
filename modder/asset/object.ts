@@ -99,8 +99,11 @@ export class GMObject extends Asset {
 	public addDrawCode(GML: Buffer): void {
 		this.addCode(GML, 8, 0);
 	}
-	// GM8.1+ native Draw GUI event (event group 11): runs once per frame after
-	// all regular draws, in window pixel coordinates. Absent in GM8.0.
+	// GM8.2-native Draw GUI event (event group 11, the trigger group GM8.2
+	// repurposed): runs once per frame after all regular draws, in window pixel
+	// coordinates. GM8.0/8.1 runners keep group 11 as triggers and never
+	// dispatch it as a draw event - attaching HUD code there silently never
+	// runs (E2 regression). Only use when isGM82 detection fired.
 	public addDrawGuiCode(GML: Buffer): void {
 		this.addCode(GML, 11, 0);
 	}

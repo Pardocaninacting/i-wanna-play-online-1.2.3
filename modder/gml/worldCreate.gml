@@ -103,6 +103,12 @@ if(!@objListLoaded){
 @showPlayerList = false;
 @loadHotkeyConsumed = false;
 @settingsOpen = false;
+// GM8.2 Draw GUI self-heal flag: the group-11 HUD copy sets this on its first
+// run, silencing the group-8 fallback copy registered alongside it (see
+// converterGM8 isGM82). Initialized here so the fallback's first frame never
+// reads an undefined global; game_restart re-runs this create event, which is
+// exactly the reset the fallback needs.
+global.__ONLINE_guiAlive = false;
 @keySettings = 79;
 @lerpEnabled = true;
 @fastLoadEnabled = true;

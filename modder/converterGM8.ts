@@ -965,6 +965,17 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Timelines header");
 	let timelines: Array<Timeline> = getAssets(exe, Timeline.deserialize) as Array<Timeline>;
+	// Code snippets worth a GAME_D3D scan that live outside objects/scripts
+	// (timeline moments here; room creation codes are collected from the room
+	// chunks at the scan site). Consumed by the scanD3d block below.
+	const extraD3dCode: Array<string> = [];
+	for(const tl of timelines){
+		if(!tl || !tl.moments) continue;
+		for(const [, tlActions] of tl.moments)
+			for(const tlAction of tlActions)
+				if(tlAction.paramStrings && tlAction.paramStrings[0])
+					extraD3dCode.push(tlAction.paramStrings[0].toString('latin1'));
+	}
 	timelines = null;
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Objects header");
@@ -1718,6 +1729,27 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	for(const scanScript of scripts){
 		if(scanScript && scanScript.source) scanD3d(scanScript.source.toString('latin1'));
 	}
+	// Timeline moments (collected before the timelines table was dropped).
+	for(const extraCode of extraD3dCode) scanD3d(extraCode);
+	// Room creation code is the classic d3d_start() location, but only the
+	// first room is ever inflated (world instance injection) - inflate every
+	// chunk here read-only, walk the header up to the creation code, scan and
+	// discard. A missed d3d game would silently lose the z-buffer wrap.
+	for(const roomRef of roomRefs){
+		try{
+			const roomRaw: Buffer = inflateBuffer(roomRef);
+			if(roomRaw.length < 4 || roomRaw.readUInt32LE(0) === 0) continue;
+			const roomData: SmartBuffer = SmartBuffer.fromBuffer(roomRaw);
+			roomData.readOffset = 4; // exists flag
+			roomData.readOffset += roomData.readUInt32LE(); // name
+			roomData.readOffset += 4; // version
+			roomData.readOffset += roomData.readUInt32LE(); // caption
+			roomData.readOffset += 24; // w,h / speed,persistent / bgColour / clearFlags
+			const roomCodeLen: number = roomData.readUInt32LE();
+			if(roomCodeLen > 0 && roomData.readOffset + roomCodeLen <= roomRaw.length)
+				scanD3d(roomRaw.toString('latin1', roomData.readOffset, roomData.readOffset + roomCodeLen));
+		}catch{ /* malformed room chunk: skip */ }
+	}
 	if(d3dUse.has("d3d")) GMLCode.addVariables("GAME_D3D");
 	if(d3dUse.size > 0)
 		console.log(`[hud] game uses ${[...d3dUse].join("/")}` +
@@ -1731,14 +1763,38 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	chatbox.addCreateCode(await GMLCode.getGML("chatboxCreate"));
 	const chatboxTick: Buffer = await GMLCode.getGML("chatboxEndStep", player.name, player2 ? player2.name : Buffer.from(""), world.name);
 	chatbox.addDrawCode(await GMLCode.getGML("chatboxDraw"));
-	const playerSaved: GMObject = newObject(Buffer.from("__ONLINE_playerSaved",'ascii'), true, -10, false);
+	// Depth just above the UI object (drawn second-to-last): keeps toasts on
+	// top of game-side HUD instances and shrinks the projection-leak surface
+	// (anything drawn after us in the same view inherits our ortho until the
+	// end-of-event restore - at this depth that is only the UI object, which
+	// sets its own projection immediately).
+	const playerSaved: GMObject = newObject(Buffer.from("__ONLINE_playerSaved",'ascii'), true, -2147483647, false);
 	playerSaved.addCreateCode(await GMLCode.getGML("playerSavedCreate"));
 	const playerSavedTick: Buffer = await GMLCode.getGML("playerSavedEndStep");
 	const playerSavedDrawGml: Buffer = await GMLCode.getGML("playerSavedDraw");
-	if(isGM82)
-		playerSaved.addDrawGuiCode(playerSavedDrawGml); // screen-space: GM8.2 native Draw GUI (see below)
-	else
+	// Runtime self-heal for isGM82 false positives (a GM8.0/8.1 game whose
+	// runner would treat group 11 as never-dispatched triggers): alongside the
+	// native Draw GUI copy, register a regular-Draw fallback gated on
+	// global.__ONLINE_guiAlive (initialized false in worldCreate). The GUI copy
+	// sets the flag on its first run, so on a real GM8.2 runner the fallback
+	// draws at most once (frame 1, before the GUI pass); on a misdetected game
+	// the GUI event never fires and the fallback keeps the HUD alive instead
+	// of vanishing silently (E2). The fallback ends with the same projection
+	// restore the GM8.0/8.1 template path uses.
+	const guiFallbackRestore: string = "\r\nif(view_enabled){\r\n	d3d_set_projection_ortho(view_xview[view_current], view_yview[view_current], view_wview[view_current], view_hview[view_current], view_angle[view_current]);\r\n}else{\r\n	d3d_set_projection_ortho(0, 0, room_width, room_height, 0);\r\n}\r\n";
+	if(isGM82){
+		playerSaved.addDrawGuiCode(concatBuffers([
+			Buffer.from("global.__ONLINE_guiAlive = true;\r\n", 'ascii'),
+			playerSavedDrawGml,
+		])); // screen-space: GM8.2 native Draw GUI (see below)
+		playerSaved.addDrawCode(concatBuffers([
+			Buffer.from("if(!global.__ONLINE_guiAlive){\r\n", 'ascii'),
+			playerSavedDrawGml,
+			Buffer.from(guiFallbackRestore + "}\r\n", 'ascii'),
+		]));
+	}else{
 		playerSaved.addDrawCode(playerSavedDrawGml);
+	}
 	addTick(world, await GMLCode.getGML("worldEndStep", player.name, player2 ? player2.name : Buffer.from("")), worldTickEventName);
 	if(injectIntoStep){
 		const helperScheduler: Buffer = concatBuffers([
@@ -1773,10 +1829,20 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// GM8.0/8.1 runners dispatch group 11 as triggers, so they keep the
 	// regular-Draw path (verified in 2D rooms).
 	ui.addDrawCode(wrapWithWorld(drawGml));
-	if(isGM82)
-		ui.addDrawGuiCode(wrapWithWorld(drawGuiGml));
-	else
+	if(isGM82){
+		ui.addDrawGuiCode(concatBuffers([
+			Buffer.from("global.__ONLINE_guiAlive = true;\r\n", 'ascii'),
+			wrapWithWorld(drawGuiGml),
+		]));
+		// group-8 self-heal fallback (see the guiAlive note at playerSaved)
+		ui.addDrawCode(concatBuffers([
+			Buffer.from("if(!global.__ONLINE_guiAlive){\r\n", 'ascii'),
+			wrapWithWorld(drawGuiGml),
+			Buffer.from(guiFallbackRestore + "}\r\n", 'ascii'),
+		]));
+	}else{
 		ui.addDrawCode(wrapWithWorld(drawGuiGml));
+	}
 	if(customWorld)
 		objects.push(world); // must stay the first of the new objects; its index was reserved as customWorldObjectId
 	objects.push(onlinePlayer);
