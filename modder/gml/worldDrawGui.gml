@@ -679,6 +679,79 @@ if(@settingsOpen){
 		draw_set_halign(fa_center);
 		draw_text(@btnRecX + @btnRecW/2, @rowY, "Now");
 		draw_set_halign(fa_left);
+		// S5 (PVP): mode cycles Off/Team/FFA. The bullet visibility toggle is
+		// locked ON while PVP is enabled (a PVP player must never hide the
+		// bullets that can kill them). The mode row is N/A when the converter
+		// could not resolve a kill script for this game.
+		#if PLAYER_LIST
+			@rowY = @contentY + 256;
+		#endif
+		#if not PLAYER_LIST
+			@rowY = @contentY + 228;
+		#endif
+		draw_set_halign(fa_left);
+		draw_set_color(c_white);
+		draw_text(@spX + 16, @rowY, "PVP:");
+		if(@pvpAvail){
+			@btnPvpLX = @spX + 190;
+			@btnPvpLY = @rowY;
+			@btnPvpLW = 20;
+			@btnPvpLH = 18;
+			draw_set_color(c_gray);
+			draw_rectangle(@btnPvpLX, @btnPvpLY, @btnPvpLX + @btnPvpLW, @btnPvpLY + @btnPvpLH, false);
+			draw_set_color(c_white);
+			draw_set_halign(fa_center);
+			draw_text(@btnPvpLX + @btnPvpLW/2, @rowY, "<");
+			@pvpModeNames[0] = "Off";
+			@pvpModeNames[1] = "Team";
+			@pvpModeNames[2] = "FFA";
+			draw_set_color(c_white);
+			draw_text(@spX + 280, @rowY, @pvpModeNames[@pvpMode]);
+			@btnPvpRX = @spX + 350;
+			@btnPvpRY = @rowY;
+			@btnPvpRW = 20;
+			@btnPvpRH = 18;
+			draw_set_color(c_gray);
+			draw_rectangle(@btnPvpRX, @btnPvpRY, @btnPvpRX + @btnPvpRW, @btnPvpRY + @btnPvpRH, false);
+			draw_set_color(c_white);
+			draw_text(@btnPvpRX + @btnPvpRW/2, @rowY, ">");
+		}
+		if(!@pvpAvail){
+			draw_set_color(c_gray);
+			draw_set_halign(fa_center);
+			draw_text(@spX + 280, @rowY, "N/A");
+		}
+		#if PLAYER_LIST
+			@rowY = @contentY + 284;
+		#endif
+		#if not PLAYER_LIST
+			@rowY = @contentY + 256;
+		#endif
+		draw_set_halign(fa_left);
+		draw_set_color(c_white);
+		draw_text(@spX + 16, @rowY, "Bullets:");
+		@btnBshX = @spX + 252;
+		@btnBshY = @rowY;
+		@btnBshW = 56;
+		@btnBshH = 18;
+		if(@bulletShow){
+			draw_set_color(make_color_rgb(40, 160, 40));
+		}else{
+			draw_set_color(c_gray);
+		}
+		draw_rectangle(@btnBshX, @btnBshY, @btnBshX + @btnBshW, @btnBshY + @btnBshH, false);
+		draw_set_color(c_white);
+		draw_set_halign(fa_center);
+		if(@bulletShow){
+			draw_text(@btnBshX + @btnBshW/2, @rowY, "ON");
+		}else{
+			draw_text(@btnBshX + @btnBshW/2, @rowY, "OFF");
+		}
+		if(@pvpMode != 0){
+			draw_set_color(c_gray);
+			draw_set_halign(fa_left);
+			draw_text(@spX + 316, @rowY, "(locked)");
+		}
 	}
 	// TAB 1: SAVES
 	if(@settingsTab == 1){
@@ -1443,6 +1516,26 @@ if(@settingsOpen){
 			if(@mx >= @btnRecX && @mx <= @btnRecX + @btnRecW && @my >= @btnRecY && @my <= @btnRecY + @btnRecH){
 				@manualReconnect = true;
 				@settingsOpen = false;
+			}
+			if(@pvpAvail){
+				if(@mx >= @btnPvpLX && @mx <= @btnPvpLX + @btnPvpLW && @my >= @btnPvpLY && @my <= @btnPvpLY + @btnPvpLH){
+					@pvpMode -= 1;
+					if(@pvpMode < 0) @pvpMode = 2;
+					@pvpChanged = true;
+				}
+				if(@mx >= @btnPvpRX && @mx <= @btnPvpRX + @btnPvpRW && @my >= @btnPvpRY && @my <= @btnPvpRY + @btnPvpRH){
+					@pvpMode += 1;
+					if(@pvpMode > 2) @pvpMode = 0;
+					@pvpChanged = true;
+				}
+			}
+			// Locked while PVP is on (see the draw side); the worldEndStep
+			// consumer re-forces visibility on mode change as a second guard.
+			if(@pvpMode == 0){
+				if(@mx >= @btnBshX && @mx <= @btnBshX + @btnBshW && @my >= @btnBshY && @my <= @btnBshY + @btnBshH){
+					@bulletShow = 1 - @bulletShow;
+					@bulletShowChanged = true;
+				}
 			}
 		}
 		if(!@tabClicked && @settingsTab == 1){

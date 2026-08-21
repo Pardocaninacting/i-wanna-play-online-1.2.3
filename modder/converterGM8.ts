@@ -353,6 +353,62 @@ export const resolveBulletObject = function(objects: Array<GMObject>, sprites: A
 	return bulletObj;
 }
 
+// S5 (PVP): resolve the game's kill script for the PVP bullet-hit call.
+// Detection chain (RESEARCH_PVP_Design.md §3): 1. iwpo.pvp.killscript=<name>
+// define ("-" = explicitly disabled); 2. scan every collision event (group 4)
+// for calls to kill-ish scripts (name contains "kill", excluding save/load/
+// count/time) and take the most-called one - the game's own killer collisions
+// vote for the right script, so exotic names (SMB: scrKillPlayer) and
+// per-area scripts (TUNNEL VISION: player_kill) resolve without guessing;
+// 3. exact name candidates; 4. "" (PVP unavailable, settings row shows N/A).
+// Deterministic; exported for harnesses.
+export const resolvePvpKillScript = function(objects: Array<GMObject>, scripts: Array<Script>, defines: Map<string, string>): string {
+	const scriptNames: Map<string, string> = new Map();
+	for(const s of scripts)
+		if(s && s.name) scriptNames.set(s.name.toString('latin1').toLowerCase(), s.name.toString('latin1'));
+	const killDefine: string = "iwpo.pvp.killscript";
+	if(defines.has(killDefine)){
+		const defineValue: string = (defines.get(killDefine) as string).trim();
+		if(defineValue === "-"){
+			console.log(`[pvp] ${killDefine}=- -> PVP disabled`);
+			return "";
+		}
+		if(defineValue !== ""){
+			const hit: string | undefined = scriptNames.get(defineValue.toLowerCase());
+			if(hit !== undefined) return hit;
+			console.warn(`[pvp] ${killDefine}=${defineValue}: no such script, falling back to detection`);
+		}
+	}
+	const isKillish = function(n: string): boolean { return /kill/i.test(n) && !/save|load|count|time/i.test(n); };
+	const tally: Map<string, number> = new Map();
+	const callRe: RegExp = /([A-Za-z_][A-Za-z0-9_]*)\s*\(/g;
+	for(const o of objects){
+		if(!o || !o.events || !o.events[4]) continue;
+		for(const [, actions] of o.events[4]){
+			for(const a of actions){
+				const code: string = a.paramStrings && a.paramStrings[0] ? a.paramStrings[0].toString('latin1') : "";
+				if(code === "") continue;
+				callRe.lastIndex = 0;
+				let m: RegExpExecArray | null;
+				while((m = callRe.exec(code)) !== null){
+					const name: string | undefined = scriptNames.get(m[1].toLowerCase());
+					if(name !== undefined && isKillish(name)) tally.set(name, (tally.get(name) || 0) + 1);
+				}
+			}
+		}
+	}
+	let best: string = "", bestN: number = 0;
+	for(const [n, c] of tally){
+		if(c > bestN){ best = n; bestN = c; }
+	}
+	if(best !== "") return best;
+	for(const cand of ["killPlayer", "scrKillPlayer", "player_kill", "kill_player"]){
+		const hit: string | undefined = scriptNames.get(cand.toLowerCase());
+		if(hit !== undefined) return hit;
+	}
+	return "";
+}
+
 // S4: emit the world-Create constant block consumed by the bulletShare GML
 // (global.__ONLINE_bulletObj / global.__ONLINE_bulletSpr). Kept for
 // verification harnesses; production bakes the same values into the
@@ -1007,6 +1063,15 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		console.log(`[bullets] bullet object -> ${objects[bulletObjIdx].name.toString('ascii')} (index ${bulletObjIdx}, sprite ${bulletSprIdx})`);
 	else
 		console.log(`[bullets] no bullet object resolved; bullet sharing disabled`);
+	// S5 (PVP): resolve the kill script before any template picks up PVPKILL
+	// (worldCreate bakes @pvpAvail, bulletShareEndStep bakes the kill call).
+	const pvpKillScript: string = skinsEnabled ? resolvePvpKillScript(objects, scripts, defines) : "";
+	if(pvpKillScript !== ""){
+		console.log(`[pvp] kill script -> ${pvpKillScript} (PVP available)`);
+		GMLCode.addVariables("PVPKILL");
+	}else{
+		console.log(`[pvp] no kill script resolved; PVP unavailable for this game`);
+	}
 	if(objects.some(obj => obj && obj.name.toString('ascii').startsWith("__ONLINE_")))
 		throw new Error("This game is already an online version");
 	const gameWorld: GMObject = await findAssetInteractive(objects, ["world", "World", "objWorld", "oWorld"], "object world") as GMObject;
@@ -1863,7 +1928,10 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	}
 	bulletProxy.addCreateCode(await GMLCode.getGML("bulletShareCreate"));
 	const bulletHitCode: string = defines.has("iwpo.bullet.hit") ? (defines.get("iwpo.bullet.hit") as string) : "";
-	bulletProxy.addEndStepCode(await GMLCode.getGML("bulletShareEndStep", player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(bulletHitCode, 'ascii')));
+	// S5: %arg3 = the PVP kill call (e.g. "killPlayer();"), empty when
+	// unavailable - the gate in the template then never fires.
+	const pvpKillCall: string = pvpKillScript !== "" ? pvpKillScript + "();" : "";
+	bulletProxy.addEndStepCode(await GMLCode.getGML("bulletShareEndStep", player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(bulletHitCode, 'ascii'), Buffer.from(pvpKillCall, 'ascii')));
 	bulletProxy.addDrawCode(await GMLCode.getGML("bulletShareDraw", world.name));
 	objects.push(bulletProxy);
 	// S4 local-bullet re-skin: give the GAME's bullet object a Draw event so

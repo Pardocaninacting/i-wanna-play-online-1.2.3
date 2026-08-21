@@ -166,6 +166,19 @@ return 1;
 if(!@bActive || @bCount < 1 || @bCount > 8){
     return 0;
 }
+// PVP bullet visibility (S5): hidden only while PVP is off - a PVP player can
+// never hide bullets (the settings UI locks the toggle and this guard enforces
+// it regardless of ini edits). While hidden, no proxies exist at all; the next
+// snapshot after re-enabling recreates them through the normal diff below.
+if(!@bulletShow && @pvpMode == 0){
+    with(@bullet){
+        if(ds_map_exists(other.@bMap, @bKey)){
+            ds_map_delete(other.@bMap, @bKey);
+        }
+        instance_destroy();
+    }
+    return 0;
+}
 // Sender's skin slot: resolved remote skins render their bullet.png; pending/
 // missing (or skinless) senders draw the game's native bullet sprite.
 @bP = noone;
@@ -251,6 +264,33 @@ for(@bi = 0; @bi < @bCount; @bi += 1){
     }
 }
 return 1;
+
+///// script @pvp_hostile
+// S5 (PVP): argument0 = owner playerId; returns 1 when that player's bullets
+// can hurt the LOCAL player. The decision is entirely victim-side
+// (RESEARCH_PVP_Design.md §4): my mode Off -> never; FFA -> always; Team ->
+// only when the owner's team differs from mine (team values compare directly,
+// so None==None is friendly; an owner whose proxy/team has not arrived yet
+// counts as hostile - better to die than to be invincible by race condition).
+// Runs in the WORLD instance's context.
+if(@pvpMode == 0){
+    return 0;
+}
+if(@pvpMode == 2){
+    return 1;
+}
+@phT = -999;
+for(@phi = 0; @phi < instance_number(@onlinePlayer); @phi += 1){
+    @phP = instance_find(@onlinePlayer, @phi);
+    if(@phP.@ID == argument0){
+        @phT = @phP.@team;
+        break;
+    }
+}
+if(@phT == -999){
+    return 1;
+}
+return (@phT != @team);
 
 ///// script @bullet_cleanup
 // worldGameEnd: destroy every proxy and the registry map.

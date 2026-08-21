@@ -601,7 +601,11 @@ return -1;
 // Draws one skin frame. argument0: state, argument1: image_index,
 // argument2/3: x/y, argument4/5: xscale/yscale, argument6: angle,
 // argument7: alpha, argument8: source slot (-1 = the selected-skin global
-// mirror, 0-31 = a remote-player slot). Caller context reads only globals.
+// mirror, 0-31 = a remote-player slot), argument9/10: tint color/alpha
+// (c_white/0 = none; S5 PVP passes c_red/0.35 for the hostile overlay - the
+// same frame is drawn a second time multiplied by the tint color, so the
+// team-colored name and the base sprite stay intact). Caller context reads
+// only globals.
 // Missing states fall back slide -> fall -> idle (the kid slides DOWN vines,
 // so the upward jump pose is wrong; a state counts as missing when its
 // mirrored sprite slot is empty, i.e. the skin has no such png or it failed
@@ -681,6 +685,9 @@ if(@skinAnState != argument0){
 @skinAnState = argument0;
 @skFrame = floor(@skinAnPos) mod @skFrames;
 draw_sprite_ext(@skSprId, @skFrame, argument2, argument3, argument4, argument5, argument6, c_white, argument7);
+if(argument10 > 0){
+    draw_sprite_ext(@skSprId, @skFrame, argument2, argument3, argument4, argument5, argument6, argument9, argument10 * argument7);
+}
 return 1;
 
 ///// script @skin_prev_load

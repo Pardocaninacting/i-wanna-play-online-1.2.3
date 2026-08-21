@@ -11,6 +11,22 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 	if(sprite_exists(sprite_index)){
 		@_drawAlpha = image_alpha;
 		@_drewSkin = 0;
+		// S5 PVP: players whose bullets can hurt the local player get a red
+		// overlay (hostile = the local mode is on and the FFA/team matrix says
+		// so). The tint is a second draw_sprite_ext pass, so the team-colored
+		// name tag is unaffected.
+		@_tintC = c_white;
+		@_tintA = 0;
+		if(@oWorld.@pvpMode != 0){
+			@_host = 0;
+			with(@oWorld){
+				other.@_host = @pvp_hostile(other.@ID);
+			}
+			if(@_host){
+				@_tintC = c_red;
+				@_tintA = 0.35;
+			}
+		}
 		if(@skinState >= 1){
 			// Remote skin: resolved players draw from their slot; pending and
 			// explicitly-missing players draw the "Unknown" fallback package
@@ -24,12 +40,15 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 					@_slot = 0;
 				}
 				if(@_slot >= 0){
-					@_drewSkin = @skin_draw(@_st, image_index, x, y, image_xscale, image_yscale, image_angle, @_drawAlpha, @_slot);
+					@_drewSkin = @skin_draw(@_st, image_index, x, y, image_xscale, image_yscale, image_angle, @_drawAlpha, @_slot, @_tintC, @_tintA);
 				}
 			}
 		}
 		if(!@_drewSkin){
 			draw_sprite_ext(sprite_index, image_index, x, y, image_xscale, image_yscale, image_angle, c_white, @_drawAlpha);
+			if(@_tintA > 0){
+				draw_sprite_ext(sprite_index, image_index, x, y, image_xscale, image_yscale, image_angle, @_tintC, @_tintA * @_drawAlpha);
+			}
 		}
 		if(@oWorld.@vis == 0){
 			@_alpha = draw_get_alpha();

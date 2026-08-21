@@ -35,7 +35,7 @@ if(global.@skinOn){
 }
 if(@st >= 0){
     @f = image_index;
-    if(!@skin_draw(@st, @f, x, y, image_xscale, image_yscale, image_angle, image_alpha, -1)){
+    if(!@skin_draw(@st, @f, x, y, image_xscale, image_yscale, image_angle, image_alpha, -1, c_white, 0)){
         @st = -1;
     }
 }
@@ -100,7 +100,7 @@ if(@st >= 0){
             @ys = image_yscale;
         #endif
     #endif
-    @skPre = @skin_draw(@st, @f, x, y, @xs, @ys, image_angle, image_alpha, -1);
+    @skPre = @skin_draw(@st, @f, x, y, @xs, @ys, image_angle, image_alpha, -1, c_white, 0);
 }
 
 ///// mode overlay
@@ -153,5 +153,5 @@ if(@st >= 0){
             @ys = image_yscale;
         #endif
     #endif
-    @skin_draw(@st, @f, x, y, @xs, @ys, image_angle, image_alpha, -1);
+    @skin_draw(@st, @f, x, y, @xs, @ys, image_angle, image_alpha, -1, c_white, 0);
 }

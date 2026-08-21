@@ -1,5 +1,6 @@
 /// ONLINE
-// %arg0: player object name, %arg1: player2 object name, %arg2: hit action
+// %arg0: player object name, %arg1: player2 object name, %arg2: hit action,
+// %arg3: PVP kill call (baked; empty when PVP is unavailable for this game)
 // Proxy bullet EndStep: age out when fresh snapshots stop arriving, advance
 // the animation phase, dead-reckon the position (uniform straight-line
 // motion - snapshots re-anchor it on arrival, so jitter no longer freezes
@@ -54,4 +55,19 @@ if(@bSpd != 0){
 #endif
 if(instance_exists(@bp) && place_meeting(x, y, @bp)){
     %arg2
+    // S5 (PVP): the kill call (%arg3, baked at convert time; empty = PVP
+    // unavailable) fires only when the shooter's bullets can hurt the local
+    // player under the victim-side rules matrix (Off/Team/FFA, see
+    // @pvp_hostile in bulletShare.gml). The call is the game's own kill
+    // script detected from its killer collision events, so death handling
+    // (blood/sound/death counter/save) stays game-native.
+    @bHurt = 0;
+    if(instance_exists(@bWorld)){
+        with(@bWorld){
+            other.@bHurt = @pvp_hostile(other.@bOwner);
+        }
+    }
+    if(@bHurt){
+        %arg3
+    }
 }

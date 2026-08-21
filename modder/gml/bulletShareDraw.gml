@@ -23,7 +23,7 @@ if(instance_exists(%arg0)){
 if(@bVis){
     @bDrew = 0;
     if(@bSlot >= 0){
-        @bDrew = @skin_draw(6, @bImg, x, y, @bXS, 1, @bAA, image_alpha, @bSlot);
+        @bDrew = @skin_draw(6, @bImg, x, y, @bXS, 1, @bAA, image_alpha, @bSlot, c_white, 0);
     }
     if(!@bDrew){
         if(global.@bulletSpr >= 0){

@@ -20,7 +20,7 @@ if(global.@skinOn == 1){
     if(hspeed > 0){
         if(@bsFace < 0) @bsFace = -@bsFace;
     }
-    if(@skin_draw(6, image_index, x, y, @bsFace, image_yscale, image_angle, image_alpha, -1)){
+    if(@skin_draw(6, image_index, x, y, @bsFace, image_yscale, image_angle, image_alpha, -1, c_white, 0)){
         exit;
     }
 }

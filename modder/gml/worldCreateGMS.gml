@@ -76,6 +76,18 @@ set_utf8_mode(1);
 @lerpChanged = false;
 @fastLoadChanged = false;
 @syncEnabledChanged = false;
+// S5 (PVP): mode 0=Off/1=Team/2=FFA; bullets visible by default and forced
+// visible while PVP is on. @pvpAvail is baked by the converter (PVPKILL).
+@pvpMode = 0;
+@bulletShow = 1;
+@pvpChanged = false;
+@bulletShowChanged = false;
+#if PVPKILL
+    @pvpAvail = 1;
+#endif
+#if not PVPKILL
+    @pvpAvail = 0;
+#endif
 @saveHistCount = 0;
 @saveHistMax = 500;
 @saveHistLastTime = 0;
@@ -380,6 +392,13 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		@pingLabels[8] = ini_read_string("ping", "label_8", @pingLabels[8]);
 		@lerpEnabled = ini_read_real("config", "lerp", @lerpEnabled);
 		@fastLoadEnabled = ini_read_real("config", "fast_load", @fastLoadEnabled);
+		@pvpMode = ini_read_real("config", "pvp_mode", @pvpMode);
+		if(@pvpMode < 0 || @pvpMode > 2) @pvpMode = 0;
+		@pvpMode = floor(@pvpMode);
+		@bulletShow = ini_read_real("config", "bullet_show", @bulletShow);
+		if(@bulletShow != 0) @bulletShow = 1;
+		// A PVP player must never hide the bullets that can kill them.
+		if(@pvpMode != 0) @bulletShow = 1;
 		@team = ini_read_real("config", "team", @team);
 		if(@team < 0 || @team > 7) @team = 0;
 		@team = floor(@team);

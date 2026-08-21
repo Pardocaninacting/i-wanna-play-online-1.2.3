@@ -2143,6 +2143,25 @@ if(@lerpChanged){
 	ini_write_real("config", "lerp", @lerpEnabled);
 	ini_close();
 }
+// S5 (PVP): persist mode/visibility changes. Switching PVP on forces bullet
+// visibility back on (and re-persists it) - a PVP player must never hide the
+// bullets that can kill them.
+if(@pvpChanged){
+	@pvpChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "pvp_mode", @pvpMode);
+	if(@pvpMode != 0 && @bulletShow != 1){
+		@bulletShow = 1;
+		ini_write_real("config", "bullet_show", @bulletShow);
+	}
+	ini_close();
+}
+if(@bulletShowChanged){
+	@bulletShowChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "bullet_show", @bulletShow);
+	ini_close();
+}
 if(@syncEnabledChanged){
 	@syncEnabledChanged = false;
 	ini_open("@config.ini");
