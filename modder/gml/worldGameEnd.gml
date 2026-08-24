@@ -125,7 +125,7 @@ if(@saveHistDirty){
 // persist player object list if edited in-game but pick mode was never closed cleanly
 if(@objListEdited){
 	@objListEdited = false;
-	@f = file_text_open_write("__online_player_objects");
+	@f = file_text_open_write(@poFile);
 	for(@i = 0; @i < ds_list_size(@obj_list); @i += 1){
 		file_text_write_real(@f, ds_list_find_value(@obj_list, @i) + 1);
 		file_text_writeln(@f);

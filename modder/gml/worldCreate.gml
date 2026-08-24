@@ -62,12 +62,17 @@ else{
 // MULTI-PLAYER OBJECT LIST (C1): tracked player objects in priority order.
 // Persisted to __online_player_objects only after an in-game edit (pick mode);
 // otherwise the converter-baked defaults below apply on every start.
+// @poDir/@poFile: GM8 resolves bare paths against the exe directory; the GMS
+// template points them at program_directory instead (its sandbox would dump
+// the file into AppData).
 @debug_pick_player = false;
 @objListEdited = false;
+@poDir = "";
+@poFile = "__online_player_objects";
 @obj_list = ds_list_create();
 @objListLoaded = false;
-if(file_exists("__online_player_objects")){
-	@f = file_text_open_read("__online_player_objects");
+if(file_exists(@poFile)){
+	@f = file_text_open_read(@poFile);
 	while(!file_text_eof(@f)){
 		@objline = file_text_read_string(@f);
 		file_text_readln(@f); // read_* leaves the cursor on the same line; without this the loop never reaches eof

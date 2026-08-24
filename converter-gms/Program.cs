@@ -271,12 +271,76 @@ static class Program
             Console.WriteLine("[pvp] no kill script resolved; PVP unavailable for this game");
         }
 
+        // C1 multi-player object list (GMS port of the GM8 converter's
+        // PLAYER_LIST). Default on; iwpo.no_player_list restores the legacy
+        // player/player2-only path. iwpo.alt_player_objects appends
+        // comma-separated object names after player/player2; unknown names
+        // are skipped with a warning (GMS compiles the baked names as
+        // constants, so an unknown name would be a hard compile error).
+        var playerListInitCode = "";
+        var altPlayerObjs = new List<UndertaleGameObject>();
+        if (!GetDefineFlag("iwpo.no_player_list"))
+        {
+            activeFlags.Add("PLAYER_LIST");
+            var playerListNames = new List<string> { player.Name.Content };
+            if (player2 != null)
+                playerListNames.Add(player2.Name.Content);
+            var altPlayerObjects = GetDefine("iwpo.alt_player_objects");
+            if (altPlayerObjects != null)
+            {
+                foreach (var altRaw in altPlayerObjects.Split(','))
+                {
+                    var altName = altRaw.Trim();
+                    if (altName == "") continue;
+                    var altObj = FindObject(altName);
+                    if (altObj == null)
+                    {
+                        Console.WriteLine($"[iwpo] alt_player_objects: object \"{altName}\" not found in this game, skipped");
+                        continue;
+                    }
+                    if (!playerListNames.Contains(altObj.Name.Content))
+                    {
+                        playerListNames.Add(altObj.Name.Content);
+                        altPlayerObjs.Add(altObj);
+                    }
+                }
+            }
+            var sbList = new StringBuilder();
+            foreach (var listName in playerListNames)
+                sbList.Append($"ds_list_add(__ONLINE_obj_list, {listName});\r\n");
+            playerListInitCode = sbList.ToString();
+        }
+
         // Compile and import GML
         var importGroup = new CodeImportGroup(Data) { AutoCreateAssets = false };
 
+        // C1: active-player resolver script (first listed object with a live
+        // instance, noone when none exist). Mirrors the GM8 converter's
+        // generated __ONLINE_get_active_player.
+        if (activeFlags.Contains("PLAYER_LIST"))
+        {
+            var gapBody =
+                "var __gap_i, __gap_obj;\r\n" +
+                $"for (__gap_i = 0; __gap_i < ds_list_size({world.Name.Content}.__ONLINE_obj_list); __gap_i += 1) {{\r\n" +
+                $"__gap_obj = ds_list_find_value({world.Name.Content}.__ONLINE_obj_list, __gap_i);\r\n" +
+                "if (instance_exists(__gap_obj)) return __gap_obj;\r\n" +
+                "}\r\n" +
+                "return noone;";
+            var gapCode = UndertaleCode.CreateEmptyEntry(Data, "gml_Script___ONLINE_get_active_player");
+            Data.Scripts.Add(new UndertaleScript()
+            {
+                Name = Data.Strings.MakeString("__ONLINE_get_active_player"),
+                Code = gapCode,
+            });
+            // GMS2.3+ script assets hold function declarations; GMS1 holds the body directly.
+            if (Data.IsVersionAtLeast(2, 3))
+                gapBody = $"function __ONLINE_get_active_player() {{\r\n{gapBody}\r\n}}";
+            importGroup.QueueReplace(gapCode, gapBody);
+        }
+
         var worldCreateCode = RenderTemplate(activeFlags, "worldCreateGMS", Config.GameId, Config.Server,
                 Config.TcpPort.ToString(), Config.UdpPort.ToString(), Config.GameName,
-                Config.Version, sharedSaveSupported ? "1" : "0", onlineFontIndex.ToString());
+                Config.Version, sharedSaveSupported ? "1" : "0", onlineFontIndex.ToString(), playerListInitCode);
         // The map slots are always assigned and run before the template body so
         // the skin library can rely on them at Create time: the real mapping when
         // skins are enabled, defaults -1/0 otherwise (the menu preview reads the
@@ -389,7 +453,7 @@ static class Program
         InjectSkinScriptAssets(importGroup, activeFlags);
         if (skinsEnabled)
         {
-            InjectPlayerDrawEvents(importGroup, activeFlags, player, player2);
+            InjectPlayerDrawEvents(importGroup, activeFlags, player, player2, altPlayerObjs);
         }
         else
         {
@@ -1554,7 +1618,7 @@ static class Program
         return modes;
     }
 
-    static void InjectPlayerDrawEvents(CodeImportGroup importGroup, ISet<string> activeFlags, UndertaleGameObject player, UndertaleGameObject player2)
+    static void InjectPlayerDrawEvents(CodeImportGroup importGroup, ISet<string> activeFlags, UndertaleGameObject player, UndertaleGameObject player2, List<UndertaleGameObject> altObjects)
     {
         var rendered = RenderSkinTemplate(activeFlags, "playerDrawInject");
         var modes = SplitMarkedModes(rendered, "playerDrawInject");
@@ -1567,6 +1631,11 @@ static class Program
         InjectPlayerDrawEvent(importGroup, player, replaceCode, preemptCode, overlayCode);
         if (player2 != null)
             InjectPlayerDrawEvent(importGroup, player2, replaceCode, preemptCode, overlayCode);
+        // C1: PLAYER_LIST alt objects get the same skin draw treatment (the
+        // facing/gravity flags are resolved from the main player, matching
+        // the GM8 converter's skinTargetObjects).
+        foreach (var altObj in altObjects)
+            InjectPlayerDrawEvent(importGroup, altObj, replaceCode, preemptCode, overlayCode);
     }
 
     static void InjectPlayerDrawEvent(CodeImportGroup importGroup, UndertaleGameObject obj, string replaceCode, string preemptCode, string overlayCode)

@@ -7,6 +7,11 @@
 // %arg5: The version
 // %arg6: Whether shared save hooks are enabled for this game
 // %arg7: The font index for online UI
+// Player object list init code follows (PLAYER_LIST only, already
+// __ONLINE_-prefixed). It is multi-line, so nothing may trail it on a
+// comment line (the remainder would land at column 0 and fail the GMS
+// compile); also never write the literal arg token inside any comment:
+// %arg8
 if(!instance_exists(@userInterface)){
 	#if GMS2
 		instance_create_depth(0, 0, -2147483648, @userInterface);
@@ -356,6 +361,37 @@ if (string_char_at(@cfgDir, string_length(@cfgDir)) != chr(92)) @cfgDir += chr(9
 @cfgPath = @cfgDir + "@config.ini";
 @serverPath = @cfgDir + "@server.txt";
 @savesPath = "@saves";
+#if PLAYER_LIST
+// MULTI-PLAYER OBJECT LIST (C1, GMS port): tracked player objects in
+// priority order. Same semantics as the GM8 template, but the persistence
+// file lives in program_directory (the GMS sandbox would dump a bare
+// relative path into AppData). Persisted only after an in-game edit (pick
+// mode); otherwise the converter-baked defaults below apply on every start.
+@debug_pick_player = false;
+@objListEdited = false;
+@poDir = @cfgDir;
+@poFile = @cfgDir + "__online_player_objects";
+@obj_list = ds_list_create();
+@objListLoaded = false;
+if(file_exists(@poFile)){
+	@poF = file_text_open_read(@poFile);
+	while(!file_text_eof(@poF)){
+		@objline = file_text_read_string(@poF);
+		file_text_readln(@poF); // read_* leaves the cursor on the same line; without this the loop never reaches eof
+		if(@objline != ""){
+			@obj_id = real(@objline) - 1; // stored +1: text files and 0 don't mix
+			if(object_exists(@obj_id)){
+				ds_list_add(@obj_list, @obj_id);
+				@objListLoaded = true;
+			}
+		}
+	}
+	file_text_close(@poF);
+}
+if(!@objListLoaded){
+%arg8
+}
+#endif
 // LAYERED CONFIG: layer 0 = default ini shipped beside the exe (read-only),
 // layer 1 = user ini in the working directory (read-write). User keys override.
 @cfgRead = false;

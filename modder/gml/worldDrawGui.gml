@@ -1797,6 +1797,11 @@ if(@spectating || @specProgress > 0){
 if(@debug_pick_player){
 	@_alpha = draw_get_alpha();
 	@_color = draw_get_color();
+	#if STUDIO
+		if(global.@ftOnline >= 0){
+			draw_set_font(global.@ftOnline);
+		}
+	#endif
 	#if not STUDIO
 		draw_set_font(@ftOnlinePlayerName);
 	#endif
@@ -1804,15 +1809,16 @@ if(@debug_pick_player){
 	draw_set_halign(fa_left);
 	@pkX = 8;
 	@pkY = 8;
-	@pkLines = ds_list_size(@obj_list) + 4;
+	@pkLines = ds_list_size(@obj_list) + 5;
 	draw_set_alpha(0.85);
 	draw_set_color(c_black);
 	draw_rectangle(@pkX, @pkY, @pkX + 400, @pkY + @pkLines * 18 + 10, false);
 	draw_set_alpha(1);
 	draw_set_color(c_white);
 	draw_text(@pkX + 8, @pkY + 4, "Player objects:  L = add/remove");
-	draw_text(@pkX + 8, @pkY + 22, "R = add first,  Enter/Esc = done");
-	@pkYY = @pkY + 42;
+	draw_text(@pkX + 8, @pkY + 22, "R = add first,  C = clear all");
+	draw_text(@pkX + 8, @pkY + 40, "Enter = done");
+	@pkYY = @pkY + 58;
 	for(@pkI = 0; @pkI < ds_list_size(@obj_list); @pkI += 1){
 		@pkObj = ds_list_find_value(@obj_list, @pkI);
 		@pkTxt = object_get_name(@pkObj);

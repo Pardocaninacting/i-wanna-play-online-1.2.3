@@ -1117,6 +1117,60 @@ if(!@spectating){
 @loadHotkeyConsumed = false;
 if(@exists){
 	@p = instance_find(@p, 0);
+	// C1 hardening: the converter-detected facing variable is only proven to
+	// exist on the real player object(s). PLAYER_LIST can make any tracked
+	// object (or one of its child instances) the active one; reading a custom
+	// variable from those fatals on GMS and silently reads 0 on GM8. Gate the
+	// custom read on object identity; everything else sends the bare scale.
+	@isPlayerObj = 1;
+#if PLAYER_LIST
+	@isPlayerObj = 0;
+	if(@p.object_index == %arg0){
+		@isPlayerObj = 1;
+	}
+	#if PLAYER2
+		if(@p.object_index == %arg1){
+			@isPlayerObj = 1;
+		}
+	#endif
+#endif
+	@xmod = 1;
+#if GM8YY
+	if(@isPlayerObj){
+		@xmod = @p.xScale;
+	}
+#endif
+#if not GM8YY
+	#if GLOBAL_PLAYER_XSCALE
+		@xmod = global.player_xscale;
+	#endif
+	#if not GLOBAL_PLAYER_XSCALE
+		#if PLAYER_XSCALE
+			if(@isPlayerObj){
+				@xmod = @p.xScale;
+			}
+		#endif
+		#if not PLAYER_XSCALE
+			#if PLAYER_XSCALE_LOWER
+				if(@isPlayerObj){
+					@xmod = @p.xscale;
+				}
+			#endif
+			#if not PLAYER_XSCALE_LOWER
+				#if PLAYER_FACING
+					if(@isPlayerObj){
+						@xmod = @p.facing;
+					}
+				#endif
+			#endif
+		#endif
+	#endif
+#endif
+#if RENEX
+	if(@isPlayerObj){
+		@xmod = @p.x_scale;
+	}
+#endif
 	if(@exists != @pExists){
 		// SEND PLAYER CREATE
 		__ONLINE_buffer_clear(@buffer);
@@ -1156,32 +1210,7 @@ if(@exists){
 				__ONLINE_buffer_write_int32(@buffer, @Y);
 				__ONLINE_buffer_write_int32(@buffer, @p.sprite_index);
 				__ONLINE_buffer_write_float32(@buffer, @p.image_speed);
-				#if GM8YY
-					__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*@p.xScale);
-				#endif
-				#if GLOBAL_PLAYER_XSCALE
-					__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*global.player_xscale);
-				#endif
-				#if not GLOBAL_PLAYER_XSCALE
-					#if not GM8YY
-						#if PLAYER_XSCALE
-							__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*@p.xScale);
-						#endif
-						#if not PLAYER_XSCALE
-							#if PLAYER_XSCALE_LOWER
-								__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*@p.xscale);
-							#endif
-							#if not PLAYER_XSCALE_LOWER
-								#if PLAYER_FACING
-									__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*@p.facing);
-								#endif
-								#if not PLAYER_FACING
-									__ONLINE_buffer_write_float32(@buffer, @p.image_xscale);
-								#endif
-							#endif
-						#endif
-					#endif
-				#endif
+				__ONLINE_buffer_write_float32(@buffer, @p.image_xscale*@xmod);
 				#if STUDIO
 					#if GRAVITY
 					__ONLINE_buffer_write_float32(@buffer, @p.image_yscale*global.grav);
@@ -1212,32 +1241,7 @@ if(@exists){
 				__ONLINE_buffer_write_i32(@buffer, @p.sprite_index);
 				__ONLINE_buffer_write_float(@buffer, @p.image_speed);
 				#if not RENEX
-					#if GLOBAL_PLAYER_XSCALE
-						__ONLINE_buffer_write_float(@buffer, @p.image_xscale*global.player_xscale);
-					#endif
-					#if GM8YY
-						__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.xScale);
-					#endif
-					#if not GLOBAL_PLAYER_XSCALE
-						#if not GM8YY
-							#if PLAYER_XSCALE
-								__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.xScale);
-							#endif
-							#if not PLAYER_XSCALE
-								#if PLAYER_XSCALE_LOWER
-									__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.xscale);
-								#endif
-								#if not PLAYER_XSCALE_LOWER
-									#if PLAYER_FACING
-										__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.facing);
-									#endif
-									#if not PLAYER_FACING
-										__ONLINE_buffer_write_float(@buffer, @p.image_xscale);
-									#endif
-								#endif
-							#endif
-						#endif
-					#endif
+					__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@xmod);
 					#if STUDIO
 						#if GRAVITY
 						__ONLINE_buffer_write_float(@buffer, @p.image_yscale*global.grav);
@@ -1256,7 +1260,7 @@ if(@exists){
 					#endif
 				#endif
 				#if RENEX
-					__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@p.x_scale);
+					__ONLINE_buffer_write_float(@buffer, @p.image_xscale*@xmod);
 					__ONLINE_buffer_write_float(@buffer, @p.image_yscale*global.grav);
 				#endif
 				__ONLINE_buffer_write_float(@buffer, @p.image_angle);
@@ -2527,13 +2531,16 @@ __ONLINE_socket_send(@socket);
 #if PLAYER_LIST
 // PLAYER OBJECT PICK MODE (entered from settings tab 0, "Player Objects" row).
 // L-click an instance: add/remove its object; R-click: add at top priority;
-// Enter/Esc/settings key: close and persist (only when edited this session).
+// C: clear the whole list (an empty persisted list boots back to the
+// converter defaults, so this doubles as reset); Enter/settings key: close
+// and persist (only when edited this session). Esc is NOT a close key - the
+// engine binds it to ending the game.
 if(@debug_pick_player){
-	if(keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_enter) || keyboard_check_pressed(@keySettings)){
+	if(keyboard_check_pressed(vk_enter) || keyboard_check_pressed(@keySettings)){
 		@debug_pick_player = false;
 		if(@objListEdited){
 			@objListEdited = false;
-			@f = file_text_open_write("__online_player_objects");
+			@f = file_text_open_write(@poFile);
 			for(@i = 0; @i < ds_list_size(@obj_list); @i += 1){
 				file_text_write_real(@f, ds_list_find_value(@obj_list, @i) + 1); // +1: GM8 text files and 0 don't mix
 				file_text_writeln(@f);
@@ -2554,7 +2561,7 @@ if(@debug_pick_player){
 					@comma = ",";
 				}
 			}
-			@f = file_text_open_write(@gameName + ".ini");
+			@f = file_text_open_write(@poDir + @gameName + ".ini");
 			file_text_write_string(@f, "# " + @gameName + " player objects");
 			file_text_writeln(@f);
 			file_text_write_string(@f, "[iwpo]");
@@ -2564,6 +2571,10 @@ if(@debug_pick_player){
 			file_text_close(@f);
 		}
 	}else{
+		if(keyboard_check_pressed(ord("C"))){
+			ds_list_clear(@obj_list);
+			@objListEdited = true;
+		}
 		@target_instance = instance_position(mouse_x, mouse_y, all);
 		if(@target_instance != noone){
 			@pickIdx = ds_list_find_index(@obj_list, @target_instance.object_index);
