@@ -68,6 +68,9 @@ interface TcpPlayer {
     /** Bullet-share rate limiting window (BULLET, high-frequency). */
     bulletWindowStart: number;
     bulletCount: number;
+    /** Note relay rate limiting windows (NOTE), one bucket per subtype. */
+    noteWindowStart: number[];
+    noteCount: number[];
 }
 
 /* ── State ─────────────────────────────────────────── */
@@ -98,6 +101,17 @@ const SKIN_PROTOCOL_VERSION = 3;
 
 function supportsSkins(player: TcpPlayer): boolean {
     return player.protocolVersion >= SKIN_PROTOCOL_VERSION;
+}
+
+// Notes/annotations (NOTE) are gated on protocol v4: older clients are never
+// sent opcode 20 (unknown opcodes kick the receiver).
+const NOTE_PROTOCOL_VERSION = 4;
+// Per-subtype drop-not-kick limits per 10s window (BULLET pattern): one
+// spammed category must not starve the others. STROKE is counted per chunk.
+const NOTE_RATE_LIMITS = [20, 20, 100, 10];
+
+function supportsNotes(player: TcpPlayer): boolean {
+    return player.protocolVersion >= NOTE_PROTOCOL_VERSION;
 }
 
 /* ── Skin library (hash-addressed read-only store) ─── */
@@ -854,6 +868,94 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             }
             break;
 
+        case TcpMsg.NOTE:
+            // Notes/annotations relay (protocol v4+). Same opcode both
+            // directions (PING pattern): S→C prepends stringNT senderId to
+            // the verbatim body. Relayed game-wide to note-capable peers;
+            // room isolation is the receiver's job (room id is in the body).
+            if (!supportsNotes(player)) { quitPlayer(player, "note_version"); return; }
+            // Smallest legal body: ICON = sub(1)+room(4)+x(4)+y(4)+icon(1) = 14.
+            // Largest: STROKE = sub(1)+room(4)+strokeId(1)+chunk(1)+n(1)+8+239*4 = 972.
+            if (msg.remaining() < 14 || msg.remaining() > 980) { quitPlayer(player, "note_bad_size"); return; }
+            {
+                const bodyStart = msg.readOffset;
+                const subType = msg.readUInt8();
+                if (subType > 3) { quitPlayer(player, "note_bad_subtype"); return; }
+                msg.readOffset += 4; // room (i32), relayed verbatim
+                let ok = false;
+                if (subType === 0) {
+                    // ICON: f32 x, f32 y, u8 iconId
+                    ok = msg.remaining() === 9;
+                } else if (subType === 1) {
+                    // POLYLINE: u8 flags, u8 n(2..24), n×(f32 x, f32 y)
+                    msg.readOffset += 1; // flags
+                    const n = msg.readUInt8();
+                    ok = n >= 2 && n <= 24 && msg.remaining() === 8 * n;
+                } else if (subType === 2) {
+                    // STROKE chunk: u8 strokeId, u8 chunk(bit7=last), u8 n(1..240),
+                    // i32 x0, i32 y0, then (n-1)×(i16 dx, i16 dy)
+                    msg.readOffset += 2; // strokeId + chunk
+                    const n = msg.readUInt8();
+                    ok = n >= 1 && n <= 240 && msg.remaining() === 8 + 4 * (n - 1);
+                } else {
+                    // TEXT: f32 x, f32 y, u8 len, len utf8 bytes
+                    msg.readOffset += 8; // x, y
+                    const len = msg.readUInt8();
+                    ok = msg.remaining() === len;
+                }
+                if (!ok) { quitPlayer(player, "note_bad_body"); return; }
+                // Per-subtype drop-not-kick buckets (BULLET pattern).
+                const now = Date.now();
+                if (now - player.noteWindowStart[subType] >= 10000) {
+                    player.noteWindowStart[subType] = now;
+                    player.noteCount[subType] = 0;
+                }
+                player.noteCount[subType] += 1;
+                if (player.noteCount[subType] > NOTE_RATE_LIMITS[subType]) break;
+                msg.readOffset = bodyStart;
+                const body = msg.readBuffer(msg.remaining());
+                const notify = new SmartBuffer();
+                notify.writeUInt8(TcpMsg.NOTE);
+                notify.writeStringNT(player.id);
+                notify.writeBuffer(body);
+                const framed = frameMessage(notify.toBuffer());
+                notify.destroy();
+                let relayCount = 0;
+                for (const p of tcpPlayers) {
+                    if (p.id === player.id || p.game !== player.game || player.game === "") continue;
+                    if (p.quitted || !supportsNotes(p)) continue;
+                    p.socket.write(framed);
+                    relayCount++;
+                }
+                if (relayCount > 0 && process.env.DSH_NOTE_DEBUG) {
+                    log.debug(`NOTE ${player.id} -> ${relayCount} peers (sub=${subType})`);
+                }
+                // Legacy bridge: an ICON note with a legacy-compatible iconId
+                // (0..8) is synthesized into an opcode 11 PING for pre-v4
+                // peers, so old clients keep seeing markers. Each peer gets
+                // exactly one format (NOTE xor PING), so no dedup is needed.
+                if (subType === 0) {
+                    const iconId = body.readUInt8(12);
+                    if (iconId <= 8) {
+                        const ping = new SmartBuffer();
+                        ping.writeUInt8(TcpMsg.PING);
+                        ping.writeStringNT(player.id);
+                        ping.writeInt32LE(body.readInt32LE(0)); // room
+                        ping.writeFloatLE(body.readFloatLE(4)); // x
+                        ping.writeFloatLE(body.readFloatLE(8)); // y
+                        ping.writeUInt8(iconId);
+                        const pingFramed = frameMessage(ping.toBuffer());
+                        ping.destroy();
+                        for (const p of tcpPlayers) {
+                            if (p.id === player.id || p.game !== player.game || player.game === "") continue;
+                            if (p.quitted || supportsNotes(p)) continue;
+                            p.socket.write(pingFramed);
+                        }
+                    }
+                }
+            }
+            break;
+
         default:
             quitPlayer(player, "unknown_opcode");
     }
@@ -889,6 +991,8 @@ createServer((socket: Socket) => {
         skinDlLimited: false,
         bulletWindowStart: 0,
         bulletCount: 0,
+        noteWindowStart: [0, 0, 0, 0],
+        noteCount: [0, 0, 0, 0],
     };
 
     tcpPlayers.push(player);

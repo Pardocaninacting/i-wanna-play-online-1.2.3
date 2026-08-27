@@ -34,7 +34,7 @@ set_utf8_mode(1);
 @tcpPort = %arg2;
 @udpPort = %arg3;
 @version = "%arg5";
-@protocolVersion = 3;
+@protocolVersion = 4;
 @race = false;
 @password = "";
 @vis = 0;
@@ -134,6 +134,7 @@ global.@ftOnline = %arg7;
 @keySpectate = 89;
 @keyArrows = 73;
 @keyPing = 72;
+@keyCanvas = 78;
 @spectating = false;
 @spectatingPrev = false;
 @specX = 0;
@@ -178,33 +179,42 @@ global.@ftOnline = %arg7;
 @teamColors[6] = make_color_rgb(255, 160, 40);
 @teamColors[7] = make_color_rgb(80, 255, 255);
 @teamMap = ds_map_create();
-// PING
-@pingWheelOpen = false;
-@pingWheelCenterX = 0;
-@pingWheelCenterY = 0;
-@pingWheelHover = 4;
-@pingWheelCanceled = false;
-@pingHead = 0;
-@pingMax = 16;
-@pingLifeMs = 4000;
-for(@i = 0; @i < @pingMax; @i += 1){
-	@pingX[@i] = 0;
-	@pingY[@i] = 0;
-	@pingT[@i] = -99999;
-	@pingType[@i] = 4;
-	@pingName[@i] = "";
-	@pingSenderIDArr[@i] = "";
-	@pingTeamArr[@i] = 0;
+// NOTES (opcode 20; supersedes the PING marker arrays — legacy clients'
+// opcode 11 pings are folded into this same store on receive)
+@noteMode = 0;             // 0 idle, 2 wheel, 3 icon palette
+@noteNoClick = 0;          // input gate: set while wheel/palette is open
+@noteCanvasMode = 0;       // N key cycles: 0 transient (toast only), 1 canvas (all notes, no names), 2 off
+@noteAnchorX = 0;          // where the note lands (H press position)
+@noteAnchorY = 0;
+@noteCX = 0;               // clamped wheel/palette center (render + hover)
+@noteCY = 0;
+@noteWarped = 0;           // cursor captured into a clamped wheel center
+@noteMouseWX = 0;          // OS cursor pos to restore on close
+@noteMouseWY = 0;
+@noteWheelHover = 4;
+@notePaletteHover = -1;
+@notePaletteLast = 4;
+@noteLastIcon = 4;         // center quick icon (ini persisted)
+@noteLastIconLoaded = 4;
+@noteHideOthers = 0;       // ini [notes] hide_others
+@noteHideAll = 0;          // ini [notes] hide_all
+@noteMax = 64;
+@notePerCap = 8;           // per-sender-per-kind FIFO cap
+@noteToastMs = 4000;       // full-alpha period; notes then persist dimmed
+@noteHead = 0;
+@noteSeq = 0;
+for(@i = 0; @i < @noteMax; @i += 1){
+	@noteKindArr[@i] = 0;
+	@noteRoomArr[@i] = 0;
+	@noteX[@i] = 0;
+	@noteY[@i] = 0;
+	@noteIcon[@i] = 4;
+	@noteSenderArr[@i] = "";
+	@noteName[@i] = "";
+	@noteTeamArr[@i] = 0;
+	@noteT[@i] = -99999;
+	@noteSeqArr[@i] = -1;
 }
-@pingLabels[0] = "?";
-@pingLabels[1] = "UP";
-@pingLabels[2] = "SAFE";
-@pingLabels[3] = "LEFT";
-@pingLabels[4] = "HERE";
-@pingLabels[5] = "RIGHT";
-@pingLabels[6] = "WAIT";
-@pingLabels[7] = "DOWN";
-@pingLabels[8] = "!";
 // SYNC
 @syncEnabled = 1;
 @syncEntryCount = 0;
@@ -416,16 +426,16 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		@keySpectate = ini_read_real("config", "key_spectate", @keySpectate);
 		@keyArrows = ini_read_real("config", "key_arrows", @keyArrows);
 		@keyPing = ini_read_real("config", "key_ping", @keyPing);
+		@keyCanvas = ini_read_real("config", "key_canvas", @keyCanvas);
 		@keyFastLoad = ini_read_real("config", "key_fastload", @keyFastLoad);
-		@pingLabels[0] = ini_read_string("ping", "label_0", @pingLabels[0]);
-		@pingLabels[1] = ini_read_string("ping", "label_1", @pingLabels[1]);
-		@pingLabels[2] = ini_read_string("ping", "label_2", @pingLabels[2]);
-		@pingLabels[3] = ini_read_string("ping", "label_3", @pingLabels[3]);
-		@pingLabels[4] = ini_read_string("ping", "label_4", @pingLabels[4]);
-		@pingLabels[5] = ini_read_string("ping", "label_5", @pingLabels[5]);
-		@pingLabels[6] = ini_read_string("ping", "label_6", @pingLabels[6]);
-		@pingLabels[7] = ini_read_string("ping", "label_7", @pingLabels[7]);
-		@pingLabels[8] = ini_read_string("ping", "label_8", @pingLabels[8]);
+		@noteLastIcon = ini_read_real("ping", "last_icon", @noteLastIcon);
+		if(@noteLastIcon < 0 || @noteLastIcon > 9) @noteLastIcon = 4;
+		@noteLastIcon = floor(@noteLastIcon);
+		@noteLastIconLoaded = @noteLastIcon;
+		@noteHideOthers = ini_read_real("notes", "hide_others", 0);
+		if(@noteHideOthers != 0) @noteHideOthers = 1;
+		@noteHideAll = ini_read_real("notes", "hide_all", 0);
+		if(@noteHideAll != 0) @noteHideAll = 1;
 		@lerpEnabled = ini_read_real("config", "lerp", @lerpEnabled);
 		@fastLoadEnabled = ini_read_real("config", "fast_load", @fastLoadEnabled);
 		@pvpMode = ini_read_real("config", "pvp_mode", @pvpMode);

@@ -202,8 +202,14 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			exit;
 			break;
 		case 4:
-			// CHAT MESSAGE
+			// CHAT MESSAGE — the chat log is written even when the sender's
+			// onlinePlayer instance is gone (mid-reconnect, late roster);
+			// only the floating bubble needs the instance.
 			@ID = __ONLINE_buffer_read_string(@buffer);
+			@message = __ONLINE_buffer_read_string(@buffer);
+			#if STUDIO
+			@message = strip_non_bmp(@message);
+			#endif
 			@found = false;
 			@oPlayer = 0;
 			for(@i = 0; @i < instance_number(@onlinePlayer) && !@found; @i += 1){
@@ -212,11 +218,28 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 					@found = true;
 				}
 			}
+			@chatSenderName = "?";
+			@chatSenderTeam = 0;
 			if(@found){
-				@message = __ONLINE_buffer_read_string(@buffer);
-				#if STUDIO
-				@message = strip_non_bmp(@message);
-				#endif
+				@chatSenderName = @oPlayer.@name;
+				@chatSenderTeam = @oPlayer.@team;
+			}
+			if(@chatHistCount < @chatHistMax){
+				@chatHistName[@chatHistCount] = @chatSenderName;
+				@chatHistMsg[@chatHistCount] = @message;
+				@chatHistTeam[@chatHistCount] = @chatSenderTeam;
+				@chatHistCount += 1;
+			}else{
+				for(@ci = 0; @ci < @chatHistMax - 1; @ci += 1){
+					@chatHistName[@ci] = @chatHistName[@ci + 1];
+					@chatHistMsg[@ci] = @chatHistMsg[@ci + 1];
+					@chatHistTeam[@ci] = @chatHistTeam[@ci + 1];
+				}
+				@chatHistName[@chatHistMax - 1] = @chatSenderName;
+				@chatHistMsg[@chatHistMax - 1] = @message;
+				@chatHistTeam[@chatHistMax - 1] = @chatSenderTeam;
+			}
+			if(@found){
 					@bubbleMsg = @message;
 				#if GM80
 				@bubbleMsg = __ONLINE_gbk_trunc(@bubbleMsg, 77, "...");
@@ -239,21 +262,6 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				#endif
 				@oCb.@message = @bubbleMsg;
 				@oCb.@follower = @oPlayer;
-				if(@chatHistCount < @chatHistMax){
-					@chatHistName[@chatHistCount] = @oPlayer.@name;
-					@chatHistMsg[@chatHistCount] = @message;
-					@chatHistTeam[@chatHistCount] = @oPlayer.@team;
-					@chatHistCount += 1;
-				}else{
-						for(@ci = 0; @ci < @chatHistMax - 1; @ci += 1){
-						@chatHistName[@ci] = @chatHistName[@ci + 1];
-						@chatHistMsg[@ci] = @chatHistMsg[@ci + 1];
-						@chatHistTeam[@ci] = @chatHistTeam[@ci + 1];
-					}
-					@chatHistName[@chatHistMax - 1] = @oPlayer.@name;
-					@chatHistMsg[@chatHistMax - 1] = @message;
-					@chatHistTeam[@chatHistMax - 1] = @oPlayer.@team;
-				}
 				if(@oPlayer.visible){
 					#if STUDIO
 						audio_play_sound(@sndChatbox, 0, false);
@@ -526,7 +534,9 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			ds_map_destroy(@listSeen);
 			break;
 		case 11:
-			// PING
+			// PING (legacy pre-v4 clients): NOTE ICON equivalent — folded into
+			// the notes store. Room filtering happens at render time, so a
+			// ping from another room is stored but not drawn.
 			@pingSenderID = __ONLINE_buffer_read_string(@buffer);
 			#if not GMNET
 				@pingPRoom = __ONLINE_buffer_read_int32(@buffer);
@@ -540,7 +550,6 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				@pingPy = __ONLINE_buffer_read_float(@buffer);
 				@pingPtype = __ONLINE_buffer_read_u8(@buffer);
 			#endif
-			if(@pingPRoom != room) break;
 			@pingSenderName = "?";
 			@pingSenderTeam = -1;
 			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
@@ -551,20 +560,15 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 					break;
 				}
 			}
-			@pingX[@pingHead] = @pingPx;
-			@pingY[@pingHead] = @pingPy;
-			@pingT[@pingHead] = current_time;
-			@pingType[@pingHead] = @pingPtype;
-			@pingName[@pingHead] = @pingSenderName;
-			@pingSenderIDArr[@pingHead] = @pingSenderID;
-			if(@pingSenderTeam >= 0 && @pingSenderTeam < 8){
-				@pingTeamArr[@pingHead] = @pingSenderTeam;
-			}else if(ds_map_exists(@teamMap, @pingSenderID)){
-				@pingTeamArr[@pingHead] = ds_map_find_value(@teamMap, @pingSenderID);
-			}else{
-				@pingTeamArr[@pingHead] = 0;
+			if(@pingSenderTeam < 0 || @pingSenderTeam > 7){
+				if(ds_map_exists(@teamMap, @pingSenderID)){
+					@pingSenderTeam = ds_map_find_value(@teamMap, @pingSenderID);
+				}else{
+					@pingSenderTeam = 0;
+				}
 			}
-			if(@vis == 0 && @pingSenderID != @selfID){
+			@note_add(0, @pingPRoom, @pingPx, @pingPy, @pingPtype, @pingSenderID, @pingSenderName, @pingSenderTeam);
+			if(@noteCanvasMode != 2 && @pingSenderID != @selfID && !@noteHideAll && !@noteHideOthers){
 				#if STUDIO
 					audio_play_sound(@sndChatbox, 0, false);
 				#endif
@@ -572,7 +576,59 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 					sound_play(@sndChatbox);
 				#endif
 			}
-			@pingHead = (@pingHead + 1) mod @pingMax;
+			break;
+		case 20:
+			// NOTE (protocol v4+): stringNT senderId, u8 subType, i32 room,
+			// then the per-subtype body. Subtypes 1-3 (POLYLINE/STROKE/TEXT)
+			// land in N2/N3 — their bodies are left unread here and dropped
+			// with the message frame.
+			@ntSender = __ONLINE_buffer_read_string(@buffer);
+			#if not GMNET
+				@ntSub = __ONLINE_buffer_read_uint8(@buffer);
+				@ntRoom = __ONLINE_buffer_read_int32(@buffer);
+			#endif
+			#if GMNET
+				@ntSub = __ONLINE_buffer_read_u8(@buffer);
+				@ntRoom = __ONLINE_buffer_read_i32(@buffer);
+			#endif
+			if(@ntSub == 0){
+				#if not GMNET
+					@ntX = __ONLINE_buffer_read_float32(@buffer);
+					@ntY = __ONLINE_buffer_read_float32(@buffer);
+					@ntIcon = __ONLINE_buffer_read_uint8(@buffer);
+				#endif
+				#if GMNET
+					@ntX = __ONLINE_buffer_read_float(@buffer);
+					@ntY = __ONLINE_buffer_read_float(@buffer);
+					@ntIcon = __ONLINE_buffer_read_u8(@buffer);
+				#endif
+				@ntName = "?";
+				@ntTeam = -1;
+				for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
+					@oPlayer = instance_find(@onlinePlayer, @i);
+					if(@oPlayer.@ID == @ntSender){
+						@ntName = @oPlayer.@name;
+						@ntTeam = @oPlayer.@team;
+						break;
+					}
+				}
+				if(@ntTeam < 0 || @ntTeam > 7){
+					if(ds_map_exists(@teamMap, @ntSender)){
+						@ntTeam = ds_map_find_value(@teamMap, @ntSender);
+					}else{
+						@ntTeam = 0;
+					}
+				}
+				@note_add(0, @ntRoom, @ntX, @ntY, @ntIcon, @ntSender, @ntName, @ntTeam);
+				if(@noteCanvasMode != 2 && @ntSender != @selfID && !@noteHideAll && !@noteHideOthers){
+					#if STUDIO
+						audio_play_sound(@sndChatbox, 0, false);
+					#endif
+					#if not STUDIO
+						sound_play(@sndChatbox);
+					#endif
+				}
+			}
 			break;
 		case 13:
 			// SKIN NOTIFY: stringNT playerId, 16-byte hash, stringNT dir hint.
@@ -1271,7 +1327,7 @@ if(@exists){
 	}
 	@t += 1;
 	if(!@loadHotkeyConsumed && !@settingsOpen && @saveHistCount > 0){
-		if(@fastLoadEnabled && keyboard_check_pressed(@keyFastLoad)){
+		if(@fastLoadEnabled && keyboard_check_pressed(@keyFastLoad) && !@noteNoClick){
 			@saveHistApply = @saveHistCount - 1;
 			@loadHotkeyConsumed = true;
 		}else{
@@ -1290,7 +1346,11 @@ if(@exists){
 			}
 		}
 	}
-	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyChat) && !@settingsOpen){
+}
+// Chat was hoisted out of if(@exists): the message must reach the log and
+// the server even when no player object exists (spectating, custom obj,
+// between rooms); only the floating bubble needs the instance.
+if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyChat) && !@settingsOpen && !@noteNoClick){
 		#if STUDIO
 			@message = get_string("Say something:", "");
 		#endif
@@ -1354,14 +1414,16 @@ if(@exists){
 			}
 			#endif
 			#endif
-			#if GMS2
-				@oCb = instance_create_depth(0, 0, @chatboxDepth, @chatbox);
-			#endif
-			#if not GMS2
-				@oCb = instance_create(0, 0, @chatbox);
-			#endif
-			@oCb.@message = @selfChatBubble;
-			@oCb.@follower = @p;
+			if(@exists){
+				#if GMS2
+					@oCb = instance_create_depth(0, 0, @chatboxDepth, @chatbox);
+				#endif
+				#if not GMS2
+					@oCb = instance_create(0, 0, @chatbox);
+				#endif
+				@oCb.@message = @selfChatBubble;
+				@oCb.@follower = @p;
+			}
 			if(@chatHistCount < @chatHistMax){
 				@chatHistName[@chatHistCount] = @name;
 				@chatHistMsg[@chatHistCount] = @message;
@@ -1385,7 +1447,6 @@ if(@exists){
 			#endif
 		}
 	}
-}
 if(@exists != @pExists){
 	// SEND PLAYER DESTROYED
 	__ONLINE_buffer_clear(@buffer);
@@ -1528,7 +1589,7 @@ if(@udpState == 1){
 		}
 	}
 }
-	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyVis) && !@settingsOpen){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyVis) && !@settingsOpen && !@noteNoClick){
 	if(@vis == 0) @vis = 1;
 	else if(@vis == 1) @vis = 2;
 	else if(@vis == 2) @vis = 0;
@@ -1541,7 +1602,7 @@ if(@udpState == 1){
 	@a.@name = "";
 	@a.@state = @vis;
 }
-	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keySave) && !@settingsOpen){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keySave) && !@settingsOpen && !@noteNoClick){
 	@save_enabled = 1 - @save_enabled;
 	if(!@save_enabled){
 		// Toggling online saves off discards any pending online save.
@@ -1561,10 +1622,10 @@ if(@udpState == 1){
 	@a.@name = "";
 	@a.@state = @save_enabled + 3;
 }
-	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyPlayerList) && !@settingsOpen){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyPlayerList) && !@settingsOpen && !@noteNoClick){
 	@showPlayerList = !@showPlayerList;
 }
-	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keySettings)){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keySettings) && !@noteNoClick){
 		@settingsOpen = !@settingsOpen;
 		if(@settingsOpen){
 			@kbFocus = 1;
@@ -1573,11 +1634,11 @@ if(@udpState == 1){
 			@keybindEditing = -1;
 		}
 }
-	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyChatLog) && !@settingsOpen){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyChatLog) && !@settingsOpen && !@noteNoClick){
 	@chatLogOpen = !@chatLogOpen;
 	@chatLogScroll = 0;
 }
-	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyArrows) && !@settingsOpen){
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyArrows) && !@settingsOpen && !@noteNoClick){
 	@showArrows = !@showArrows;
 	#if GMS2
 		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
@@ -1592,75 +1653,119 @@ if(@udpState == 1){
 	}
 	@a.@state = -2;
 }
-// PING RADIAL MENU
+// CANVAS VIEW MODE (N): 0 transient (toast only), 1 canvas (all notes, no
+// names), 2 off. Notes no longer follow @vis.
+	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyCanvas) && !@settingsOpen && !@noteNoClick){
+	@noteCanvasMode = (@noteCanvasMode + 1) mod 3;
+	#if GMS2
+		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
+	#endif
+	#if not GMS2
+		@a = instance_create(0, 0, @playerSaved);
+	#endif
+	if(@noteCanvasMode == 0) @a.@name = "Notes: transient";
+	if(@noteCanvasMode == 1) @a.@name = "Notes: canvas";
+	if(@noteCanvasMode == 2) @a.@name = "Notes: off";
+	@a.@state = -2;
+}
+// NOTES WHEEL (opcode 20 NOTE; tap-H re-fires the last icon, hold opens the
+// wheel: corners fire icons, W edge opens the modal icon palette, N/E/S tool
+// edges are inert until N2/N3)
 	if(@socket != -1 && !@settingsOpen && !@chatLogOpen && @keybindEditing < 0 && !@loadHotkeyConsumed){
-	if(keyboard_check_pressed(@keyPing) && !@pingWheelOpen){
-		@pingWheelOpen = true;
-		@pingWheelCanceled = false;
-		@pingWheelCenterX = mouse_x;
-		@pingWheelCenterY = mouse_y;
-		@pingWheelHover = 4;
-	}
-	if(@pingWheelOpen){
-		@pwDx = mouse_x - @pingWheelCenterX;
-		@pwDy = mouse_y - @pingWheelCenterY;
-		if(@pwDx*@pwDx + @pwDy*@pwDy < 19*19){
-			@pingWheelHover = 4;
+	if(@noteMode == 0){
+		if(keyboard_check_pressed(@keyPing)){
+			@note_set_mode(2);
+			@noteAnchorX = mouse_x;
+			@noteAnchorY = mouse_y;
+			@noteWheelHover = 4;
+			@noteWarped = 0;
+			@noteMouseWX = window_mouse_get_x();
+			@noteMouseWY = window_mouse_get_y();
+			@note_clamp_center();
+			if(point_distance(@noteAnchorX, @noteAnchorY, @noteCX, @noteCY) > 1){
+				// edge-clamped: capture the cursor into the visible wheel
+				// center so the gesture matches the visuals; restored on
+				// close via @note_set_mode(0)
+				@noteWarped = 1;
+				@note_warp_cursor(@noteCX, @noteCY);
+			}
+		}
+	}else if(@noteMode == 2){
+		@note_clamp_center();
+		// Hover/cancel are measured from the (possibly clamped) wheel center;
+		// when clamped the cursor was warped there, so this stays gesture-true.
+		@pwDx = mouse_x - @noteCX;
+		@pwDy = mouse_y - @noteCY;
+		@pwD2 = @pwDx*@pwDx + @pwDy*@pwDy;
+		if(@pwD2 < 19*19){
+			@noteWheelHover = 4;
+		}else if(@pwD2 > 110*110){
+			// beyond the cancel radius: nothing lit, release will cancel
+			@noteWheelHover = -1;
 		}else{
 			@pwDir = point_direction(0, 0, @pwDx, @pwDy);
-			if(@pwDir >= 337.5 || @pwDir < 22.5) @pingWheelHover = 5;
-			else if(@pwDir < 67.5) @pingWheelHover = 2;
-			else if(@pwDir < 112.5) @pingWheelHover = 1;
-			else if(@pwDir < 157.5) @pingWheelHover = 0;
-			else if(@pwDir < 202.5) @pingWheelHover = 3;
-			else if(@pwDir < 247.5) @pingWheelHover = 6;
-			else if(@pwDir < 292.5) @pingWheelHover = 7;
-			else @pingWheelHover = 8;
+			if(@pwDir >= 337.5 || @pwDir < 22.5) @noteWheelHover = 5;
+			else if(@pwDir < 67.5) @noteWheelHover = 2;
+			else if(@pwDir < 112.5) @noteWheelHover = 1;
+			else if(@pwDir < 157.5) @noteWheelHover = 0;
+			else if(@pwDir < 202.5) @noteWheelHover = 3;
+			else if(@pwDir < 247.5) @noteWheelHover = 6;
+			else if(@pwDir < 292.5) @noteWheelHover = 7;
+			else @noteWheelHover = 8;
 		}
 		if(mouse_check_button_pressed(mb_right)){
-			@pingWheelOpen = false;
-			@pingWheelCanceled = true;
-		}
-		if(!keyboard_check(@keyPing)){
-			@pingWheelOpen = false;
-			if(!@pingWheelCanceled){
-				__ONLINE_buffer_clear(@buffer);
-				#if not GMNET
-					__ONLINE_buffer_write_uint8(@buffer, 11);
-					__ONLINE_buffer_write_int32(@buffer, room);
-					__ONLINE_buffer_write_float32(@buffer, @pingWheelCenterX);
-					__ONLINE_buffer_write_float32(@buffer, @pingWheelCenterY);
-					__ONLINE_buffer_write_uint8(@buffer, @pingWheelHover);
-				#endif
-				#if GMNET
-					__ONLINE_buffer_write_u8(@buffer, 11);
-					__ONLINE_buffer_write_i32(@buffer, room);
-					__ONLINE_buffer_write_float(@buffer, @pingWheelCenterX);
-					__ONLINE_buffer_write_float(@buffer, @pingWheelCenterY);
-					__ONLINE_buffer_write_u8(@buffer, @pingWheelHover);
-				#endif
-				__ONLINE_socket_write_message(@socket, @buffer);
-				@pingX[@pingHead] = @pingWheelCenterX;
-				@pingY[@pingHead] = @pingWheelCenterY;
-				@pingT[@pingHead] = current_time;
-				@pingType[@pingHead] = @pingWheelHover;
-				@pingName[@pingHead] = @name;
-				@pingSenderIDArr[@pingHead] = @selfID;
-				@pingTeamArr[@pingHead] = @team;
-				#if STUDIO
-					audio_play_sound(@sndChatbox, 0, false);
-				#endif
-				#if not STUDIO
-					sound_play(@sndChatbox);
-				#endif
-				@pingHead = (@pingHead + 1) mod @pingMax;
+			@note_set_mode(0);
+		}else if(!keyboard_check(@keyPing)){
+			if(@pwD2 > 110*110 || @noteWheelHover < 0){
+				// released beyond the outer radius = cancel
+				@note_set_mode(0);
+			}else{
+				@nFire = -1;
+				if(@noteWheelHover == 0) @nFire = 8;
+				if(@noteWheelHover == 2) @nFire = 0;
+				if(@noteWheelHover == 6) @nFire = 9;
+				if(@noteWheelHover == 8) @nFire = 2;
+				if(@noteWheelHover == 4) @nFire = @noteLastIcon;
+				if(@nFire >= 0){
+					@note_fire(@nFire, @noteAnchorX, @noteAnchorY);
+					@note_set_mode(0);
+				}else if(@noteWheelHover == 3){
+					// more-icons palette (modal, mouse-driven)
+					@note_set_mode(3);
+					@notePaletteHover = -1;
+				}else{
+					// edges 1/5/7 (arrow/brush/text): land in N2/N3
+					@note_set_mode(0);
+				}
 			}
-			@pingWheelCanceled = false;
+		}
+	}else if(@noteMode == 3){
+		@note_clamp_center();
+		@npDx = mouse_x - @noteCX;
+		@npDy = mouse_y - @noteCY;
+		@notePaletteHover = -1;
+		if(abs(@npDx) < 57 && abs(@npDy) < 57){
+			@npCol = 1;
+			if(@npDx < -19) @npCol = 0;
+			if(@npDx >= 19) @npCol = 2;
+			@npRow = 1;
+			if(@npDy < -19) @npRow = 0;
+			if(@npDy >= 19) @npRow = 2;
+			@notePaletteHover = @npRow * 3 + @npCol;
+		}
+		if(mouse_check_button_pressed(mb_right)){
+			@note_set_mode(0);
+		}else if(mouse_check_button_pressed(mb_left) || keyboard_check_pressed(@keyPing)){
+			if(@notePaletteHover >= 0){
+				// page 1: cell index IS the icon id (legacy 9-icon layout)
+				@note_fire(@notePaletteHover, @noteAnchorX, @noteAnchorY);
+				@notePaletteLast = @notePaletteHover;
+			}
+			@note_set_mode(0);
 		}
 	}
 }else{
-	@pingWheelOpen = false;
-	@pingWheelCanceled = false;
+	if(@noteMode != 0) @note_set_mode(0);
 }
 // SPECTATOR MODE
 	if(@loadHotkeyConsumed || !keyboard_check(@keySpectate) || @settingsOpen){
@@ -2996,6 +3101,7 @@ if(@keybindEditing >= 0 && @settingsOpen && @settingsTab == 3 && @keybindArmTime
 			if(@keybindEditing == 7) @keyChat = @kbPressed;
 			if(@keybindEditing == 8) @keyPing = @kbPressed;
 			if(@keybindEditing == 9) @keyFastLoad = @kbPressed;
+			if(@keybindEditing == 10) @keyCanvas = @kbPressed;
 			@keybindSave = true;
 		}
 		@keybindEditing = -1;
@@ -3015,6 +3121,7 @@ if(@keybindSave){
 	ini_write_real("config", "key_spectate", @keySpectate);
 	ini_write_real("config", "key_arrows", @keyArrows);
 	ini_write_real("config", "key_ping", @keyPing);
+	ini_write_real("config", "key_canvas", @keyCanvas);
 	ini_write_real("config", "key_fastload", @keyFastLoad);
 	ini_write_real("config", "team", @team);
 	ini_write_real("config", "lerp", @lerpEnabled);

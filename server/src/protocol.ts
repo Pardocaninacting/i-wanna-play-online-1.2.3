@@ -20,6 +20,7 @@ export enum TcpMsg {
     SKIN_FILE   = 17, // S→C: 16-byte hash, stringNT name, u8 status; when ok: u32 totalSize, u32 offset, u16 chunkLen, chunkLen raw bytes (16 KiB chunks, in order).
     BULLET      = 18, // C→S: u8 count(1..8, OR'd with 0x80 in wire format v2), then room + per-bullet body: u16 room, [i32 id, i32 x, i32 y, f32 direction, f32 speed] × count (v2 adds f32 face [image_xscale reconciled with travel direction] + f32 image_angle per bullet). Bullet sharing, gated like skins (protocol v3+).
     BULLET_NOTIFY = 19, // S→C: stringNT senderId, u8 count (v2 flag preserved), then the exact room + per-bullet body from the client. V2 receivers parse both strides; v1 receivers drop flagged messages (count > 8).
+    NOTE        = 20, // Notes/annotations (protocol v4+). Same opcode both directions (PING pattern): C→S is u8 subType, i32 room, then per-subtype body — 0=ICON(f32 x, f32 y, u8 iconId); 1=POLYLINE(u8 flags, u8 n(2..24), n×(f32 x, f32 y)); 2=STROKE(u8 strokeId, u8 chunk(bit7=last), u8 n(1..240), i32 x0, i32 y0, (n-1)×(i16 dx, i16 dy)); 3=TEXT(f32 x, f32 y, u8 len, utf8 bytes). S→C prepends stringNT senderId to the verbatim body.
 }
 
 export enum UdpMsg {

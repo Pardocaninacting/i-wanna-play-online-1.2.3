@@ -961,7 +961,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// are injected unconditionally — worldCreate/worldEndStep call them in every
 	// converted game); playerDrawInject.gml is only needed with skins enabled.
 	// Abort before any asset rewriting instead of deep into the conversion.
-	for(const skinFile of (skinsEnabled ? ["md5", "skinLib", "bulletShare", "playerDrawInject"] : ["md5", "skinLib", "bulletShare"])){
+	for(const skinFile of (skinsEnabled ? ["md5", "skinLib", "bulletShare", "notesLib", "playerDrawInject"] : ["md5", "skinLib", "bulletShare", "notesLib"])){
 		if(!await fs.exists(path.join(__dirname, "gml", `${skinFile}.gml`)))
 			throw new Error(`Skin system GML missing: gml/${skinFile}.gml. md5.gml and skinLib.gml must always be present in the gml/ folder; playerDrawInject.gml too unless converting with iwpo.no_skins=true.`);
 	}
@@ -1663,7 +1663,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 					skinScriptNames.add(n);
 			}
 		}
-		for(const packFile of ["md5", "skinLib", "bulletShare"]){
+		for(const packFile of ["md5", "skinLib", "bulletShare", "notesLib"]){
 			const sections: Array<{name: string, code: Buffer}> = splitMarkedScripts(await renderSkinGml(packFile));
 			if(sections.length === 0)
 				throw new Error(`Skin system GML gml/${packFile}.gml has no "///// script <name>" sections`);

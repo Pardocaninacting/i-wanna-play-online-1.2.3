@@ -134,6 +134,12 @@ if(@objListEdited){
 }
 ds_list_destroy(@obj_list);
 #endif
+// NOTES: persist the last-used quick icon (only when changed this session)
+if(@noteLastIcon != @noteLastIconLoaded){
+	ini_open("@config.ini");
+	ini_write_real("ping", "last_icon", @noteLastIcon);
+	ini_close();
+}
 // S4: bullet sharing cleanup (destroy proxies + registry map).
 @bullet_cleanup();
 // P0/P3: persist the skin hash cache (only when it changed this session).
