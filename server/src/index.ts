@@ -898,10 +898,12 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                     const n = msg.readUInt8();
                     ok = n >= 1 && n <= 240 && msg.remaining() === 8 + 4 * (n - 1);
                 } else {
-                    // TEXT: f32 x, f32 y, u8 len, len utf8 bytes
-                    msg.readOffset += 8; // x, y
-                    const len = msg.readUInt8();
-                    ok = msg.remaining() === len;
+                    // TEXT: f32 x, f32 y, stringNT utf8 (<=300 bytes of text)
+                    if (msg.remaining() >= 10) {
+                        msg.readOffset += 8; // x, y
+                        const text = msg.readStringNT();
+                        ok = msg.remaining() === 0 && Buffer.byteLength(text, "utf8") <= 300;
+                    }
                 }
                 if (!ok) { quitPlayer(player, "note_bad_body"); return; }
                 // Per-subtype drop-not-kick buckets (BULLET pattern).

@@ -256,7 +256,11 @@ for(@i = 0; @i < @noteMax; @i += 1){
 	@noteTeamArr[@i] = 0;
 	@noteT[@i] = -99999;
 	@noteSeqArr[@i] = -1;
+	@notePtsN[@i] = 0;
+	@noteText[@i] = "";
 }
+@noteStageN = 0;           // in-progress polyline staging (also used by receive)
+@noteStageText = "";
 // SYNC
 @syncEnabled = 1;
 @syncEntryCount = 0;

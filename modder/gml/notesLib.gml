@@ -111,6 +111,20 @@ if(@naCount >= @notePerCap && @naOldestSlot >= 0){
 @noteT[@naSlot] = current_time;
 @noteSeqArr[@naSlot] = @noteSeq;
 @noteSeq += 1;
+@notePtsN[@naSlot] = 0;
+@noteText[@naSlot] = "";
+if(argument0 == 1){
+    // POLYLINE: points staged in @noteStageX/Y[0..@noteStageN-1]
+    @notePtsN[@naSlot] = @noteStageN;
+    for(@naJ = 0; @naJ < @noteStageN; @naJ += 1){
+        @notePtsX[@naSlot * 24 + @naJ] = @noteStageX[@naJ];
+        @notePtsY[@naSlot * 24 + @naJ] = @noteStageY[@naJ];
+    }
+}
+if(argument0 == 3){
+    // TEXT: payload staged in @noteStageText
+    @noteText[@naSlot] = @noteStageText;
+}
 return @naSlot;
 
 ///// script @note_fire
@@ -252,4 +266,279 @@ if(@ndId == 9){
     draw_line_width(@ndX - 6 * @ndS, @ndY - 6 * @ndS, @ndX + 6 * @ndS, @ndY + 6 * @ndS, 2);
     draw_line_width(@ndX - 6 * @ndS, @ndY + 6 * @ndS, @ndX + 6 * @ndS, @ndY - 6 * @ndS, 2);
 }
+return 0;
+
+///// script @note_sender_info
+// Resolves a note sender id to display name + team (onlinePlayer instances
+// first, teamMap fallback) into @ntName/@ntTeam, and plays the arrival sound
+// when notes are currently visible. Shared by the case 11 (legacy PING) and
+// case 20 (NOTE) receivers.
+// args: 0 senderID
+@ntName = "?";
+@ntTeam = -1;
+for(@nsI = 0; @nsI < instance_number(@onlinePlayer); @nsI += 1){
+    @nsP = instance_find(@onlinePlayer, @nsI);
+    if(@nsP.@ID == argument0){
+        @ntName = @nsP.@name;
+        @ntTeam = @nsP.@team;
+        break;
+    }
+}
+if(@ntTeam < 0 || @ntTeam > 7){
+    if(ds_map_exists(@teamMap, argument0)){
+        @ntTeam = ds_map_find_value(@teamMap, argument0);
+    }else{
+        @ntTeam = 0;
+    }
+}
+if(@noteCanvasMode != 2 && argument0 != @selfID && !@noteHideAll && !@noteHideOthers){
+    #if STUDIO
+        audio_play_sound(@sndChatbox, 0, false);
+    #endif
+    #if not STUDIO
+        sound_play(@sndChatbox);
+    #endif
+}
+return 0;
+
+///// script @note_fire_poly
+// Submits the staged polyline (@noteStageX/Y[0..@noteStageN-1]) as a NOTE
+// POLYLINE (sub 1). Wire flags: bit0 = end arrowhead (always set); bit1 =
+// flowing node chevrons — receivers derive that from the node count, so the
+// bit is informational only. self = world instance.
+// args: none
+if(@noteStageN < 2) return 0;
+if(@socket != -1 && @connected && @protocolVersion >= 4){
+    __ONLINE_buffer_clear(@buffer);
+    @npFlags = 1;
+    if(@noteStageN > 2) @npFlags = 3;
+    #if not GMNET
+        __ONLINE_buffer_write_uint8(@buffer, 20);
+        __ONLINE_buffer_write_uint8(@buffer, 1);
+        __ONLINE_buffer_write_int32(@buffer, room);
+        __ONLINE_buffer_write_uint8(@buffer, @npFlags);
+        __ONLINE_buffer_write_uint8(@buffer, @noteStageN);
+        for(@npI = 0; @npI < @noteStageN; @npI += 1){
+            __ONLINE_buffer_write_float32(@buffer, @noteStageX[@npI]);
+            __ONLINE_buffer_write_float32(@buffer, @noteStageY[@npI]);
+        }
+    #endif
+    #if GMNET
+        __ONLINE_buffer_write_u8(@buffer, 20);
+        __ONLINE_buffer_write_u8(@buffer, 1);
+        __ONLINE_buffer_write_i32(@buffer, room);
+        __ONLINE_buffer_write_u8(@buffer, @npFlags);
+        __ONLINE_buffer_write_u8(@buffer, @noteStageN);
+        for(@npI = 0; @npI < @noteStageN; @npI += 1){
+            __ONLINE_buffer_write_float(@buffer, @noteStageX[@npI]);
+            __ONLINE_buffer_write_float(@buffer, @noteStageY[@npI]);
+        }
+    #endif
+    __ONLINE_socket_write_message(@socket, @buffer);
+}
+@note_add(1, room, @noteStageX[0], @noteStageY[0], 0, @selfID, @name, @team);
+#if STUDIO
+    audio_play_sound(@sndChatbox, 0, false);
+#endif
+#if not STUDIO
+    sound_play(@sndChatbox);
+#endif
+return 0;
+
+///// script @note_fire_text
+// Submits a TEXT note (sub 3, stringNT payload) at a world position.
+// args: 0 x, 1 y, 2 text (already truncated/escaped by the caller)
+if(argument2 == "") return 0;
+if(@socket != -1 && @connected && @protocolVersion >= 4){
+    __ONLINE_buffer_clear(@buffer);
+    #if not GMNET
+        __ONLINE_buffer_write_uint8(@buffer, 20);
+        __ONLINE_buffer_write_uint8(@buffer, 3);
+        __ONLINE_buffer_write_int32(@buffer, room);
+        __ONLINE_buffer_write_float32(@buffer, argument0);
+        __ONLINE_buffer_write_float32(@buffer, argument1);
+        __ONLINE_buffer_write_string(@buffer, argument2);
+    #endif
+    #if GMNET
+        __ONLINE_buffer_write_u8(@buffer, 20);
+        __ONLINE_buffer_write_u8(@buffer, 3);
+        __ONLINE_buffer_write_i32(@buffer, room);
+        __ONLINE_buffer_write_float(@buffer, argument0);
+        __ONLINE_buffer_write_float(@buffer, argument1);
+        __ONLINE_buffer_write_string(@buffer, argument2);
+    #endif
+    __ONLINE_socket_write_message(@socket, @buffer);
+}
+@noteStageText = argument2;
+@note_add(3, room, argument0, argument1, 0, @selfID, @name, @team);
+#if STUDIO
+    audio_play_sound(@sndChatbox, 0, false);
+#endif
+#if not STUDIO
+    sound_play(@sndChatbox);
+#endif
+return 0;
+
+///// script @note_draw_poly
+// Draws a stored POLYLINE note: 3px team-colored segments, an end arrowhead,
+// and for 3+ nodes a stream of chevrons flowing along the path (movement
+// direction/rhythm cue). No name label, no backing ring.
+// args: 0 slot, 1 alpha
+@npS = argument0;
+@npA = argument1;
+@npN = @notePtsN[@npS];
+if(@npN < 2) return 0;
+// proximity fade: distance from the local player to the nearest point of the
+// PATH (point-to-segment per segment) — a long polyline crossing the player
+// must fade too, not only near its first node
+if(!@spectating && @pExists){
+    @npFade = 1;
+    for(@npI = 0; @npI < @npN - 1; @npI += 1){
+        @npX1 = @notePtsX[@npS * 24 + @npI];
+        @npY1 = @notePtsY[@npS * 24 + @npI];
+        @npX2 = @notePtsX[@npS * 24 + @npI + 1];
+        @npY2 = @notePtsY[@npS * 24 + @npI + 1];
+        @npDX = @npX2 - @npX1;
+        @npDY = @npY2 - @npY1;
+        @npL2 = @npDX * @npDX + @npDY * @npDY;
+        @npT = 0;
+        if(@npL2 > 0) @npT = ((@X - @npX1) * @npDX + (@Y - @npY1) * @npDY) / @npL2;
+        if(@npT < 0) @npT = 0;
+        if(@npT > 1) @npT = 1;
+        @npD = point_distance(@X, @Y, @npX1 + @npT * @npDX, @npY1 + @npT * @npDY);
+        if(@npD / 100 < @npFade) @npFade = @npD / 100;
+    }
+    @npA *= @npFade;
+    if(@npA <= 0) return 0;
+}
+@npCol = @teamColors[@noteTeamArr[@npS]];
+if(@noteTeamArr[@npS] < 0 || @noteTeamArr[@npS] > 7) @npCol = @teamColors[0];
+draw_set_alpha(@npA);
+draw_set_color(@npCol);
+@npTotal = 0;
+for(@npI = 0; @npI < @npN - 1; @npI += 1){
+    @npX1 = @notePtsX[@npS * 24 + @npI];
+    @npY1 = @notePtsY[@npS * 24 + @npI];
+    @npX2 = @notePtsX[@npS * 24 + @npI + 1];
+    @npY2 = @notePtsY[@npS * 24 + @npI + 1];
+    draw_line_width(@npX1, @npY1, @npX2, @npY2, 3);
+    @npSegLen[@npI] = point_distance(@npX1, @npY1, @npX2, @npY2);
+    @npTotal += @npSegLen[@npI];
+    draw_circle(@npX1, @npY1, 2, false);
+}
+// end arrowhead
+@npAX = @notePtsX[@npS * 24 + @npN - 2];
+@npAY = @notePtsY[@npS * 24 + @npN - 2];
+@npBX = @notePtsX[@npS * 24 + @npN - 1];
+@npBY = @notePtsY[@npS * 24 + @npN - 1];
+@npDir = point_direction(@npAX, @npAY, @npBX, @npBY);
+draw_triangle(@npBX, @npBY, @npBX + lengthdir_x(12, @npDir + 150), @npBY + lengthdir_y(12, @npDir + 150), @npBX + lengthdir_x(12, @npDir - 150), @npBY + lengthdir_y(12, @npDir - 150), false);
+// flowing chevrons (direction cue along the whole path)
+if(@npN > 2 && @npTotal > 0){
+    @npSpacing = 48;
+    @npOff = (current_time * 0.045) mod @npSpacing;
+    @npD = @npOff + 1;
+    while(@npD < @npTotal){
+        @npAcc = 0;
+        @npI = 0;
+        @npL = 0;
+        while(@npI < @npN - 1){
+            @npL = @npSegLen[@npI];
+            if(@npAcc + @npL >= @npD) break;
+            @npAcc += @npL;
+            @npI += 1;
+        }
+        if(@npI >= @npN - 1) break;
+        @npT = 0;
+        if(@npL > 0) @npT = (@npD - @npAcc) / @npL;
+        @npX1 = @notePtsX[@npS * 24 + @npI];
+        @npY1 = @notePtsY[@npS * 24 + @npI];
+        @npX2 = @notePtsX[@npS * 24 + @npI + 1];
+        @npY2 = @notePtsY[@npS * 24 + @npI + 1];
+        @npPX = @npX1 + (@npX2 - @npX1) * @npT;
+        @npPY = @npY1 + @npT * (@npY2 - @npY1);
+        @npDir = point_direction(@npX1, @npY1, @npX2, @npY2);
+        @npFX = @npPX + lengthdir_x(4, @npDir);
+        @npFY = @npPY + lengthdir_y(4, @npDir);
+        draw_line_width(@npPX + lengthdir_x(5, @npDir + 140), @npPY + lengthdir_y(5, @npDir + 140), @npFX, @npFY, 2);
+        draw_line_width(@npPX + lengthdir_x(5, @npDir - 140), @npPY + lengthdir_y(5, @npDir - 140), @npFX, @npFY, 2);
+        @npD += @npSpacing;
+    }
+}
+return 0;
+
+///// script @note_draw_text
+// Draws a stored TEXT note: team-colored single-line text centered at the
+// anchor over a dim backing plate, 4-direction outline. No name label (the
+// text itself is the message). Platform branches mirror the name-label code.
+// Caller owns the font (already set by the notes draw preamble).
+// args: 0 slot, 1 alpha
+@nxS = argument0;
+@nxA = argument1;
+@nxText = @noteText[@nxS];
+if(@nxText == "") return 0;
+@nxX = @noteX[@nxS];
+@nxY = @noteY[@nxS];
+@nxCol = @teamColors[@noteTeamArr[@nxS]];
+if(@noteTeamArr[@nxS] < 0 || @noteTeamArr[@nxS] > 7) @nxCol = @teamColors[0];
+draw_set_alpha(@nxA);
+#if GM80
+    // FoxWriting path (GM8.0): fw align stubs pass through to GM's draw
+    // state, so leave them at the ambient center/middle (restoring left/top
+    // here would misalign every glyph drawn later this frame)
+    __ONLINE_fw_use_font(@nxText);
+    @nxW = fw_string_width_ext(@nxText, -1, 9999);
+    draw_set_alpha(@nxA * 0.5);
+    draw_set_color(c_black);
+    draw_rectangle(@nxX - @nxW / 2 - 4, @nxY - 9, @nxX + @nxW / 2 + 4, @nxY + 9, false);
+    draw_set_alpha(@nxA);
+    fw_draw_set_halign(fa_center);
+    fw_draw_set_valign(fa_middle);
+    fw_draw_text_ext(@nxX + 1, @nxY, @nxText, 9999);
+    fw_draw_text_ext(@nxX - 1, @nxY, @nxText, 9999);
+    fw_draw_text_ext(@nxX, @nxY + 1, @nxText, 9999);
+    fw_draw_text_ext(@nxX, @nxY - 1, @nxText, 9999);
+    draw_set_color(@nxCol);
+    fw_draw_text_ext(@nxX, @nxY, @nxText, 9999);
+#endif
+#if CJKTEXT
+    @nxW = __ONLINE_cjk_string_width_ext(@nxText, -1, 9999);
+    @nxH = __ONLINE_cjk_string_height_ext(@nxText, -1, 9999);
+    @nxLX = round(@nxX - @nxW * 0.5);
+    @nxLY = round(@nxY - @nxH * 0.5);
+    draw_set_alpha(@nxA * 0.5);
+    draw_set_color(c_black);
+    draw_rectangle(@nxLX - 4, @nxLY - 2, @nxLX + @nxW + 4, @nxLY + @nxH + 2, false);
+    draw_set_alpha(@nxA);
+    global.__ONLINE_cjkHalign = 0;
+    global.__ONLINE_cjkValign = 0;
+    __ONLINE_cjk_draw_text(@nxLX - 1, @nxLY, @nxText, 9999);
+    __ONLINE_cjk_draw_text(@nxLX + 1, @nxLY, @nxText, 9999);
+    __ONLINE_cjk_draw_text(@nxLX, @nxLY - 1, @nxText, 9999);
+    __ONLINE_cjk_draw_text(@nxLX, @nxLY + 1, @nxText, 9999);
+    draw_set_color(@nxCol);
+    __ONLINE_cjk_draw_text(@nxLX, @nxLY, @nxText, 9999);
+#endif
+#if not GM80
+#if not CJKTEXT
+    @nxW = string_width(@nxText);
+    @nxH = string_height(@nxText);
+    @nxLX = round(@nxX - @nxW * 0.5);
+    @nxLY = round(@nxY - @nxH * 0.5);
+    draw_set_alpha(@nxA * 0.5);
+    draw_set_color(c_black);
+    draw_rectangle(@nxLX - 4, @nxLY - 2, @nxLX + @nxW + 4, @nxLY + @nxH + 2, false);
+    draw_set_alpha(@nxA);
+    draw_set_halign(fa_left);
+    draw_set_valign(fa_top);
+    draw_text(@nxLX - 1, @nxLY, @nxText);
+    draw_text(@nxLX + 1, @nxLY, @nxText);
+    draw_text(@nxLX, @nxLY - 1, @nxText);
+    draw_text(@nxLX, @nxLY + 1, @nxText);
+    draw_set_color(@nxCol);
+    draw_text(@nxLX, @nxLY, @nxText);
+    draw_set_halign(fa_center);
+    draw_set_valign(fa_middle);
+#endif
+#endif
 return 0;

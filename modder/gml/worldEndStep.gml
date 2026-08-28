@@ -550,38 +550,13 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				@pingPy = __ONLINE_buffer_read_float(@buffer);
 				@pingPtype = __ONLINE_buffer_read_u8(@buffer);
 			#endif
-			@pingSenderName = "?";
-			@pingSenderTeam = -1;
-			for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
-				@oPlayer = instance_find(@onlinePlayer, @i);
-				if(@oPlayer.@ID == @pingSenderID){
-					@pingSenderName = @oPlayer.@name;
-					@pingSenderTeam = @oPlayer.@team;
-					break;
-				}
-			}
-			if(@pingSenderTeam < 0 || @pingSenderTeam > 7){
-				if(ds_map_exists(@teamMap, @pingSenderID)){
-					@pingSenderTeam = ds_map_find_value(@teamMap, @pingSenderID);
-				}else{
-					@pingSenderTeam = 0;
-				}
-			}
-			@note_add(0, @pingPRoom, @pingPx, @pingPy, @pingPtype, @pingSenderID, @pingSenderName, @pingSenderTeam);
-			if(@noteCanvasMode != 2 && @pingSenderID != @selfID && !@noteHideAll && !@noteHideOthers){
-				#if STUDIO
-					audio_play_sound(@sndChatbox, 0, false);
-				#endif
-				#if not STUDIO
-					sound_play(@sndChatbox);
-				#endif
-			}
+			@note_sender_info(@pingSenderID);
+			@note_add(0, @pingPRoom, @pingPx, @pingPy, @pingPtype, @pingSenderID, @ntName, @ntTeam);
 			break;
 		case 20:
 			// NOTE (protocol v4+): stringNT senderId, u8 subType, i32 room,
-			// then the per-subtype body. Subtypes 1-3 (POLYLINE/STROKE/TEXT)
-			// land in N2/N3 — their bodies are left unread here and dropped
-			// with the message frame.
+			// then the per-subtype body. Subtype 2 (STROKE) lands in N3 — its
+			// body is left unread here and dropped with the message frame.
 			@ntSender = __ONLINE_buffer_read_string(@buffer);
 			#if not GMNET
 				@ntSub = __ONLINE_buffer_read_uint8(@buffer);
@@ -602,32 +577,53 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 					@ntY = __ONLINE_buffer_read_float(@buffer);
 					@ntIcon = __ONLINE_buffer_read_u8(@buffer);
 				#endif
-				@ntName = "?";
-				@ntTeam = -1;
-				for(@i = 0; @i < instance_number(@onlinePlayer); @i += 1){
-					@oPlayer = instance_find(@onlinePlayer, @i);
-					if(@oPlayer.@ID == @ntSender){
-						@ntName = @oPlayer.@name;
-						@ntTeam = @oPlayer.@team;
-						break;
-					}
-				}
-				if(@ntTeam < 0 || @ntTeam > 7){
-					if(ds_map_exists(@teamMap, @ntSender)){
-						@ntTeam = ds_map_find_value(@teamMap, @ntSender);
-					}else{
-						@ntTeam = 0;
-					}
-				}
+				@note_sender_info(@ntSender);
 				@note_add(0, @ntRoom, @ntX, @ntY, @ntIcon, @ntSender, @ntName, @ntTeam);
-				if(@noteCanvasMode != 2 && @ntSender != @selfID && !@noteHideAll && !@noteHideOthers){
-					#if STUDIO
-						audio_play_sound(@sndChatbox, 0, false);
-					#endif
-					#if not STUDIO
-						sound_play(@sndChatbox);
-					#endif
+			}
+			if(@ntSub == 1){
+				// POLYLINE: u8 flags (informational; chevrons derive from the
+				// node count at render), u8 n(2..24), n×(f32 x, f32 y)
+				#if not GMNET
+					@ntFlags = __ONLINE_buffer_read_uint8(@buffer);
+					@ntN = __ONLINE_buffer_read_uint8(@buffer);
+				#endif
+				#if GMNET
+					@ntFlags = __ONLINE_buffer_read_u8(@buffer);
+					@ntN = __ONLINE_buffer_read_u8(@buffer);
+				#endif
+				if(@ntN >= 2 && @ntN <= 24){
+					@noteStageN = @ntN;
+					for(@i = 0; @i < @ntN; @i += 1){
+						#if not GMNET
+							@noteStageX[@i] = __ONLINE_buffer_read_float32(@buffer);
+							@noteStageY[@i] = __ONLINE_buffer_read_float32(@buffer);
+						#endif
+						#if GMNET
+							@noteStageX[@i] = __ONLINE_buffer_read_float(@buffer);
+							@noteStageY[@i] = __ONLINE_buffer_read_float(@buffer);
+						#endif
+					}
+					@note_sender_info(@ntSender);
+					@note_add(1, @ntRoom, @noteStageX[0], @noteStageY[0], 0, @ntSender, @ntName, @ntTeam);
 				}
+			}
+			if(@ntSub == 3){
+				// TEXT: f32 x, f32 y, stringNT utf8
+				#if not GMNET
+					@ntX = __ONLINE_buffer_read_float32(@buffer);
+					@ntY = __ONLINE_buffer_read_float32(@buffer);
+				#endif
+				#if GMNET
+					@ntX = __ONLINE_buffer_read_float(@buffer);
+					@ntY = __ONLINE_buffer_read_float(@buffer);
+				#endif
+				@ntText = __ONLINE_buffer_read_string(@buffer);
+				#if STUDIO
+				@ntText = strip_non_bmp(@ntText);
+				#endif
+				@note_sender_info(@ntSender);
+				@noteStageText = @ntText;
+				@note_add(3, @ntRoom, @ntX, @ntY, 0, @ntSender, @ntName, @ntTeam);
 			}
 			break;
 		case 13:
@@ -1733,8 +1729,56 @@ if(@udpState == 1){
 					// more-icons palette (modal, mouse-driven)
 					@note_set_mode(3);
 					@notePaletteHover = -1;
+				}else if(@noteWheelHover == 1){
+					// arrow tool: modal polyline drawing, anchor = node 0
+					@note_set_mode(4);
+					@noteStageN = 1;
+					@noteStageX[0] = @noteAnchorX;
+					@noteStageY[0] = @noteAnchorY;
+					if(@noteWarped){
+						// drawing continues from the real press point
+						@noteWarped = 0;
+						window_mouse_set(@noteMouseWX, @noteMouseWY);
+					}
+				}else if(@noteWheelHover == 7){
+					// text tool: modal input at the anchor (blocking OS box)
+					@note_set_mode(0);
+					#if STUDIO
+						@ntInput = get_string("Note:", "");
+					#endif
+					#if not STUDIO
+						#if GM80
+						@ntInput = wd_input_box("Note", "Text:", "");
+						#endif
+						#if CJKTEXT
+						@ntInput = __ONLINE_ansi_to_utf8(wd_input_box("Note", "Text:", ""));
+						#endif
+						#if not GM80
+						#if not CJKTEXT
+						@ntInput = wd_input_box("Note", "Text:", "");
+						#endif
+						#endif
+					#endif
+					@ntInput = string_replace_all(@ntInput, "#", "\\#");
+					#if STUDIO
+					@ntInput = strip_non_bmp(@ntInput);
+					#endif
+					#if GM80
+					@ntInput = __ONLINE_gbk_trunc(@ntInput, 96, "");
+					#endif
+					#if CJKTEXT
+					@ntInput = __ONLINE_gbk_trunc(@ntInput, 96, "");
+					#endif
+					#if not GM80
+					#if not CJKTEXT
+					if(string_length(@ntInput) > 96) @ntInput = string_copy(@ntInput, 1, 96);
+					#endif
+					#endif
+					if(@ntInput != ""){
+						@note_fire_text(@noteAnchorX, @noteAnchorY, @ntInput);
+					}
 				}else{
-					// edges 1/5/7 (arrow/brush/text): land in N2/N3
+					// edge 5 (brush): lands in N3
 					@note_set_mode(0);
 				}
 			}
@@ -1760,6 +1804,37 @@ if(@udpState == 1){
 				// page 1: cell index IS the icon id (legacy 9-icon layout)
 				@note_fire(@notePaletteHover, @noteAnchorX, @noteAnchorY);
 				@notePaletteLast = @notePaletteHover;
+			}
+			@note_set_mode(0);
+		}
+	}else if(@noteMode == 4){
+		// arrow/polyline drawing (modal): anchor = staged node 0; left-click
+		// adds a node (max 24), H commits (cursor becomes the final node when
+		// far enough), right-click pops the last node (cancels at the anchor)
+		if(mouse_check_button_pressed(mb_right)){
+			if(@noteStageN > 1){
+				@noteStageN -= 1;
+			}else{
+				@note_set_mode(0);
+			}
+		}else if(mouse_check_button_pressed(mb_left)){
+			if(@noteStageN < 24){
+				if(point_distance(mouse_x, mouse_y, @noteStageX[@noteStageN - 1], @noteStageY[@noteStageN - 1]) > 4){
+					@noteStageX[@noteStageN] = mouse_x;
+					@noteStageY[@noteStageN] = mouse_y;
+					@noteStageN += 1;
+				}
+			}
+		}else if(keyboard_check_pressed(@keyPing)){
+			if(@noteStageN < 24){
+				if(point_distance(mouse_x, mouse_y, @noteStageX[@noteStageN - 1], @noteStageY[@noteStageN - 1]) > 8){
+					@noteStageX[@noteStageN] = mouse_x;
+					@noteStageY[@noteStageN] = mouse_y;
+					@noteStageN += 1;
+				}
+			}
+			if(@noteStageN >= 2){
+				@note_fire_poly();
 			}
 			@note_set_mode(0);
 		}
@@ -2991,11 +3066,11 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_down)){
-			@kbRow[3] += 1; if(@kbRow[3] > 10) @kbRow[3] = 10;
+			@kbRow[3] += 1; if(@kbRow[3] > 11) @kbRow[3] = 11;
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_enter)){
-			if(@kbRow[3] < 10){
+			if(@kbRow[3] < 11){
 				@keybindEditing = @kbRow[3];
 				@keybindArmTimer = 6;
 			}else{
@@ -3009,6 +3084,7 @@ if(@settingsOpen && @keybindEditing < 0){
 				@keyChat = 32;
 				@keyPing = 72;
 				@keyFastLoad = 70;
+				@keyCanvas = 78;
 				@keybindEditing = -1;
 				@keybindSave = true;
 			}

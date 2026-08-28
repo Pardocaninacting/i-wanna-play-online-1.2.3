@@ -165,10 +165,13 @@ if(@showArrows || @spectating){
 		if(@noteHideOthers && @noteSenderArr[@i] != @selfID) continue;
 		@pAge = current_time - @noteT[@i];
 		if(@pAge < 0) @pAge = 0;
+		@pToastMs = @noteToastMs;
+		if(@noteKindArr[@i] == 1) @pToastMs = 15000;
+		if(@noteKindArr[@i] == 3) @pToastMs = 20000;
 		@pOuterAlpha = 0;
 		@pOuterR = 0;
-		if(@pAge < @noteToastMs){
-			@pT = @pAge / @noteToastMs;
+		if(@pAge < @pToastMs){
+			@pT = @pAge / @pToastMs;
 			if(@pT < 0.053){
 				@pK = @pT / 0.053;
 				@pScale = 1.15 - 0.15 * (1 - @pK) * (1 - @pK);
@@ -189,11 +192,11 @@ if(@showArrows || @spectating){
 			if(@noteCanvasMode != 1) continue;
 			@pScale = 0.92;
 			@pA = 0.25;
-			@pAge = @noteToastMs;
+			@pAge = @pToastMs;
 		}
 		@pX = round(@noteX[@i]);
 		@pY = round(@noteY[@i]);
-		if(!@spectating && @pExists){
+		if(!@spectating && @pExists && @noteKindArr[@i] != 1){
 			@pA *= min(1, point_distance(@X, @Y, @pX, @pY) / 100);
 		}
 		if(@pA < 0) @pA = 0;
@@ -201,20 +204,29 @@ if(@showArrows || @spectating){
 		@pNT = @noteTeamArr[@i];
 		if(@pNT < 0 || @pNT > 7) @pNT = 0;
 		@pNC = @teamColors[@pNT];
-		draw_set_alpha(@pA);
-		draw_set_alpha(@pA * 0.55);
-		draw_set_color(c_black);
-		draw_circle(@pX, @pY, 16 * @pScale, false);
-		draw_set_alpha(@pA);
-		draw_set_color(@pNC);
-		draw_circle(@pX, @pY, 18 * @pScale, true);
-		draw_circle(@pX, @pY, 19 * @pScale, true);
-		if(@pOuterAlpha > 0){
-			draw_set_alpha(@pA * @pOuterAlpha * 0.6);
-			draw_circle(@pX, @pY, @pOuterR * @pScale, true);
+		if(@noteKindArr[@i] == 1){
+			// polyline: no backing ring (the path is the mark)
+			@note_draw_poly(@i, @pA);
+		}else if(@noteKindArr[@i] == 3){
+			// text note: the text itself is the mark
+			@note_draw_text(@i, @pA);
+		}else{
+			draw_set_alpha(@pA * 0.55);
+			draw_set_color(c_black);
+			draw_circle(@pX, @pY, 16 * @pScale, false);
+			draw_set_alpha(@pA);
+			draw_set_color(@pNC);
+			draw_circle(@pX, @pY, 18 * @pScale, true);
+			draw_circle(@pX, @pY, 19 * @pScale, true);
+			if(@pOuterAlpha > 0){
+				draw_set_alpha(@pA * @pOuterAlpha * 0.6);
+				draw_circle(@pX, @pY, @pOuterR * @pScale, true);
+			}
+			draw_set_alpha(@pA);
+			@note_draw_icon(@noteIcon[@i], @pX, @pY, @pScale, @pA, @pAge);
 		}
-		draw_set_alpha(@pA);
-		@note_draw_icon(@noteIcon[@i], @pX, @pY, @pScale, @pA, @pAge);
+		// sender name label for every kind (attribution), transient mode only —
+		// the canvas layer stays nameless
 		draw_set_alpha(@pA);
 		if(@noteName[@i] != "" && @noteCanvasMode != 1){
 			@pNameDrawX = @pX;
@@ -279,6 +291,10 @@ if(@showArrows || @spectating){
 	}
 	// anchor crosshair while the wheel/palette is active (所见即所发: the
 	// note lands here even when the wheel itself is edge-clamped away)
+	// (defensive: the notes loop above can leave GM draw alignment dirty —
+	// the GM8 fw align stubs pass through to draw_set_halign/valign)
+	draw_set_halign(fa_center);
+	draw_set_valign(fa_middle);
 	if(@noteMode >= 2){
 		draw_set_alpha(0.9);
 		draw_set_color(c_black);
@@ -313,7 +329,7 @@ if(@showArrows || @spectating){
 				if(@cellIdx == 8) @cellIcon = 2;
 				if(@cellIdx == 4) @cellIcon = @noteLastIcon;
 				@cellDisabled = 0;
-				if(@cellIdx == 1 || @cellIdx == 5 || @cellIdx == 7) @cellDisabled = 1;
+				if(@cellIdx == 5) @cellDisabled = 1;
 				draw_set_alpha(0.22);
 				draw_set_color(c_black);
 				draw_circle(@cx, @cy, 14, false);
@@ -333,9 +349,9 @@ if(@showArrows || @spectating){
 				if(@cellIcon >= 0){
 					@note_draw_icon(@cellIcon, @cx, @cy, 0.8, 1, current_time);
 				}else if(@cellIdx == 1){
-					// arrow tool (N2)
-					draw_set_alpha(0.25);
-					draw_set_color(c_gray);
+					// arrow tool (active)
+					draw_set_alpha(1);
+					draw_set_color(c_white);
 					draw_line_width(@cx - 5, @cy + 5, @cx + 3, @cy - 3, 2);
 					draw_triangle(@cx + 1, @cy - 7, @cx + 7, @cy - 1, @cx + 6, @cy - 6, false);
 				}else if(@cellIdx == 5){
@@ -345,9 +361,9 @@ if(@showArrows || @spectating){
 					draw_line_width(@cx - 5, @cy + 5, @cx + 3, @cy - 3, 3);
 					draw_triangle(@cx + 2, @cy - 2, @cx + 7, @cy - 7, @cx + 6, @cy - 1, false);
 				}else if(@cellIdx == 7){
-					// text tool (N2)
-					draw_set_alpha(0.25);
-					draw_set_color(c_gray);
+					// text tool (active)
+					draw_set_alpha(1);
+					draw_set_color(c_white);
 					draw_text(@cx, @cy, "T");
 				}else if(@cellIdx == 3){
 					// more icons: opens the palette
@@ -400,6 +416,33 @@ if(@showArrows || @spectating){
 				}
 			}
 		}
+	}
+	// in-progress polyline preview (mode 4): staged segments + node dots +
+	// live segment to the cursor with arrowhead, plus a controls hint
+	if(@noteMode == 4){
+		@pvTeam = @team;
+		if(@pvTeam < 0 || @pvTeam > 7) @pvTeam = 0;
+		draw_set_alpha(0.9);
+		draw_set_color(@teamColors[@pvTeam]);
+		for(@pvI = 0; @pvI < @noteStageN - 1; @pvI += 1){
+			draw_line_width(@noteStageX[@pvI], @noteStageY[@pvI], @noteStageX[@pvI + 1], @noteStageY[@pvI + 1], 3);
+			draw_circle(@noteStageX[@pvI], @noteStageY[@pvI], 3, false);
+		}
+		@pvLX = @noteStageX[@noteStageN - 1];
+		@pvLY = @noteStageY[@noteStageN - 1];
+		draw_circle(@pvLX, @pvLY, 3, false);
+		if(point_distance(@pvLX, @pvLY, mouse_x, mouse_y) > 2){
+			draw_line_width(@pvLX, @pvLY, mouse_x, mouse_y, 3);
+			@pvDir = point_direction(@pvLX, @pvLY, mouse_x, mouse_y);
+			draw_triangle(mouse_x, mouse_y, mouse_x + lengthdir_x(12, @pvDir + 150), mouse_y + lengthdir_y(12, @pvDir + 150), mouse_x + lengthdir_x(12, @pvDir - 150), mouse_y + lengthdir_y(12, @pvDir - 150), false);
+		}
+		draw_set_alpha(0.8);
+		draw_set_color(c_white);
+		draw_set_halign(fa_left);
+		draw_set_valign(fa_top);
+		draw_text(round(mouse_x + 14), round(mouse_y + 10), "LMB node / H done / RMB undo");
+		draw_set_halign(fa_center);
+		draw_set_valign(fa_middle);
 	}
 	draw_set_alpha(@pdAlpha);
 	draw_set_color(@pdColor);

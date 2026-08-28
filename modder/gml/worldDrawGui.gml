@@ -1068,7 +1068,7 @@ if(@settingsOpen){
 	// TAB 3: KEYS
 	if(@settingsTab == 3){
 		@rowY = @contentY + 4;
-		if(@kbFocus == 1 && @kbRow[3] < 10){
+		if(@kbFocus == 1 && @kbRow[3] < 11){
 			@kbHi = @rowY - 4 + @kbRow[3] * 28;
 			draw_set_color(make_color_rgb(220, 200, 60));
 			draw_rectangle(@spX + 4, @kbHi, @spX + @spW - 4, @kbHi + 27, true);
@@ -1084,6 +1084,7 @@ if(@settingsOpen){
 		@kbLabels[7] = "Chat";
 		@kbLabels[8] = "Here";
 		@kbLabels[9] = "Fast Load";
+		@kbLabels[10] = "Canvas";
 		@kbKeys[0] = @keyVis;
 		@kbKeys[1] = @keySave;
 		@kbKeys[2] = @keySpectate;
@@ -1094,7 +1095,8 @@ if(@settingsOpen){
 		@kbKeys[7] = @keyChat;
 		@kbKeys[8] = @keyPing;
 		@kbKeys[9] = @keyFastLoad;
-		for(@kI = 0; @kI < 10; @kI += 1){
+		@kbKeys[10] = @keyCanvas;
+		for(@kI = 0; @kI < 11; @kI += 1){
 			@kbY = @rowY + @kI * 28;
 			draw_set_color(c_white);
 			draw_text(@spX + 16, @kbY, @kbLabels[@kI]);
@@ -1124,10 +1126,10 @@ if(@settingsOpen){
 			draw_set_halign(fa_left);
 		}
 		@btnRstX = @spX + @spW/2 - 55;
-		@btnRstY = @rowY + 10 * 28 + 10;
+		@btnRstY = @rowY + 11 * 28 + 10;
 		@btnRstW = 110;
 		@btnRstH = 22;
-		if(@kbFocus == 1 && @kbRow[3] == 10){
+		if(@kbFocus == 1 && @kbRow[3] == 11){
 			draw_set_color(make_color_rgb(220, 200, 60));
 			draw_rectangle(@spX + 4, @btnRstY - 3, @spX + @spW - 4, @btnRstY + @btnRstH + 3, true);
 		}
@@ -1624,7 +1626,7 @@ if(@settingsOpen){
 		}
 		if(!@tabClicked && @settingsTab == 3){
 			@kbFocus = 1;
-			for(@kI = 0; @kI < 10; @kI += 1){
+			for(@kI = 0; @kI < 11; @kI += 1){
 				@kbY = @rowY + @kI * 28;
 				@btnKX = @spX + 140;
 				@btnKY = @kbY - 2;
@@ -1650,6 +1652,7 @@ if(@settingsOpen){
 				@keyChat = 32;
 				@keyPing = 72;
 				@keyFastLoad = 70;
+				@keyCanvas = 78;
 				@keybindEditing = -1;
 				@keybindSave = true;
 			}
