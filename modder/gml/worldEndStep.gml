@@ -347,10 +347,20 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			// SELF ID
 			@selfID = __ONLINE_buffer_read_string(@buffer);
 			@listCounter = room_speed * 15;
+			// notes restored before the handshake carry an empty sender: adopt
+			// them so they can be deleted / count as mine for persistence
+			for(@adoptI = 0; @adoptI < @noteMax; @adoptI += 1){
+				if(@noteSeqArr[@adoptI] >= 0 && @noteSenderArr[@adoptI] == "") @noteSenderArr[@adoptI] = @selfID;
+			}
 			break;
 		case 22:
 			// SERVER_HELLO: capability advertisement (note sends gate on this)
-			@serverProtocol = __ONLINE_buffer_read_uint8(@buffer);
+			#if not GMNET
+				@serverProtocol = __ONLINE_buffer_read_uint8(@buffer);
+			#endif
+			#if GMNET
+				@serverProtocol = __ONLINE_buffer_read_u8(@buffer);
+			#endif
 			break;
 		case 7:
 			// CUSTOM DATA

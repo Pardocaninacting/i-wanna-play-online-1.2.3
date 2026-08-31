@@ -79,7 +79,8 @@ return 0;
 // sender already owns @notePerCap live notes of this kind, their OLDEST such
 // note is evicted instead of the global head, so one spammer cannot flush
 // everyone else's notes off the board.
-// args: 0 kind (0=ICON), 1 room, 2 x, 3 y, 4 iconId, 5 senderID, 6 name, 7 team
+// args: 0 kind (0=ICON), 1 room, 2 x, 3 y, 4 iconId, 5 senderID, 6 name,
+// 7 team, 8 wireSeq (the sender-side u16 on the wire; -1 for legacy PING)
 @naSlot = -1;
 @naCount = 0;
 @naOldestSeq = -1;

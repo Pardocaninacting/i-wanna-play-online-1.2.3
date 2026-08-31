@@ -74,6 +74,8 @@ interface TcpPlayer {
     noteCount: number[];
     /** NOTE_SYNC pull throttle timestamp. */
     noteSyncAt: number;
+    /** Consecutive NOTE messages dropped by the per-subtype buckets. */
+    noteDropStreak: number;
     /** Bitmask of teams whose cached last-save was already sent to this client. */
     saveCacheSentTeams: number;
 }
@@ -1003,7 +1005,12 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                     player.noteCount[bucket] = 0;
                 }
                 player.noteCount[bucket] += 1;
-                if (player.noteCount[bucket] > NOTE_RATE_LIMITS[bucket]) break;
+                if (player.noteCount[bucket] > NOTE_RATE_LIMITS[bucket]) {
+                    player.noteDropStreak += 1;
+                    if (player.noteDropStreak > 40) { quitPlayer(player, "note_flood"); return; }
+                    break;
+                }
+                player.noteDropStreak = 0;
                 if (subType === 4) {
                     noteCacheDelete(player.game, player.id, seq);
                     break;
@@ -1122,6 +1129,7 @@ createServer((socket: Socket) => {
         noteWindowStart: [0, 0, 0, 0, 0],
         noteCount: [0, 0, 0, 0, 0],
         noteSyncAt: 0,
+        noteDropStreak: 0,
         saveCacheSentTeams: 0,
     };
 

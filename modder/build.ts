@@ -24,6 +24,20 @@ const build = async function(): Promise<string> {
 	const nodeMajorVersion: number = Number(process.versions.node.split(".")[0]);
 	const nodeCompatFlags: Array<string> = nodeMajorVersion >= 17 ? ["--openssl-legacy-provider"] : [];
 	console.log("Cleaning build directory...");
+	// N4 review: gml templates are ASCII-only by contract (getGMLCode.ts). A
+	// stray non-ASCII byte once cost us a conversion-time compile error, so
+	// fail the build instead of shipping one.
+	{
+		const gmlDir: string = path.join(__dirname, "gml");
+		for(const f of fs.readdirSync(gmlDir)){
+			if(!f.endsWith(".gml")) continue;
+			const content: string = fs.readFileSync(path.join(gmlDir, f), "latin1");
+			// eslint-disable-next-line no-control-regex
+			if(/[^\x00-\x7F]/.test(content))
+				throw new Error(`gml/${f} contains non-ASCII characters (templates must be ASCII-only)`);
+		}
+		console.log("GML ASCII check passed");
+	}
 	await Utils.rimraf(buildDir);
 	console.log("Bundling JavaScript...");
 	await fs.mkdir(buildDir);
