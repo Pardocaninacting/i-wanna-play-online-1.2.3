@@ -202,7 +202,7 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			exit;
 			break;
 		case 4:
-			// CHAT MESSAGE — the chat log is written even when the sender's
+			// CHAT MESSAGE - the chat log is written even when the sender's
 			// onlinePlayer instance is gone (mid-reconnect, late roster);
 			// only the floating bubble needs the instance.
 			@ID = __ONLINE_buffer_read_string(@buffer);
@@ -347,6 +347,10 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			// SELF ID
 			@selfID = __ONLINE_buffer_read_string(@buffer);
 			@listCounter = room_speed * 15;
+			break;
+		case 22:
+			// SERVER_HELLO: capability advertisement (note sends gate on this)
+			@serverProtocol = __ONLINE_buffer_read_uint8(@buffer);
 			break;
 		case 7:
 			// CUSTOM DATA
@@ -534,7 +538,7 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			ds_map_destroy(@listSeen);
 			break;
 		case 11:
-			// PING (legacy pre-v4 clients): NOTE ICON equivalent — folded into
+			// PING (legacy pre-v4 clients): NOTE ICON equivalent - folded into
 			// the notes store. Room filtering happens at render time, so a
 			// ping from another room is stored but not drawn.
 			@pingSenderID = __ONLINE_buffer_read_string(@buffer);
@@ -550,7 +554,7 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				@pingPy = __ONLINE_buffer_read_float(@buffer);
 				@pingPtype = __ONLINE_buffer_read_u8(@buffer);
 			#endif
-			@note_sender_info(@pingSenderID);
+			@note_sender_info(@pingSenderID, 0);
 			@note_add(0, @pingPRoom, @pingPx, @pingPy, @pingPtype, @pingSenderID, @ntName, @ntTeam, -1);
 			break;
 		case 20:
@@ -593,7 +597,7 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			}
 			if(@ntSub == 1){
 				// POLYLINE: u8 flags (informational; chevrons derive from the
-				// node count at render), u8 n(2..24), n×(f32 x, f32 y)
+				// node count at render), u8 n(2..24), nx(f32 x, f32 y)
 				#if not GMNET
 					@ntFlags = __ONLINE_buffer_read_uint8(@buffer);
 					@ntN = __ONLINE_buffer_read_uint8(@buffer);
@@ -948,6 +952,7 @@ switch(@socketState){
 				@listCounter = room_speed * 15;
 				@skinNetDirty = true;
 				@notePrevRoom = -1;
+				@serverProtocol = 0;
 				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
 					__ONLINE_buffer_write_uint8(@buffer, 3);
@@ -1692,10 +1697,10 @@ if(@udpState == 1){
 // NOTES sync + delete + persist flush (N4)
 	// pull the room's cached notes on room change (and after reconnect, which
 	// resets @notePrevRoom to -1); throttled to one pull per 2s
-	if(@connected && @protocolVersion >= 5){
+	if(@connected && @serverProtocol >= 5){
 		if(room != @notePrevRoom){
-			@notePrevRoom = room;
 			if(current_time - @noteSyncLastMs > 2000){
+				@notePrevRoom = room;
 				@noteSyncLastMs = current_time;
 				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
@@ -1712,7 +1717,7 @@ if(@udpState == 1){
 	}
 	// canvas mode + right-click on your OWN note = delete it (local + server
 	// cache; other clients keep theirs)
-	if(@noteCanvasMode == 1 && @noteMode == 0 && mouse_check_button_pressed(mb_right)){
+	if(@noteCanvasMode == 1 && @noteMode == 0 && !@settingsOpen && !@chatLogOpen && mouse_check_button_pressed(mb_right)){
 		@ndBest = -1;
 		@ndBestD = 24;
 		for(@ndI = 0; @ndI < @noteMax; @ndI += 1){
@@ -1720,13 +1725,19 @@ if(@udpState == 1){
 			if(@noteRoomArr[@ndI] != room) continue;
 			if(@noteSenderArr[@ndI] != @selfID) continue;
 			@ndD = point_distance(mouse_x, mouse_y, @noteX[@ndI], @noteY[@ndI]);
+			if(@noteKindArr[@ndI] == 1 || @noteKindArr[@ndI] == 2){
+				for(@ndJ = 0; @ndJ < @notePtsN[@ndI]; @ndJ += 1){
+					@ndD2 = point_distance(mouse_x, mouse_y, @notePtsX[@ndI, @ndJ], @notePtsY[@ndI, @ndJ]);
+					if(@ndD2 < @ndD) @ndD = @ndD2;
+				}
+			}
 			if(@ndD < @ndBestD){
 				@ndBestD = @ndD;
 				@ndBest = @ndI;
 			}
 		}
 		if(@ndBest >= 0){
-			if(@connected && @protocolVersion >= 5 && @noteWireArr[@ndBest] > 0){
+			if(@connected && @serverProtocol >= 5 && @noteWireArr[@ndBest] > 0){
 				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
 					__ONLINE_buffer_write_uint8(@buffer, 20);
@@ -1952,7 +1963,7 @@ if(@udpState == 1){
 	}else if(@noteMode == 5){
 		// brush (modal freehand session): LMB drag draws one sub-path
 		// (sampled >=6px, total 480pt cap); releasing LMB ends the sub-path
-		// WITHOUT committing — more strokes keep accumulating into the same
+		// WITHOUT committing - more strokes keep accumulating into the same
 		// drawing. H commits the whole drawing (one note); RMB mid-stroke
 		// cancels it, RMB idle undoes the last sub-path, RMB with nothing
 		// pending exits.

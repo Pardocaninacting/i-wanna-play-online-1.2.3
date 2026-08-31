@@ -22,6 +22,7 @@ export enum TcpMsg {
     BULLET_NOTIFY = 19, // S→C: stringNT senderId, u8 count (v2 flag preserved), then the exact room + per-bullet body from the client. V2 receivers parse both strides; v1 receivers drop flagged messages (count > 8).
     NOTE        = 20, // Notes/annotations (protocol v5+). Same opcode both directions (PING pattern): C→S is u8 subType, i32 room, u16 seq, then per-subtype body — 0=ICON(f32 x, f32 y, u8 iconId); 1=POLYLINE(u8 flags, u8 n(2..24), n×(f32 x, f32 y)); 2=STROKE(u8 strokeId, u8 chunk(bit6=pen-up start, bit7=final), u8 n(1..240), i32 x0, i32 y0, (n-1)×(i16 dx, i16 dy)); 3=TEXT(f32 x, f32 y, stringNT utf8, <=300 bytes); 4=DELETE(no body: drops the sender's note (by seq) from the server cache, never relayed). S→C prepends stringNT senderId to the verbatim body; sync replays set subType|0x20.
     NOTE_SYNC   = 21, // C→S: i32 room. Requests a replay of the server's cached notes for that room of the sender's game (per-note NOTE messages with subType|0x20). Protocol v5+, heavily throttled.
+    SERVER_HELLO = 22, // S→C: u8 serverProtocolVersion, sent once on connect. Clients gate NOTE/NOTE_SYNC sends on it (old servers never see opcode 20/21). Old clients drop the unknown opcode via their default case.
 }
 
 export enum UdpMsg {

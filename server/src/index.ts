@@ -5,7 +5,7 @@ import { SmartBuffer } from "smart-buffer";
 import { Logger } from "tslog";
 import {
     PORT_HTTP, PORT_TCP, PORT_UDP, MIN_CLIENT_VERSION, PROTOCOL_VERSION, MIN_PROTOCOL_VERSION,
-    NOTE_CACHE_MAX_PER_GAME, NOTE_SYNC_MIN_MS, GAME_CACHE_EXPIRY_MS,
+    NOTE_CACHE_MAX_PER_GAME, NOTE_SYNC_MIN_MS, GAME_CACHE_EXPIRY_MS, SAVE_CACHE_MAX_AGE_MS,
     MAX_PLAYERS_PER_IP, HEARTBEAT_INTERVAL_SEC, HEARTBEAT_TIMEOUT_SEC,
     UDP_CLEANUP_INTERVAL_MIN, UDP_EXPIRY_MIN,
     MAX_TCP_MESSAGE, MAX_TCP_BUFFER, MAX_UDP_MESSAGE, MAX_CUSTOM_SLOTS, MAX_PER_ENTRY_SLOTS,
@@ -74,8 +74,8 @@ interface TcpPlayer {
     noteCount: number[];
     /** NOTE_SYNC pull throttle timestamp. */
     noteSyncAt: number;
-    /** Whether the cached last-save was already sent to this client. */
-    saveCacheSent: boolean;
+    /** Bitmask of teams whose cached last-save was already sent to this client. */
+    saveCacheSentTeams: number;
 }
 
 /* ── State ─────────────────────────────────────────── */
@@ -108,7 +108,7 @@ function supportsSkins(player: TcpPlayer): boolean {
     return player.protocolVersion >= SKIN_PROTOCOL_VERSION;
 }
 
-// Notes/annotations (NOTE) are gated on protocol v4: older clients are never
+// Notes/annotations (NOTE) are gated on protocol v5: older clients are never
 // sent opcode 20 (unknown opcodes kick the receiver).
 const NOTE_PROTOCOL_VERSION = 5;
 // Per-subtype drop-not-kick limits per 10s window (BULLET pattern): one
@@ -452,7 +452,6 @@ function extractMessages(player: TcpPlayer): SmartBuffer[] {
 
 interface NoteCacheEntry {
     senderId: string;
-    senderName: string;
     seq: number;
     room: number;
     /** body as read from the wire: subType, room, seq, payload (verbatim). */
@@ -461,14 +460,14 @@ interface NoteCacheEntry {
 }
 
 const noteCache = new Map<string, NoteCacheEntry[]>();
-const saveCache = new Map<string, Map<number, { gravity: number; name: string; x: number; y: number; room: number }>>();
+const saveCache = new Map<string, Map<number, { gravity: number; name: string; x: number; y: number; room: number; ts: number }>>();
 const gameEmptySince = new Map<string, number>();
 
-function noteCacheAdd(game: string, senderId: string, senderName: string, seq: number, room: number, body: Buffer): void {
+function noteCacheAdd(game: string, senderId: string, seq: number, room: number, body: Buffer): void {
     if (game === "") return;
     let ring = noteCache.get(game);
     if (!ring) { ring = []; noteCache.set(game, ring); }
-    ring.push({ senderId, senderName, seq, room, body: Buffer.from(body), ts: Date.now() });
+    ring.push({ senderId, seq, room, body: Buffer.from(body), ts: Date.now() });
     if (ring.length > NOTE_CACHE_MAX_PER_GAME) ring.shift();
 }
 
@@ -611,7 +610,7 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 if (player.game !== "") {
                     let perTeam = saveCache.get(player.game);
                     if (!perTeam) { perTeam = new Map(); saveCache.set(player.game, perTeam); }
-                    perTeam.set(player.team, { gravity, name: player.name, x, y, room });
+                    perTeam.set(player.team, { gravity, name: player.name, x, y, room, ts: Date.now() });
                 }
             }
             break;
@@ -707,10 +706,10 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 broadcastFrom(player, reply);
             }
 
-                if (!player.saveCacheSent && player.game !== "") {
-                    player.saveCacheSent = true;
+                if (player.game !== "" && (player.saveCacheSentTeams & (1 << player.team)) === 0) {
+                    player.saveCacheSentTeams |= (1 << player.team); // team is 0..7 (MAX_TEAMS), so the shift stays in range
                     const cached = saveCache.get(player.game)?.get(player.team);
-                    if (cached) {
+                    if (cached && Date.now() - cached.ts < SAVE_CACHE_MAX_AGE_MS) {
                         const sMsg = new SmartBuffer();
                         sMsg.writeUInt8(TcpMsg.SAVE);
                         sMsg.writeUInt8(cached.gravity);
@@ -968,15 +967,21 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                     ok = msg.remaining() === 9;
                 } else if (subType === 1) {
                     // POLYLINE: u8 flags, u8 n(2..24), n×(f32 x, f32 y)
-                    msg.readOffset += 1; // flags
-                    const n = msg.readUInt8();
-                    ok = n >= 2 && n <= 24 && msg.remaining() === 8 * n;
+                    if (msg.remaining() < 2) { ok = false; }
+                    else {
+                        msg.readOffset += 1; // flags
+                        const n = msg.readUInt8();
+                        ok = n >= 2 && n <= 24 && msg.remaining() === 8 * n;
+                    }
                 } else if (subType === 2) {
                     // STROKE chunk: u8 strokeId, u8 chunk(bit6=pen-up, bit7=last),
                     // u8 n(1..240), i32 x0, i32 y0, then (n-1)×(i16 dx, i16 dy)
-                    msg.readOffset += 2; // strokeId + chunk
-                    const n = msg.readUInt8();
-                    ok = n >= 1 && n <= 240 && msg.remaining() === 8 + 4 * (n - 1);
+                    if (msg.remaining() < 3) { ok = false; }
+                    else {
+                        msg.readOffset += 2; // strokeId + chunk
+                        const n = msg.readUInt8();
+                        ok = n >= 1 && n <= 240 && msg.remaining() === 8 + 4 * (n - 1);
+                    }
                 } else if (subType === 3) {
                     // TEXT: f32 x, f32 y, stringNT utf8 (<=300 bytes of text)
                     if (msg.remaining() >= 10) {
@@ -992,7 +997,7 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 // Per-subtype drop-not-kick buckets (BULLET pattern); DELETE
                 // shares the ICON bucket (both are small, human-rate messages).
                 const now = Date.now();
-                const bucket = subType === 4 ? 0 : subType;
+                const bucket = subType;
                 if (now - player.noteWindowStart[bucket] >= 10000) {
                     player.noteWindowStart[bucket] = now;
                     player.noteCount[bucket] = 0;
@@ -1005,7 +1010,7 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 }
                 msg.readOffset = bodyStart;
                 const body = msg.readBuffer(msg.remaining()); // subType..payload
-                noteCacheAdd(player.game, player.id, player.name, seq, room, body);
+                noteCacheAdd(player.game, player.id, seq, room, body);
                 const notify = new SmartBuffer();
                 notify.writeUInt8(TcpMsg.NOTE);
                 notify.writeStringNT(player.id);
@@ -1062,9 +1067,9 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 const ring = noteCache.get(player.game);
                 if (!ring) break;
                 let sent = 0;
-                for (const e of ring) {
-                    if (e.room !== syncRoom) continue;
-                    if (e.senderId === player.id) continue; // own notes are local already
+                const NOTE_SYNC_MAX = 64; // amplification cap: replay the newest 64
+                const roomEntries = ring.filter(e => e.room === syncRoom && e.senderId !== player.id); // own notes are local already
+                for (const e of roomEntries.slice(-NOTE_SYNC_MAX)) {
                     const m = new SmartBuffer();
                     m.writeUInt8(TcpMsg.NOTE);
                     m.writeStringNT(e.senderId);
@@ -1074,7 +1079,7 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                     sendTo(player, m);
                     sent++;
                 }
-                if (sent > 0) log.info(`NOTE_SYNC ${player.id} (${JSON.stringify(player.name)}) room=${syncRoom} -> ${sent} notes`);
+                if (sent > 0 && process.env.DSH_NOTE_DEBUG) log.debug(`NOTE_SYNC ${player.id} (${JSON.stringify(player.name)}) room=${syncRoom} -> ${sent} notes`);
             }
             break;
 
@@ -1117,7 +1122,7 @@ createServer((socket: Socket) => {
         noteWindowStart: [0, 0, 0, 0, 0],
         noteCount: [0, 0, 0, 0, 0],
         noteSyncAt: 0,
-        saveCacheSent: false,
+        saveCacheSentTeams: 0,
     };
 
     tcpPlayers.push(player);
@@ -1131,6 +1136,13 @@ createServer((socket: Socket) => {
     idMsg.writeUInt8(TcpMsg.SELF_ID);
     idMsg.writeStringNT(player.id);
     sendTo(player, idMsg);
+
+    // Capability advertisement (protocol v5+ clients read this; older clients
+    // silently drop the unknown opcode via their default case).
+    const hello = new SmartBuffer();
+    hello.writeUInt8(TcpMsg.SERVER_HELLO);
+    hello.writeUInt8(PROTOCOL_VERSION);
+    sendTo(player, hello);
 
     socket.on("data", (chunk: Buffer) => {
         if (player.quitted) return;
@@ -1162,7 +1174,7 @@ createServer((socket: Socket) => {
             const savedOffset = msg.readOffset;
             const peekOp = msg.readUInt8();
             msg.readOffset = savedOffset;
-            if (peekOp !== TcpMsg.BULLET) {
+            if (peekOp !== TcpMsg.BULLET && peekOp !== TcpMsg.NOTE) {
                 player.msgCount++;
                 if (player.msgCount > TCP_RATE_LIMIT) { quitPlayer(player, "tcp_rate_limit"); break; }
             }

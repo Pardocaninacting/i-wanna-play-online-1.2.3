@@ -614,7 +614,7 @@ return -1;
 // so the upward jump pose is wrong; a state counts as missing when its
 // mirrored sprite slot is empty, i.e. the skin has no such png or it failed
 // to load). bow and bullet are optional states with NO fallback: when the
-// slot is empty this returns 0 — a bow caller must draw nothing (a skin
+// slot is empty this returns 0 - a bow caller must draw nothing (a skin
 // without bow.png is a character with no bow), a bullet caller must keep
 // the game's original sprite. Returns 1 when something was drawn, 0
 // otherwise.

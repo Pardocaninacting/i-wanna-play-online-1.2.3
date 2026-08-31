@@ -30,6 +30,7 @@ export const UDP_RATE_LIMIT = 100; // per second
 export const NOTE_CACHE_MAX_PER_GAME = 256;   // ring entries (a multi-chunk stroke = 1 entry per chunk)
 export const NOTE_SYNC_MIN_MS = 2000;         // per-player pull throttle
 export const GAME_CACHE_EXPIRY_MS = 600000;   // 10 min empty grace
+export const SAVE_CACHE_MAX_AGE_MS = 60000;    // a cached save older than 60s is stale (its owner likely left)
 
 export const RATING_COOLDOWN_SEC = 300;     // 5 min between ratings per player
 export const RATING_MAX_PER_GAME = 500;     // max stored ratings per game

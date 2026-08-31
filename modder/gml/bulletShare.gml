@@ -268,7 +268,7 @@ return 1;
 ///// script @pvp_hostile
 // S5 (PVP): argument0 = owner playerId; returns 1 when that player's bullets
 // can hurt the LOCAL player. The decision is entirely victim-side
-// (RESEARCH_PVP_Design.md §4): my mode Off -> never; FFA -> always; Team ->
+// (RESEARCH_PVP_Design.md S4): my mode Off -> never; FFA -> always; Team ->
 // only when the owner's team differs from mine (team values compare directly,
 // so None==None is friendly; an owner whose proxy/team has not arrived yet
 // counts as hostile - better to die than to be invincible by race condition).

@@ -1,7 +1,7 @@
 /// ONLINE
 // ============================================================================
 // Notes system script pack (opcode 20 NOTE; supersedes the PING marker
-// arrays — legacy clients' opcode 11 pings are folded into the same store).
+// arrays - legacy clients' opcode 11 pings are folded into the same store).
 // The converter splits this file at the "///// script <name>" markers into
 // standalone script assets (content before the first marker is dropped), so
 // every section must be self-contained. No template argument placeholders.
@@ -16,7 +16,7 @@
 ///// script @note_set_mode
 // Single source for note-UI mode transitions (one setter, no parallel state
 // edits). Modes: 0 idle, 2 wheel visible, 3 icon palette (modal). The wheel
-// opens immediately on H press — a quick release lands in the center deadzone
+// opens immediately on H press - a quick release lands in the center deadzone
 // and re-fires the last icon, so tap and hold share one code path.
 // @noteNoClick mirrors "any modal UI open" so the other HUD hotkeys can gate
 // on it. No io_clear here: clearing input mid-gesture would kill held
@@ -37,7 +37,7 @@ if(@noteMode >= 2){
 return 0;
 
 ///// script @note_warp_cursor
-// Moves the OS cursor to a room position — used when the wheel's DRAW center
+// Moves the OS cursor to a room position - used when the wheel's DRAW center
 // was edge-clamped away from the anchor, so the gesture stays visually
 // consistent with the on-screen wheel. Port-space conversion mirrors the
 // HUD prelude (window 1:1 in the common windowed case).
@@ -114,7 +114,7 @@ if(@naCount >= @naCap && @naOldestSlot >= 0){
 @noteSeqArr[@naSlot] = @noteSeq;
 @noteWireArr[@naSlot] = argument8;
 @noteSeq += 1;
-@noteDirty = 1;
+if(argument5 == @selfID) @noteDirty = 1;
 @notePtsN[@naSlot] = 0;
 @noteText[@naSlot] = "";
 if(argument0 == 1 || argument0 == 2){
@@ -141,7 +141,7 @@ return @naSlot;
 // script safe if it ever does).
 // args: 0 iconId, 1 x, 2 y
 @nfSeq = @note_next_seq();
-if(@socket != -1 && @connected && @protocolVersion >= 4){
+if(@socket != -1 && @connected && @serverProtocol >= 5){
     __ONLINE_buffer_clear(@buffer);
     #if not GMNET
         __ONLINE_buffer_write_uint8(@buffer, 20);
@@ -294,7 +294,7 @@ return 0;
 // first, teamMap fallback) into @ntName/@ntTeam, and plays the arrival sound
 // when notes are currently visible. Shared by the case 11 (legacy PING) and
 // case 20 (NOTE) receivers.
-// args: 0 senderID
+// args: 0 senderID, 1 silent (1 = no arrival sound; sync replays)
 @ntName = "?";
 @ntTeam = -1;
 for(@nsI = 0; @nsI < instance_number(@onlinePlayer); @nsI += 1){
@@ -325,12 +325,12 @@ return 0;
 ///// script @note_fire_poly
 // Submits the staged polyline (@noteStageX/Y[0..@noteStageN-1]) as a NOTE
 // POLYLINE (sub 1). Wire flags: bit0 = end arrowhead (always set); bit1 =
-// flowing node chevrons — receivers derive that from the node count, so the
+// flowing node chevrons - receivers derive that from the node count, so the
 // bit is informational only. self = world instance.
 // args: none
 if(@noteStageN < 2) return 0;
 @nfSeq = @note_next_seq();
-if(@socket != -1 && @connected && @protocolVersion >= 4){
+if(@socket != -1 && @connected && @serverProtocol >= 5){
     __ONLINE_buffer_clear(@buffer);
     @npFlags = 1;
     if(@noteStageN > 2) @npFlags = 3;
@@ -374,7 +374,7 @@ return 0;
 // args: 0 x, 1 y, 2 text (already truncated/escaped by the caller)
 if(argument2 == "") return 0;
 @nfSeq = @note_next_seq();
-if(@socket != -1 && @connected && @protocolVersion >= 4){
+if(@socket != -1 && @connected && @serverProtocol >= 5){
     __ONLINE_buffer_clear(@buffer);
     #if not GMNET
         __ONLINE_buffer_write_uint8(@buffer, 20);
@@ -416,7 +416,7 @@ return 0;
 @npN = @notePtsN[@npS];
 if(@npN < 2) return 0;
 // proximity fade: distance from the local player to the nearest point of the
-// PATH (point-to-segment per segment) — a long polyline crossing the player
+// PATH (point-to-segment per segment) - a long polyline crossing the player
 // must fade too, not only near its first node
 if(!@spectating && @pExists){
     @npFade = 1;
@@ -438,8 +438,8 @@ if(!@spectating && @pExists){
     @npA *= @npFade;
     if(@npA <= 0) return 0;
 }
-@npCol = @teamColors[@noteTeamArr[@npS]];
-if(@noteTeamArr[@npS] < 0 || @noteTeamArr[@npS] > 7) @npCol = @teamColors[0];
+@npCol = @teamColors[0];
+if(@noteTeamArr[@npS] >= 0 && @noteTeamArr[@npS] <= 7) @npCol = @teamColors[@noteTeamArr[@npS]];
 draw_set_alpha(@npA);
 draw_set_color(@npCol);
 @npTotal = 0;
@@ -506,8 +506,8 @@ return 0;
 if(@nxText == "") return 0;
 @nxX = @noteX[@nxS];
 @nxY = @noteY[@nxS];
-@nxCol = @teamColors[@noteTeamArr[@nxS]];
-if(@noteTeamArr[@nxS] < 0 || @noteTeamArr[@nxS] > 7) @nxCol = @teamColors[0];
+@nxCol = @teamColors[0];
+if(@noteTeamArr[@nxS] >= 0 && @noteTeamArr[@nxS] <= 7) @nxCol = @teamColors[@noteTeamArr[@nxS]];
 draw_set_alpha(@nxA);
 #if GM80
     // FoxWriting path (GM8.0): fw align stubs pass through to GM's draw
@@ -659,7 +659,7 @@ while(@nfOfs < @noteStageN){
     @nfFlags = 0;
     if(@noteStageBrk[@nfOfs]) @nfFlags = 64;
     if(@nfOfs + @nfN >= @noteStageN) @nfFlags += 128;
-    if(@socket != -1 && @connected && @protocolVersion >= 4){
+    if(@socket != -1 && @connected && @serverProtocol >= 5){
         __ONLINE_buffer_clear(@buffer);
         #if not GMNET
             __ONLINE_buffer_write_uint8(@buffer, 20);
@@ -667,7 +667,7 @@ while(@nfOfs < @noteStageN){
             __ONLINE_buffer_write_int32(@buffer, room);
             __ONLINE_buffer_write_uint16(@buffer, @nfSeq);
             __ONLINE_buffer_write_uint8(@buffer, @nfSid);
-            __ONLINE_buffer_write_uint8(@buffer, @nfChunk + @nfFlags);
+            __ONLINE_buffer_write_uint8(@buffer, (@nfChunk mod 64) + @nfFlags);
             __ONLINE_buffer_write_uint8(@buffer, @nfN);
             __ONLINE_buffer_write_int32(@buffer, @noteStageX[@nfOfs]);
             __ONLINE_buffer_write_int32(@buffer, @noteStageY[@nfOfs]);
@@ -682,7 +682,7 @@ while(@nfOfs < @noteStageN){
             __ONLINE_buffer_write_i32(@buffer, room);
             __ONLINE_buffer_write_u16(@buffer, @nfSeq);
             __ONLINE_buffer_write_u8(@buffer, @nfSid);
-            __ONLINE_buffer_write_u8(@buffer, @nfChunk + @nfFlags);
+            __ONLINE_buffer_write_u8(@buffer, (@nfChunk mod 64) + @nfFlags);
             __ONLINE_buffer_write_u8(@buffer, @nfN);
             __ONLINE_buffer_write_i32(@buffer, @noteStageX[@nfOfs]);
             __ONLINE_buffer_write_i32(@buffer, @noteStageY[@nfOfs]);
@@ -736,8 +736,8 @@ if(!@spectating && @pExists && @nsN >= 2){
     @nsA *= @nsFade;
     if(@nsA <= 0) return 0;
 }
-@nsCol = @teamColors[@noteTeamArr[@nsS]];
-if(@noteTeamArr[@nsS] < 0 || @noteTeamArr[@nsS] > 7) @nsCol = @teamColors[0];
+@nsCol = @teamColors[0];
+if(@noteTeamArr[@nsS] >= 0 && @noteTeamArr[@nsS] <= 7) @nsCol = @teamColors[@noteTeamArr[@nsS]];
 draw_set_alpha(@nsA);
 draw_set_color(@nsCol);
 for(@nsI = 0; @nsI < @nsN - 1; @nsI += 1){
@@ -1121,7 +1121,7 @@ if(@showArrows || @spectating){
 			draw_set_alpha(@pA);
 			@note_draw_icon(@noteIcon[@i], @pX, @pY, @pScale, @pA, @pAge);
 		}
-		// sender name label for every kind (attribution), transient mode only —
+		// sender name label for every kind (attribution), transient mode only -
 		// the canvas layer stays nameless
 		draw_set_alpha(@pA);
 		if(@noteName[@i] != "" && @noteCanvasMode != 1){
@@ -1185,9 +1185,9 @@ if(@showArrows || @spectating){
 			#endif
 		}
 	}
-	// anchor crosshair while the wheel/palette is active (所见即所发: the
+	// anchor crosshair while the wheel/palette is active (what you aim at is what fires: the
 	// note lands here even when the wheel itself is edge-clamped away)
-	// (defensive: the notes loop above can leave GM draw alignment dirty —
+	// (defensive: the notes loop above can leave GM draw alignment dirty -
 	// the GM8 fw align stubs pass through to draw_set_halign/valign)
 	draw_set_halign(fa_center);
 	draw_set_valign(fa_middle);
@@ -1391,6 +1391,7 @@ if(@showArrows || @spectating){
 		draw_set_font(0);
 	}
 }
+return 0;
 
 ///// script @note_next_seq
 // Per-session sender-side note sequence (u16). Combined with the sender id it
@@ -1416,7 +1417,7 @@ __ONLINE_buffer_clear(@savesBuffer);
 #endif
 @npcN = 0;
 for(@npcI = 0; @npcI < @noteMax; @npcI += 1){
-    if(@noteSeqArr[@npcI] >= 0) @npcN += 1;
+    if(@noteSeqArr[@npcI] >= 0 && @noteSenderArr[@npcI] == @selfID) @npcN += 1;
 }
 #if not GMNET
     __ONLINE_buffer_write_uint16(@savesBuffer, @npcN);
@@ -1426,6 +1427,7 @@ for(@npcI = 0; @npcI < @noteMax; @npcI += 1){
 #endif
 for(@npcI = 0; @npcI < @noteMax; @npcI += 1){
     if(@noteSeqArr[@npcI] < 0) continue;
+    if(@noteSenderArr[@npcI] != @selfID) continue;
     #if not GMNET
         __ONLINE_buffer_write_uint8(@savesBuffer, @noteKindArr[@npcI]);
         __ONLINE_buffer_write_int32(@savesBuffer, @noteRoomArr[@npcI]);
@@ -1542,7 +1544,7 @@ for(@nplI = 0; @nplI < @nplN; @nplI += 1){
     if(@nplKind == 3){
         @noteStageText = __ONLINE_buffer_read_string(@savesBuffer);
     }
-    @nplSlot = @note_add(@nplKind, @nplRoom, @nplX, @nplY, @nplIcon, "", @nplName, @nplTeam, @nplSeq);
+    @nplSlot = @note_add(@nplKind, @nplRoom, @nplX, @nplY, @nplIcon, @selfID, @nplName, @nplTeam, @nplSeq);
     // restored entries are old news: past-toast, no arrival sound
     @noteT[@nplSlot] = current_time - 999999999;
 }

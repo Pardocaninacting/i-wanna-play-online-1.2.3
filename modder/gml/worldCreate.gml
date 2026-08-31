@@ -221,7 +221,7 @@ global.__ONLINE_guiAlive = false;
 @teamColors[6] = make_color_rgb(255, 160, 40);
 @teamColors[7] = make_color_rgb(80, 255, 255);
 @teamMap = ds_map_create();
-// NOTES (opcode 20; supersedes the PING marker arrays — legacy clients'
+// NOTES (opcode 20; supersedes the PING marker arrays - legacy clients'
 // opcode 11 pings are folded into this same store on receive)
 @noteMode = 0;             // 0 idle, 2 wheel, 3 icon palette
 @noteNoClick = 0;          // input gate: set while wheel/palette is open
@@ -263,6 +263,7 @@ for(@i = 0; @i < @noteMax; @i += 1){
 }
 @noteStageN = 0;           // in-progress polyline/stroke staging (also used by receive)
 @noteStageText = "";
+@serverProtocol = 0;      // set by SERVER_HELLO; note sends gate on this, never on our own version
 @noteAtlasSpr = -1;
 @noteSeqSend = 0;         // sender-side note id counter (wire seq)
 @notePrevRoom = -1;         // room-change detector drives NOTE_SYNC pulls
@@ -575,7 +576,7 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		@keyCanvas = ini_read_real("config", "key_canvas", @keyCanvas);
 		@keyFastLoad = ini_read_real("config", "key_fastload", @keyFastLoad);
 		@noteLastIcon = ini_read_real("ping", "last_icon", @noteLastIcon);
-		if(@noteLastIcon < 0 || @noteLastIcon > 9) @noteLastIcon = 4;
+		if(@noteLastIcon < 0 || (@noteLastIcon > 9 && @noteLastIcon < 16) || @noteLastIcon > 47) @noteLastIcon = 4;
 		@noteLastIcon = floor(@noteLastIcon);
 		@noteLastIconLoaded = @noteLastIcon;
 		@noteHideOthers = ini_read_real("notes", "hide_others", 0);
