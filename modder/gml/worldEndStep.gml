@@ -607,7 +607,12 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 					@note_add(1, @ntRoom, @noteStageX[0], @noteStageY[0], 0, @ntSender, @ntName, @ntTeam);
 				}
 			}
-			if(@ntSub == 3){
+			if(@ntSub == 2){
+				// STROKE chunk: reassembled per (sender, strokeId) by the lib
+				// (final chunk commits the note)
+				@note_stroke_recv(@ntSender);
+			}
+			if(@ntSub ==  3){
 				// TEXT: f32 x, f32 y, stringNT utf8
 				#if not GMNET
 					@ntX = __ONLINE_buffer_read_float32(@buffer);
@@ -1677,7 +1682,7 @@ if(@udpState == 1){
 			@noteWarped = 0;
 			@noteMouseWX = window_mouse_get_x();
 			@noteMouseWY = window_mouse_get_y();
-			@note_clamp_center();
+			@note_clamp_center(90, 90);
 			if(point_distance(@noteAnchorX, @noteAnchorY, @noteCX, @noteCY) > 1){
 				// edge-clamped: capture the cursor into the visible wheel
 				// center so the gesture matches the visuals; restored on
@@ -1687,7 +1692,7 @@ if(@udpState == 1){
 			}
 		}
 	}else if(@noteMode == 2){
-		@note_clamp_center();
+		@note_clamp_center(90, 90);
 		// Hover/cancel are measured from the (possibly clamped) wheel center;
 		// when clamped the cursor was warped there, so this stays gesture-true.
 		@pwDx = mouse_x - @noteCX;
@@ -1735,6 +1740,7 @@ if(@udpState == 1){
 					@noteStageN = 1;
 					@noteStageX[0] = @noteAnchorX;
 					@noteStageY[0] = @noteAnchorY;
+					@noteStageBrk[0] = 0;
 					if(@noteWarped){
 						// drawing continues from the real press point
 						@noteWarped = 0;
@@ -1777,35 +1783,53 @@ if(@udpState == 1){
 					if(@ntInput != ""){
 						@note_fire_text(@noteAnchorX, @noteAnchorY, @ntInput);
 					}
+				}else if(@noteWheelHover == 5){
+					// brush tool: modal freehand drawing
+					@note_set_mode(5);
+					@noteDrawing = 0;
+					@noteStageN = 0;
+					if(@noteWarped){
+						// drawing continues from the real press point
+						@noteWarped = 0;
+						window_mouse_set(@noteMouseWX, @noteMouseWY);
+					}
 				}else{
-					// edge 5 (brush): lands in N3
+					// unreachable cells: close
 					@note_set_mode(0);
 				}
 			}
 		}
 	}else if(@noteMode == 3){
-		@note_clamp_center();
+		// icon matrix (modal, all icons at once, no paging): 8x6 grid,
+		// identity mapping cell == iconId. Cells 0-9 vector icons, 10-15
+		// placeholders (not fireable), 16-47 built-in atlas.
+		@note_clamp_center(160, 124);
 		@npDx = mouse_x - @noteCX;
 		@npDy = mouse_y - @noteCY;
 		@notePaletteHover = -1;
-		if(abs(@npDx) < 57 && abs(@npDy) < 57){
-			@npCol = 1;
-			if(@npDx < -19) @npCol = 0;
-			if(@npDx >= 19) @npCol = 2;
-			@npRow = 1;
-			if(@npDy < -19) @npRow = 0;
-			if(@npDy >= 19) @npRow = 2;
-			@notePaletteHover = @npRow * 3 + @npCol;
+		if(abs(@npDx) < 162 && abs(@npDy) < 126){
+			@npCol = floor((@npDx + 144) / 36);
+			@npRow = floor((@npDy + 108) / 36);
+			if(@npCol < 0) @npCol = 0;
+			if(@npCol > 7) @npCol = 7;
+			if(@npRow < 0) @npRow = 0;
+			if(@npRow > 5) @npRow = 5;
+			@notePaletteHover = @npRow * 8 + @npCol;
 		}
 		if(mouse_check_button_pressed(mb_right)){
 			@note_set_mode(0);
 		}else if(mouse_check_button_pressed(mb_left) || keyboard_check_pressed(@keyPing)){
 			if(@notePaletteHover >= 0){
-				// page 1: cell index IS the icon id (legacy 9-icon layout)
-				@note_fire(@notePaletteHover, @noteAnchorX, @noteAnchorY);
-				@notePaletteLast = @notePaletteHover;
+				@npIcon = @notePaletteHover;
+				if(@npIcon < 16 && @npIcon > 9) @npIcon = -1;
+				if(@npIcon >= 0){
+					@note_fire(@npIcon, @noteAnchorX, @noteAnchorY);
+					@notePaletteLast = @npIcon;
+					@note_set_mode(0);
+				}
+			}else{
+				@note_set_mode(0);
 			}
-			@note_set_mode(0);
 		}
 	}else if(@noteMode == 4){
 		// arrow/polyline drawing (modal): anchor = staged node 0; left-click
@@ -1822,6 +1846,7 @@ if(@udpState == 1){
 				if(point_distance(mouse_x, mouse_y, @noteStageX[@noteStageN - 1], @noteStageY[@noteStageN - 1]) > 4){
 					@noteStageX[@noteStageN] = mouse_x;
 					@noteStageY[@noteStageN] = mouse_y;
+					@noteStageBrk[@noteStageN] = 0;
 					@noteStageN += 1;
 				}
 			}
@@ -1830,6 +1855,7 @@ if(@udpState == 1){
 				if(point_distance(mouse_x, mouse_y, @noteStageX[@noteStageN - 1], @noteStageY[@noteStageN - 1]) > 8){
 					@noteStageX[@noteStageN] = mouse_x;
 					@noteStageY[@noteStageN] = mouse_y;
+					@noteStageBrk[@noteStageN] = 0;
 					@noteStageN += 1;
 				}
 			}
@@ -1837,6 +1863,55 @@ if(@udpState == 1){
 				@note_fire_poly();
 			}
 			@note_set_mode(0);
+		}
+	}else if(@noteMode == 5){
+		// brush (modal freehand session): LMB drag draws one sub-path
+		// (sampled >=6px, total 480pt cap); releasing LMB ends the sub-path
+		// WITHOUT committing — more strokes keep accumulating into the same
+		// drawing. H commits the whole drawing (one note); RMB mid-stroke
+		// cancels it, RMB idle undoes the last sub-path, RMB with nothing
+		// pending exits.
+		if(mouse_check_button_pressed(mb_right)){
+			if(@noteDrawing){
+				// cancel the in-progress sub-path back to its first point
+				@noteStageN = @noteDrawRunStart;
+				@noteDrawing = 0;
+			}else if(@noteStageN > 0){
+				// undo the last completed sub-path
+				@nbJ = @noteStageN - 1;
+				while(@nbJ > 0 && @noteStageBrk[@nbJ] == 0) @nbJ -= 1;
+				@noteStageN = @nbJ;
+			}else{
+				@note_set_mode(0);
+			}
+		}else if(keyboard_check_pressed(@keyPing)){
+			@noteDrawing = 0;
+			if(@noteStageN >= 1){
+				@note_fire_stroke();
+			}
+			@note_set_mode(0);
+		}else{
+			if(mouse_check_button(mb_left)){
+				if(!@noteDrawing){
+					@noteDrawing = 1;
+					@noteDrawRunStart = @noteStageN;
+					@noteStageBrk[@noteStageN] = 0;
+					if(@noteStageN > 0) @noteStageBrk[@noteStageN] = 1;
+					@noteStageX[@noteStageN] = mouse_x;
+					@noteStageY[@noteStageN] = mouse_y;
+					@noteStageN += 1;
+				}else if(@noteStageN < 480){
+					if(point_distance(mouse_x, mouse_y, @noteStageX[@noteStageN - 1], @noteStageY[@noteStageN - 1]) >= 6){
+						@noteStageX[@noteStageN] = mouse_x;
+						@noteStageY[@noteStageN] = mouse_y;
+						@noteStageBrk[@noteStageN] = 0;
+						@noteStageN += 1;
+					}
+				}
+			}else if(@noteDrawing){
+				// pen lift: sub-path ends, stays pending for more strokes
+				@noteDrawing = 0;
+			}
 		}
 	}
 }else{

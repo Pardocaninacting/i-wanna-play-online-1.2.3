@@ -2161,4 +2161,6 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	}
 	await EnsureX86HttpDllBuilt();
 	await fs.copyFile(path.join(__dirname, "lib", HTTP_DLL_FILENAME), path.join(outputDir, HTTP_DLL_FILENAME));
+	// N3: built-in notes icon atlas ships with every converted game
+	await Utils.copyDir(path.join(__dirname, "lib", "iwponotes"), path.join(outputDir, "iwponotes"));
 }

@@ -193,6 +193,7 @@ global.@ftOnline = %arg7;
 @noteMouseWY = 0;
 @noteWheelHover = 4;
 @notePaletteHover = -1;
+@notePalettePage = 0;
 @notePaletteLast = 4;
 @noteLastIcon = 4;         // center quick icon (ini persisted)
 @noteLastIconLoaded = 4;
@@ -217,8 +218,18 @@ for(@i = 0; @i < @noteMax; @i += 1){
 	@notePtsN[@i] = 0;
 	@noteText[@i] = "";
 }
-@noteStageN = 0;           // in-progress polyline staging (also used by receive)
+@noteStageN = 0;           // in-progress polyline/stroke staging (also used by receive)
 @noteStageText = "";
+@noteAtlasSpr = -1;
+@noteDrawing = 0;          // brush mode: LMB stroke in progress
+@noteDrawRunStart = 0;     // brush mode: current sub-path start index
+@noteStrokeSeq = 0;        // sender-side stroke id counter
+for(@i = 0; @i < 8; @i += 1){
+	@noteStrokeOwner[@i] = "";
+	@noteStrokeSid[@i] = -1;
+	@noteStrokeN[@i] = 0;
+	@noteStrokeT[@i] = 0;
+}
 // SYNC
 @syncEnabled = 1;
 @syncEntryCount = 0;
@@ -360,7 +371,11 @@ if(@skSprFld != 0){
 }
 if(@skSprOk){
     for(@skSprI = 0; @skSprI < @skSprN; @skSprI += 1){
-        sprite_delete(@skSprId[@skSprI]);
+        // re-check at delete time: a duplicated/stale record must never
+        // fatal (a second delete of the same id crashes)
+        if(sprite_exists(@skSprId[@skSprI])){
+            sprite_delete(@skSprId[@skSprI]);
+        }
     }
 }
 for(@skSt = 0; @skSt < 7; @skSt += 1){
@@ -883,3 +898,9 @@ for(@skI = 0; @skI < instance_number(@onlinePlayer); @skI += 1){
 // bullet object; @bActive stays 0 and every entry is inert).
 @bActive = 0;
 @bullet_init();
+
+// N3: built-in notes icon atlas (iwponotes/icons.png). Loads AFTER the skin
+// sprite sweep so the fresh id lands in the bookkeeper record (game_restart
+// frees exactly this id next time). -1 = atlas missing; iconId 16-31 then
+// render as the vector HERE fallback.
+@note_atlas_load();

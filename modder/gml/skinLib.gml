@@ -525,6 +525,10 @@ for(@skSvSt = 0; @skSvSt < 7; @skSvSt += 1){
     if(@skinSpr[@skSvSt] >= 0) @skSvList += @skin_spr_rec(@skinSpr[@skSvSt]);
     if(@skinPrevSpr[@skSvSt] >= 0) @skSvList += @skin_spr_rec(@skinPrevSpr[@skSvSt]);
 }
+// N3: the notes atlas sprite is recorded once (NOT inside the 7-state loop -
+// recording it per state makes the next world Create delete the same id 7x,
+// which fatals on the second delete).
+if(@noteAtlasSpr >= 0) @skSvList += @skin_spr_rec(@noteAtlasSpr);
 for(@skSvSlot = 0; @skSvSlot < global.@rskCount; @skSvSlot += 1){
     for(@skSvSt = 0; @skSvSt < 7; @skSvSt += 1){
         if(global.@rskSpr[@skSvSlot, @skSvSt] >= 0) @skSvList += @skin_spr_rec(global.@rskSpr[@skSvSlot, @skSvSt]);

@@ -108,6 +108,18 @@ if(@hudWinW < 1) @hudGuiOn = false;
 if(@hudWinH < 1) @hudGuiOn = false;
 #endif
 if(@hudGuiOn){
+#if GM8GUI
+	// N3: world-anchored notes + off-screen arrows render in this GUI pass
+	// under the view-rect projection (room coords work unchanged), then port
+	// space is restored for the screen-space HUD below.
+	if(@hudView >= 0){
+		d3d_set_projection_ortho(view_xview[@hudView], view_yview[@hudView], view_wview[@hudView], view_hview[@hudView], view_angle[@hudView]);
+	}else{
+		d3d_set_projection_ortho(0, 0, room_width, room_height, 0);
+	}
+	@note_render_all();
+	d3d_set_projection_ortho(0, 0, @hudWinW, @hudWinH, 0);
+#endif
 
 if(@chatLogOpen){
 	@_alpha = draw_get_alpha();

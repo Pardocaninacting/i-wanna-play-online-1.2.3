@@ -50,26 +50,26 @@ if(view_enabled && view_visible[0]){
 return 0;
 
 ///// script @note_clamp_center
-// Writes @noteCX/@noteCY: the anchor clamped 90px inside the active view
-// (wheel/palette render + hover center). The note itself lands at the raw
-// anchor; only the UI moves. View 0 is the reference, matching the existing
-// EndStep-side view idiom.
-// args: none
+// Writes @noteCX/@noteCY: the anchor clamped inside the active view with a
+// per-mode inset (the wheel needs 90px; the icon matrix needs more).
+// args: 0 halfW, 1 halfH (both required - GM8 defaults missing args to 0)
+// The note itself lands at the raw anchor; only the UI moves. View 0 is the
+// reference, matching the existing EndStep-side view idiom.
 @noteCX = @noteAnchorX;
 @noteCY = @noteAnchorY;
 if(view_enabled && view_visible[0]){
-    if(view_wview[0] > 180){
-        @noteCX = min(max(@noteCX, view_xview[0] + 90), view_xview[0] + view_wview[0] - 90);
+    if(view_wview[0] > argument0 * 2){
+        @noteCX = min(max(@noteCX, view_xview[0] + argument0), view_xview[0] + view_wview[0] - argument0);
     }
-    if(view_hview[0] > 180){
-        @noteCY = min(max(@noteCY, view_yview[0] + 90), view_yview[0] + view_hview[0] - 90);
+    if(view_hview[0] > argument1 * 2){
+        @noteCY = min(max(@noteCY, view_yview[0] + argument1), view_yview[0] + view_hview[0] - argument1);
     }
 }else{
-    if(room_width > 180){
-        @noteCX = min(max(@noteCX, 90), room_width - 90);
+    if(room_width > argument0 * 2){
+        @noteCX = min(max(@noteCX, argument0), room_width - argument0);
     }
-    if(room_height > 180){
-        @noteCY = min(max(@noteCY, 90), room_height - 90);
+    if(room_height > argument1 * 2){
+        @noteCY = min(max(@noteCY, argument1), room_height - argument1);
     }
 }
 return 0;
@@ -84,6 +84,8 @@ return 0;
 @naCount = 0;
 @naOldestSeq = -1;
 @naOldestSlot = -1;
+@naCap = @notePerCap;
+if(argument0 == 2) @naCap = 4;   // strokes: tighter per-sender cap (anti-spam)
 for(@naI = 0; @naI < @noteMax; @naI += 1){
     if(@noteSeqArr[@naI] < 0) continue;
     if(@noteKindArr[@naI] != argument0) continue;
@@ -94,7 +96,7 @@ for(@naI = 0; @naI < @noteMax; @naI += 1){
         @naOldestSlot = @naI;
     }
 }
-if(@naCount >= @notePerCap && @naOldestSlot >= 0){
+if(@naCount >= @naCap && @naOldestSlot >= 0){
     @naSlot = @naOldestSlot;
 }else{
     @naSlot = @noteHead;
@@ -113,12 +115,14 @@ if(@naCount >= @notePerCap && @naOldestSlot >= 0){
 @noteSeq += 1;
 @notePtsN[@naSlot] = 0;
 @noteText[@naSlot] = "";
-if(argument0 == 1){
-    // POLYLINE: points staged in @noteStageX/Y[0..@noteStageN-1]
+if(argument0 == 1 || argument0 == 2){
+    // POLYLINE/STROKE: points staged in @noteStageX/Y[0..@noteStageN-1]
+    // (@noteStageBrk marks pen-up boundaries; polylines are all-zero)
     @notePtsN[@naSlot] = @noteStageN;
     for(@naJ = 0; @naJ < @noteStageN; @naJ += 1){
-        @notePtsX[@naSlot * 24 + @naJ] = @noteStageX[@naJ];
-        @notePtsY[@naSlot * 24 + @naJ] = @noteStageY[@naJ];
+        @notePtsX[@naSlot, @naJ] = @noteStageX[@naJ];
+        @notePtsY[@naSlot, @naJ] = @noteStageY[@naJ];
+        @notePtsBrk[@naSlot, @naJ] = @noteStageBrk[@naJ];
     }
 }
 if(argument0 == 3){
@@ -172,12 +176,24 @@ return 0;
 // their loops).
 // args: 0 iconId, 1 x, 2 y, 3 scale, 4 alpha, 5 anim age ms
 @ndId = floor(argument0);
-if(@ndId < 0 || @ndId > 9) @ndId = 4;
 @ndX = argument1;
 @ndY = argument2;
 @ndS = argument3;
 @ndA = argument4;
 @ndAge = argument5;
+// atlas zone: iconId 16-47 draw the 32x32 cell (iconId-16) of the 8x4 grid;
+// a missing/invalid atlas falls back to the vector HERE glyph
+if(@ndId >= 16 && @ndId <= 47){
+    if(@noteAtlasSpr >= 0){
+        if(sprite_exists(@noteAtlasSpr)){
+            @ndCell = @ndId - 16;
+            draw_sprite_part_ext(@noteAtlasSpr, 0, (@ndCell mod 8) * 32, (@ndCell div 8) * 32, 32, 32, @ndX - 16 * @ndS, @ndY - 16 * @ndS, @ndS, @ndS, c_white, @ndA);
+            return 0;
+        }
+    }
+    @ndId = 4;
+}
+if(@ndId < 0 || @ndId > 9) @ndId = 4;
 draw_set_alpha(@ndA);
 if(@ndId == 0){
     @ndBob = round(sin(@ndAge * 0.010) * @ndS);
@@ -394,10 +410,10 @@ if(@npN < 2) return 0;
 if(!@spectating && @pExists){
     @npFade = 1;
     for(@npI = 0; @npI < @npN - 1; @npI += 1){
-        @npX1 = @notePtsX[@npS * 24 + @npI];
-        @npY1 = @notePtsY[@npS * 24 + @npI];
-        @npX2 = @notePtsX[@npS * 24 + @npI + 1];
-        @npY2 = @notePtsY[@npS * 24 + @npI + 1];
+        @npX1 = @notePtsX[@npS, @npI];
+        @npY1 = @notePtsY[@npS, @npI];
+        @npX2 = @notePtsX[@npS, @npI + 1];
+        @npY2 = @notePtsY[@npS, @npI + 1];
         @npDX = @npX2 - @npX1;
         @npDY = @npY2 - @npY1;
         @npL2 = @npDX * @npDX + @npDY * @npDY;
@@ -417,20 +433,20 @@ draw_set_alpha(@npA);
 draw_set_color(@npCol);
 @npTotal = 0;
 for(@npI = 0; @npI < @npN - 1; @npI += 1){
-    @npX1 = @notePtsX[@npS * 24 + @npI];
-    @npY1 = @notePtsY[@npS * 24 + @npI];
-    @npX2 = @notePtsX[@npS * 24 + @npI + 1];
-    @npY2 = @notePtsY[@npS * 24 + @npI + 1];
+    @npX1 = @notePtsX[@npS, @npI];
+    @npY1 = @notePtsY[@npS, @npI];
+    @npX2 = @notePtsX[@npS, @npI + 1];
+    @npY2 = @notePtsY[@npS, @npI + 1];
     draw_line_width(@npX1, @npY1, @npX2, @npY2, 3);
     @npSegLen[@npI] = point_distance(@npX1, @npY1, @npX2, @npY2);
     @npTotal += @npSegLen[@npI];
     draw_circle(@npX1, @npY1, 2, false);
 }
 // end arrowhead
-@npAX = @notePtsX[@npS * 24 + @npN - 2];
-@npAY = @notePtsY[@npS * 24 + @npN - 2];
-@npBX = @notePtsX[@npS * 24 + @npN - 1];
-@npBY = @notePtsY[@npS * 24 + @npN - 1];
+@npAX = @notePtsX[@npS, @npN - 2];
+@npAY = @notePtsY[@npS, @npN - 2];
+@npBX = @notePtsX[@npS, @npN - 1];
+@npBY = @notePtsY[@npS, @npN - 1];
 @npDir = point_direction(@npAX, @npAY, @npBX, @npBY);
 draw_triangle(@npBX, @npBY, @npBX + lengthdir_x(12, @npDir + 150), @npBY + lengthdir_y(12, @npDir + 150), @npBX + lengthdir_x(12, @npDir - 150), @npBY + lengthdir_y(12, @npDir - 150), false);
 // flowing chevrons (direction cue along the whole path)
@@ -451,10 +467,10 @@ if(@npN > 2 && @npTotal > 0){
         if(@npI >= @npN - 1) break;
         @npT = 0;
         if(@npL > 0) @npT = (@npD - @npAcc) / @npL;
-        @npX1 = @notePtsX[@npS * 24 + @npI];
-        @npY1 = @notePtsY[@npS * 24 + @npI];
-        @npX2 = @notePtsX[@npS * 24 + @npI + 1];
-        @npY2 = @notePtsY[@npS * 24 + @npI + 1];
+        @npX1 = @notePtsX[@npS, @npI];
+        @npY1 = @notePtsY[@npS, @npI];
+        @npX2 = @notePtsX[@npS, @npI + 1];
+        @npY2 = @notePtsY[@npS, @npI + 1];
         @npPX = @npX1 + (@npX2 - @npX1) * @npT;
         @npPY = @npY1 + @npT * (@npY2 - @npY1);
         @npDir = point_direction(@npX1, @npY1, @npX2, @npY2);
@@ -542,3 +558,818 @@ draw_set_alpha(@nxA);
 #endif
 #endif
 return 0;
+
+///// script @note_rdp
+// Ramer-Douglas-Peucker simplify (epsilon 2px) on the staged stroke
+// @noteStageX/Y[0..@noteStageN-1], iterative (explicit stack; GM8 recursion
+// is stack-fragile at 480 points). Runs are delimited by @noteStageBrk
+// (pen-up boundaries): each sub-path is simplified independently, never
+// smoothed across a pen lift. Kept points are compacted back into the
+// staging arrays (break flags preserved). Returns the new point count.
+@rdpOut = 0;
+@rdpStart = 0;
+while(@rdpStart < @noteStageN){
+    @rdpEnd = @rdpStart + 1;
+    while(@rdpEnd < @noteStageN && @noteStageBrk[@rdpEnd] == 0) @rdpEnd += 1;
+    for(@rdpI = @rdpStart; @rdpI < @rdpEnd; @rdpI += 1) @noteKeep[@rdpI] = 0;
+    @noteKeep[@rdpStart] = 1;
+    @noteKeep[@rdpEnd - 1] = 1;
+    @rdpStackN = 0;
+    @rdpSA[0] = @rdpStart; @rdpSB[0] = @rdpEnd - 1; @rdpStackN = 1;
+    while(@rdpStackN > 0){
+        @rdpStackN -= 1;
+        @rdpA = @rdpSA[@rdpStackN];
+        @rdpB = @rdpSB[@rdpStackN];
+        if(@rdpB - @rdpA < 2) continue;
+        @rdpAX = @noteStageX[@rdpA];
+        @rdpAY = @noteStageY[@rdpA];
+        @rdpBX = @noteStageX[@rdpB];
+        @rdpBY = @noteStageY[@rdpB];
+        @rdpDX = @rdpBX - @rdpAX;
+        @rdpDY = @rdpBY - @rdpAY;
+        @rdpLen = sqrt(@rdpDX*@rdpDX + @rdpDY*@rdpDY);
+        @rdpMaxD = 0;
+        @rdpMaxI = -1;
+        for(@rdpI = @rdpA + 1; @rdpI < @rdpB; @rdpI += 1){
+            if(@rdpLen > 0){
+                @rdpD = abs(@rdpDY * @noteStageX[@rdpI] - @rdpDX * @noteStageY[@rdpI] + @rdpBX * @rdpAY - @rdpBY * @rdpAX) / @rdpLen;
+            }else{
+                @rdpD = point_distance(@noteStageX[@rdpI], @noteStageY[@rdpI], @rdpAX, @rdpAY);
+            }
+            if(@rdpD > @rdpMaxD){
+                @rdpMaxD = @rdpD;
+                @rdpMaxI = @rdpI;
+            }
+        }
+        if(@rdpMaxD > 2 && @rdpMaxI >= 0){
+            @noteKeep[@rdpMaxI] = 1;
+            @rdpSA[@rdpStackN] = @rdpA; @rdpSB[@rdpStackN] = @rdpMaxI; @rdpStackN += 1;
+            @rdpSA[@rdpStackN] = @rdpMaxI; @rdpSB[@rdpStackN] = @rdpB; @rdpStackN += 1;
+        }
+    }
+    // compact the run into the write cursor (break flag on the run head)
+    for(@rdpI = @rdpStart; @rdpI < @rdpEnd; @rdpI += 1){
+        if(@noteKeep[@rdpI]){
+            @noteStageX[@rdpOut] = @noteStageX[@rdpI];
+            @noteStageY[@rdpOut] = @noteStageY[@rdpI];
+            @noteStageBrk[@rdpOut] = 0;
+            if(@rdpI == @rdpStart && @rdpOut > 0) @noteStageBrk[@rdpOut] = 1;
+            @rdpOut += 1;
+        }
+    }
+    @rdpStart = @rdpEnd;
+}
+@noteStageN = @rdpOut;
+return @rdpOut;
+
+///// script @note_fire_stroke
+// Finalizes the staged drawing (@noteStageX/Y[0..@noteStageN-1] with
+// @noteStageBrk pen-up boundaries): RDP simplify, then send as NOTE STROKE
+// chunks (sub 2). Wire chunk: u8 strokeId, u8 chunkIdx|bit6=pen-up start|
+// bit7=final, u8 n(1..240), i32 x0, i32 y0, then (n-1) i16 deltas. Each
+// sub-path starts a new chunk; over-long sub-paths split mid-path as
+// continuation chunks. Stored locally as one kind-2 note either way.
+// args: none
+if(@noteStageN < 1) return 0;
+@note_rdp();
+if(@noteStageN < 1) return 0;
+@nfSid = @noteStrokeSeq;
+@noteStrokeSeq = (@noteStrokeSeq + 1) mod 256;
+@nfOfs = 0;
+@nfChunk = 0;
+while(@nfOfs < @noteStageN){
+    // chunk spans until 240 points or the next pen-up boundary
+    @nfN = 0;
+    while(@nfOfs + @nfN < @noteStageN && @nfN < 240){
+        if(@nfN > 0 && @noteStageBrk[@nfOfs + @nfN]) break;
+        @nfN += 1;
+    }
+    @nfFlags = 0;
+    if(@noteStageBrk[@nfOfs]) @nfFlags = 64;
+    if(@nfOfs + @nfN >= @noteStageN) @nfFlags += 128;
+    if(@socket != -1 && @connected && @protocolVersion >= 4){
+        __ONLINE_buffer_clear(@buffer);
+        #if not GMNET
+            __ONLINE_buffer_write_uint8(@buffer, 20);
+            __ONLINE_buffer_write_uint8(@buffer, 2);
+            __ONLINE_buffer_write_int32(@buffer, room);
+            __ONLINE_buffer_write_uint8(@buffer, @nfSid);
+            __ONLINE_buffer_write_uint8(@buffer, @nfChunk + @nfFlags);
+            __ONLINE_buffer_write_uint8(@buffer, @nfN);
+            __ONLINE_buffer_write_int32(@buffer, @noteStageX[@nfOfs]);
+            __ONLINE_buffer_write_int32(@buffer, @noteStageY[@nfOfs]);
+            for(@nfI = 1; @nfI < @nfN; @nfI += 1){
+                __ONLINE_buffer_write_int16(@buffer, @noteStageX[@nfOfs + @nfI] - @noteStageX[@nfOfs + @nfI - 1]);
+                __ONLINE_buffer_write_int16(@buffer, @noteStageY[@nfOfs + @nfI] - @noteStageY[@nfOfs + @nfI - 1]);
+            }
+        #endif
+        #if GMNET
+            __ONLINE_buffer_write_u8(@buffer, 20);
+            __ONLINE_buffer_write_u8(@buffer, 2);
+            __ONLINE_buffer_write_i32(@buffer, room);
+            __ONLINE_buffer_write_u8(@buffer, @nfSid);
+            __ONLINE_buffer_write_u8(@buffer, @nfChunk + @nfFlags);
+            __ONLINE_buffer_write_u8(@buffer, @nfN);
+            __ONLINE_buffer_write_i32(@buffer, @noteStageX[@nfOfs]);
+            __ONLINE_buffer_write_i32(@buffer, @noteStageY[@nfOfs]);
+            for(@nfI = 1; @nfI < @nfN; @nfI += 1){
+                __ONLINE_buffer_write_i16(@buffer, @noteStageX[@nfOfs + @nfI] - @noteStageX[@nfOfs + @nfI - 1]);
+                __ONLINE_buffer_write_i16(@buffer, @noteStageY[@nfOfs + @nfI] - @noteStageY[@nfOfs + @nfI - 1]);
+            }
+        #endif
+        __ONLINE_socket_write_message(@socket, @buffer);
+    }
+    @nfOfs += @nfN;
+    @nfChunk += 1;
+}
+@note_add(2, room, @noteStageX[0], @noteStageY[0], 0, @selfID, @name, @team);
+#if STUDIO
+    audio_play_sound(@sndChatbox,  0, false);
+#endif
+#if not STUDIO
+    sound_play(@sndChatbox);
+#endif
+return 0;
+
+///// script @note_draw_stroke
+// Draws a stored STROKE note (a multi-sub-path drawing): team-colored 3px
+// path with round joints; @notePtsBrk marks pen-up boundaries (no segment
+// drawn into a break point). Same path-proximity fade rule as polylines.
+// No arrowhead/chevrons.
+// args: 0 slot, 1 alpha
+@nsS = argument0;
+@nsA = argument1;
+@nsN = @notePtsN[@nsS];
+if(@nsN < 1) return 0;
+if(!@spectating && @pExists && @nsN >= 2){
+    @nsFade = 1;
+    for(@nsI = 0; @nsI < @nsN - 1; @nsI += 1){
+        if(@notePtsBrk[@nsS, @nsI + 1]) continue;
+        @nsX1 = @notePtsX[@nsS, @nsI];
+        @nsY1 = @notePtsY[@nsS, @nsI];
+        @nsX2 = @notePtsX[@nsS, @nsI + 1];
+        @nsY2 = @notePtsY[@nsS, @nsI + 1];
+        @nsDX = @nsX2 - @nsX1;
+        @nsDY = @nsY2 - @nsY1;
+        @nsL2 = @nsDX * @nsDX + @nsDY * @nsDY;
+        @nsT = 0;
+        if(@nsL2 > 0) @nsT = ((@X - @nsX1) * @nsDX + (@Y - @nsY1) * @nsDY) / @nsL2;
+        if(@nsT < 0) @nsT = 0;
+        if(@nsT > 1) @nsT = 1;
+        @nsD = point_distance(@X, @Y, @nsX1 + @nsT * @nsDX, @nsY1 + @nsT * @nsDY);
+        if(@nsD / 100 < @nsFade) @nsFade = @nsD / 100;
+    }
+    @nsA *= @nsFade;
+    if(@nsA <= 0) return 0;
+}
+@nsCol = @teamColors[@noteTeamArr[@nsS]];
+if(@noteTeamArr[@nsS] < 0 || @noteTeamArr[@nsS] > 7) @nsCol = @teamColors[0];
+draw_set_alpha(@nsA);
+draw_set_color(@nsCol);
+for(@nsI = 0; @nsI < @nsN - 1; @nsI += 1){
+    if(@notePtsBrk[@nsS, @nsI + 1]) continue;
+    draw_line_width(@notePtsX[@nsS, @nsI], @notePtsY[@nsS, @nsI], @notePtsX[@nsS, @nsI + 1], @notePtsY[@nsS, @nsI + 1], 3);
+}
+for(@nsI = 0; @nsI < @nsN; @nsI += 1){
+    draw_circle(@notePtsX[@nsS, @nsI], @notePtsY[@nsS, @nsI], 1.5, false);
+}
+return 0;
+
+///// script @note_stroke_recv
+// Reassembles STROKE chunks into 8 pending slots keyed by (sender, strokeId).
+// Wire chunk: u8 strokeId, u8 chunkIdx|bit6=pen-up start|bit7=final, u8 n,
+// i32 x0, i32 y0 (absolute), then (n-1) i16 deltas. Pen-up chunks start a new
+// sub-path (break flag at its first point). Final chunk commits one kind-2
+// note via the staging arrays. Orphan slots expire after 5s (the STROKE rate
+// limiter can legitimately drop chunks).
+// args: 0 senderID   (caller has just read sub + room into @ntSub/@ntRoom)
+#if not GMNET
+    @nsSid = __ONLINE_buffer_read_uint8(@buffer);
+    @nsChunk = __ONLINE_buffer_read_uint8(@buffer);
+    @nsN = __ONLINE_buffer_read_uint8(@buffer);
+#endif
+#if GMNET
+    @nsSid = __ONLINE_buffer_read_u8(@buffer);
+    @nsChunk = __ONLINE_buffer_read_u8(@buffer);
+    @nsN = __ONLINE_buffer_read_u8(@buffer);
+#endif
+// expire stale pending strokes
+for(@nsI = 0; @nsI < 8; @nsI += 1){
+    if(@noteStrokeN[@nsI] > 0 && current_time - @noteStrokeT[@nsI] > 5000){
+        @noteStrokeN[@nsI] = 0;
+        @noteStrokeOwner[@nsI] = "";
+    }
+}
+// find or allocate the slot for this (sender, stroke)
+@nsSlot = -1;
+for(@nsI = 0; @nsI < 8; @nsI += 1){
+    if(@noteStrokeN[@nsI] > 0 && @noteStrokeOwner[@nsI] == argument0 && @noteStrokeSid[@nsI] == @nsSid){
+        @nsSlot = @nsI;
+        break;
+    }
+}
+if(@nsSlot < 0){
+    for(@nsI =  0; @nsI < 8; @nsI += 1){
+        if(@noteStrokeN[@nsI] ==  0){
+            @nsSlot = @nsI;
+            break;
+        }
+    }
+    if(@nsSlot < 0){
+        // all slots busy: evict the stalest
+        @nsSlot = 0;
+        @nsOld = @noteStrokeT[0];
+        for(@nsI = 1; @nsI < 8; @nsI += 1){
+            if(@noteStrokeT[@nsI] < @nsOld){
+                @nsOld = @noteStrokeT[@nsI];
+                @nsSlot = @nsI;
+            }
+        }
+    }
+    @noteStrokeOwner[@nsSlot] = argument0;
+    @noteStrokeSid[@nsSlot] = @nsSid;
+    @noteStrokeN[@nsSlot] = 0;
+}
+// decode: absolute first point + i16 deltas, appended to the slot
+@nsBase = @noteStrokeN[@nsSlot];
+if(@nsBase + @nsN <= 480){
+    #if not GMNET
+        @nsX = __ONLINE_buffer_read_int32(@buffer);
+        @nsY = __ONLINE_buffer_read_int32(@buffer);
+    #endif
+    #if GMNET
+        @nsX = __ONLINE_buffer_read_i32(@buffer);
+        @nsY = __ONLINE_buffer_read_i32(@buffer);
+    #endif
+    @noteStrokePtsX[@nsSlot, @nsBase] = @nsX;
+    @noteStrokePtsY[@nsSlot, @nsBase] = @nsY;
+    @noteStrokeBrk[@nsSlot, @nsBase] = 0;
+    if(@nsChunk >=  64 && @nsBase > 0){
+        if((@nsChunk mod 128) >= 64) @noteStrokeBrk[@nsSlot, @nsBase] = 1;
+    }
+    @nsBase += 1;
+    for(@nsI = 1; @nsI < @nsN; @nsI += 1){
+        #if not GMNET
+            @nsX += __ONLINE_buffer_read_int16(@buffer);
+            @nsY += __ONLINE_buffer_read_int16(@buffer);
+        #endif
+        #if GMNET
+            @nsX += __ONLINE_buffer_read_i16(@buffer);
+            @nsY += __ONLINE_buffer_read_i16(@buffer);
+        #endif
+        @noteStrokePtsX[@nsSlot, @nsBase] = @nsX;
+        @noteStrokePtsY[@nsSlot, @nsBase] = @nsY;
+        @noteStrokeBrk[@nsSlot, @nsBase] = 0;
+        @nsBase += 1;
+    }
+    @noteStrokeN[@nsSlot] = @nsBase;
+    @noteStrokeT[@nsSlot] = current_time;
+}
+if(@nsChunk >= 128 && @noteStrokeN[@nsSlot] >= 1){
+    // final chunk: hand over via the staging arrays and commit
+    @noteStageN = @noteStrokeN[@nsSlot];
+    for(@nsI = 0; @nsI < @noteStageN; @nsI += 1){
+        @noteStageX[@nsI] = @noteStrokePtsX[@nsSlot, @nsI];
+        @noteStageY[@nsI] = @noteStrokePtsY[@nsSlot, @nsI];
+        @noteStageBrk[@nsI] = @noteStrokeBrk[@nsSlot, @nsI];
+    }
+    @note_sender_info(argument0);
+    @note_add(2, @ntRoom, @noteStageX[0], @noteStageY[0], 0, argument0, @ntName, @ntTeam);
+    @noteStrokeN[@nsSlot] = 0;
+    @noteStrokeOwner[@nsSlot] = "";
+}
+return 0;
+
+///// script @note_atlas_load
+// Loads the built-in icon atlas (iwponotes/icons.png, one 256x128 frame as an
+// 8x4 grid of 32x32 cells = iconId 16-47). The sprite id is registered with
+// the skin bookkeeper so a game_restart frees it exactly (S1 lesson: no blind
+// range sweeps). Cells draw via draw_sprite_part_ext. A missing/invalid atlas
+// falls back to the vector glyphs. Returns the sprite id (or -1).
+// args: none
+if(@noteAtlasSpr >= 0){
+    if(sprite_exists(@noteAtlasSpr)){
+        sprite_delete(@noteAtlasSpr);
+    }
+    @noteAtlasSpr = -1;
+}
+@noteAtlasSpr = -1;
+if(!file_exists("iwponotes" + chr(92) + "icons.png")) return -1;
+@noteAtlasSpr = sprite_add("iwponotes" + chr(92) + "icons.png", 1, false, false, 0, 0);
+if(@noteAtlasSpr >= 0){
+    if(sprite_get_width(@noteAtlasSpr) != 256 || sprite_get_height(@noteAtlasSpr) != 128){
+        sprite_delete(@noteAtlasSpr);
+        @noteAtlasSpr = -1;
+    }
+}
+@skin_spr_save();
+return @noteAtlasSpr;
+
+///// script @note_render_all
+// The whole world-space notes/annotations layer + off-screen arrows, shared
+// by two call sites with identical world coordinates:
+//  - worldDraw (group 8) for GM8.0/8.1 and GMS
+//  - worldDrawGui (group 11, GM8GUI only) under a view-rect ortho sandwich,
+//    because group-8 primitives never rasterize in d3d-started rooms (E1).
+// Runs with self = the world instance either way.
+/// ONLINE
+// OFF-SCREEN ARROWS
+if(@showArrows || @spectating){
+	@_alpha = draw_get_alpha();
+	@_color = draw_get_color();
+	@arVX = 0;
+	@arVY = 0;
+	@arVW = room_width;
+	@arVH = room_height;
+	if(view_enabled && view_visible[view_current]){
+		@arVX = view_xview[view_current];
+		@arVY = view_yview[view_current];
+		@arVW = view_wview[view_current];
+		@arVH = view_hview[view_current];
+	}
+	#if STUDIO
+		if(global.@ftOnline >= 0){
+			draw_set_font(global.@ftOnline);
+		}
+	#endif
+	#if not STUDIO
+		draw_set_font(@ftOnlinePlayerName);
+	#endif
+	@arMargin = 16;
+	@arInner = 8;
+	for(@arI = 0; @arI < instance_number(@onlinePlayer); @arI += 1){
+		@arP = instance_find(@onlinePlayer, @arI);
+		if(@arP.@oRoom == room && @arP.visible){
+		@arPX = @arP.x;
+		@arPY = @arP.y;
+		if(@arPX < @arVX || @arPX > @arVX + @arVW || @arPY < @arVY || @arPY > @arVY + @arVH){
+		@arSX = @arVX + @arVW / 2;
+		@arSY = @arVY + @arVH / 2;
+		@arDX = @arPX - @arSX;
+		@arDY = @arPY - @arSY;
+		@arDist = sqrt(@arDX * @arDX + @arDY * @arDY);
+		if(@arDist > 0){
+			@arVX2 = @arDX / @arDist;
+			@arVY2 = @arDY / @arDist;
+		}else{
+			@arVX2 = 0;
+			@arVY2 = 0;
+		}
+		@arLen = @arDist;
+		if(@arVY2 < 0){
+			@arLen = min(@arLen, ((@arVY + @arMargin) - @arSY) / @arVY2);
+		}
+		if(@arVY2 > 0){
+			@arLen = min(@arLen, ((@arVY + @arVH - @arMargin) - @arSY) / @arVY2);
+		}
+		if(@arVX2 < 0){
+			@arLen = min(@arLen, ((@arVX + @arMargin) - @arSX) / @arVX2);
+		}
+		if(@arVX2 > 0){
+			@arLen = min(@arLen, ((@arVX + @arVW - @arMargin) - @arSX) / @arVX2);
+		}
+		@arLen -= @arInner;
+		@arAlpha = max(0.2, 1.2 - (@arDist - @arLen) / 1250);
+		@arDrawX = @arSX + @arVX2 * @arLen;
+		@arDrawY = @arSY + @arVY2 * @arLen;
+		@arSize = 14;
+		@arTipX = @arDrawX + @arVX2 * @arSize;
+		@arTipY = @arDrawY + @arVY2 * @arSize;
+		@arTailX = @arDrawX - @arVX2 * @arSize;
+		@arTailY = @arDrawY - @arVY2 * @arSize;
+		draw_set_alpha(@arAlpha);
+		draw_set_color(c_black);
+		draw_arrow(@arTailX+2, @arTailY, @arTipX+2, @arTipY, @arSize);
+		draw_arrow(@arTailX-2, @arTailY, @arTipX-2, @arTipY, @arSize);
+		draw_arrow(@arTailX, @arTailY+2, @arTipX, @arTipY+2, @arSize);
+		draw_arrow(@arTailX, @arTailY-2, @arTipX, @arTipY-2, @arSize);
+		@_tc = c_white;
+		@arTeam = @arP.@team;
+		if(@arTeam >= 0 && @arTeam <= 7){
+			@_tc = @teamColors[@arTeam];
+		}
+		draw_set_color(@_tc);
+		draw_arrow(@arTailX, @arTailY, @arTipX, @arTipY, @arSize);
+		@arLblX = @arDrawX - @arVX2 * 24;
+		@arLblY = @arDrawY - @arVY2 * 24;
+		draw_set_valign(fa_center);
+		draw_set_halign(fa_center);
+		@arDispName = @arP.@name;
+		#if GM80
+		@arDispName = __ONLINE_gbk_trunc(@arDispName, 8, "..");
+		#endif
+		#if CJKTEXT
+		@arDispName = __ONLINE_gbk_trunc(@arDispName, 8, "..");
+		#endif
+		#if not GM80
+		#if not CJKTEXT
+		if(string_length(@arDispName) > 8) @arDispName = string_copy(@arDispName, 1, 8) + "..";
+		#endif
+		#endif
+		draw_set_color(c_black);
+		#if GM80
+		fw_draw_set_halign(fa_center);
+		fw_draw_set_valign(fa_center);
+		__ONLINE_fw_use_font(@arDispName);
+		fw_draw_text_ext(@arLblX+1, @arLblY, @arDispName, 9999);
+		fw_draw_text_ext(@arLblX-1, @arLblY, @arDispName, 9999);
+		fw_draw_text_ext(@arLblX, @arLblY+1, @arDispName, 9999);
+		fw_draw_text_ext(@arLblX, @arLblY-1, @arDispName, 9999);
+		draw_set_color(@_tc);
+		fw_draw_text_ext(@arLblX, @arLblY, @arDispName, 9999);
+		#endif
+		#if CJKTEXT
+		global.__ONLINE_cjkHalign = 1;
+		global.__ONLINE_cjkValign = 1;
+		__ONLINE_cjk_draw_text(@arLblX+1, @arLblY, @arDispName, 9999);
+		__ONLINE_cjk_draw_text(@arLblX-1, @arLblY, @arDispName, 9999);
+		__ONLINE_cjk_draw_text(@arLblX, @arLblY+1, @arDispName, 9999);
+		__ONLINE_cjk_draw_text(@arLblX, @arLblY-1, @arDispName, 9999);
+		draw_set_color(@_tc);
+		__ONLINE_cjk_draw_text(@arLblX, @arLblY, @arDispName, 9999);
+		#endif
+		#if not GM80
+		#if not CJKTEXT
+		draw_text(@arLblX+1, @arLblY, @arDispName);
+		draw_text(@arLblX-1, @arLblY, @arDispName);
+		draw_text(@arLblX, @arLblY+1, @arDispName);
+		draw_text(@arLblX, @arLblY-1, @arDispName);
+		draw_set_color(@_tc);
+		draw_text(@arLblX, @arLblY, @arDispName);
+		#endif
+		#endif
+		}
+		}
+	}
+	draw_set_halign(fa_left);
+	draw_set_valign(fa_top);
+	#if GM80
+	fw_draw_set_halign(fa_left);
+	fw_draw_set_valign(fa_top);
+	#endif
+	#if CJKTEXT
+	global.__ONLINE_cjkHalign = 0;
+	global.__ONLINE_cjkValign = 0;
+	#endif
+	draw_set_alpha(@_alpha);
+	draw_set_color(@_color);
+	if(font_exists(0)){
+		draw_set_font(0);
+	}
+}
+// PING DRAW
+{
+	@pdAlpha = draw_get_alpha();
+	@pdColor = draw_get_color();
+	#if STUDIO
+		if(global.@ftOnline >= 0){
+			draw_set_font(global.@ftOnline);
+		}
+	#endif
+	#if not STUDIO
+		draw_set_font(@ftOnlinePlayerName);
+	#endif
+	draw_set_halign(fa_center);
+	draw_set_valign(fa_middle);
+	for(@i = 0; @i < @noteMax; @i += 1){
+		if(@noteCanvasMode == 2) break;
+		if(@noteSeqArr[@i] < 0) continue;
+		if(@noteHideAll) continue;
+		if(@noteRoomArr[@i] != room) continue;
+		if(@noteHideOthers && @noteSenderArr[@i] != @selfID) continue;
+		@pAge = current_time - @noteT[@i];
+		if(@pAge < 0) @pAge = 0;
+		@pToastMs = @noteToastMs;
+		if(@noteKindArr[@i] == 1) @pToastMs = 15000;
+		if(@noteKindArr[@i] == 2) @pToastMs = 20000;
+		if(@noteKindArr[@i] == 3) @pToastMs = 20000;
+		@pOuterAlpha = 0;
+		@pOuterR = 0;
+		if(@pAge < @pToastMs){
+			@pT = @pAge / @pToastMs;
+			if(@pT < 0.053){
+				@pK = @pT / 0.053;
+				@pScale = 1.15 - 0.15 * (1 - @pK) * (1 - @pK);
+				@pA = @pK;
+				@pOuterAlpha = 1 - @pK;
+				@pOuterR = 16 * (1 + 0.6 * @pK);
+			}else if(@pT < 0.833){
+				@pScale = 1;
+				@pA = 1;
+			}else{
+				@pK = (@pT - 0.833) / 0.167;
+				@pScale = 1 - 0.08 * @pK;
+				@pA = 1 - @pK;
+			}
+		}else{
+			// past toast: only the canvas layer (mode 1) still shows the note,
+			// dimmed and with glyph animations frozen at the toast end
+			if(@noteCanvasMode != 1) continue;
+			@pScale = 0.92;
+			@pA = 0.25;
+			@pAge = @pToastMs;
+		}
+		@pX = round(@noteX[@i]);
+		@pY = round(@noteY[@i]);
+		if(!@spectating && @pExists && @noteKindArr[@i] != 1){
+			@pA *= min(1, point_distance(@X, @Y, @pX, @pY) / 100);
+		}
+		if(@pA < 0) @pA = 0;
+		if(@pA <= 0) continue;
+		@pNT = @noteTeamArr[@i];
+		if(@pNT < 0 || @pNT > 7) @pNT = 0;
+		@pNC = @teamColors[@pNT];
+		if(@noteKindArr[@i] == 1){
+			// polyline: no backing ring (the path is the mark)
+			@note_draw_poly(@i, @pA);
+		}else if(@noteKindArr[@i] == 2){
+			// freehand stroke: same, minus arrowhead/chevrons
+			@note_draw_stroke(@i, @pA);
+		}else if(@noteKindArr[@i] == 3){
+			// text note: the text itself is the mark
+			@note_draw_text(@i, @pA);
+		}else{
+			draw_set_alpha(@pA * 0.55);
+			draw_set_color(c_black);
+			draw_circle(@pX, @pY, 16 * @pScale, false);
+			draw_set_alpha(@pA);
+			draw_set_color(@pNC);
+			draw_circle(@pX, @pY, 18 * @pScale, true);
+			draw_circle(@pX, @pY, 19 * @pScale, true);
+			if(@pOuterAlpha > 0){
+				draw_set_alpha(@pA * @pOuterAlpha * 0.6);
+				draw_circle(@pX, @pY, @pOuterR * @pScale, true);
+			}
+			draw_set_alpha(@pA);
+			@note_draw_icon(@noteIcon[@i], @pX, @pY, @pScale, @pA, @pAge);
+		}
+		// sender name label for every kind (attribution), transient mode only —
+		// the canvas layer stays nameless
+		draw_set_alpha(@pA);
+		if(@noteName[@i] != "" && @noteCanvasMode != 1){
+			@pNameDrawX = @pX;
+			@pNameDrawY = @pY - 22;
+			#if CJKTEXT
+			@pNameDrawW = __ONLINE_cjk_string_width_ext(@noteName[@i], -1, 9999);
+			@pNameDrawH = __ONLINE_cjk_string_height_ext(@noteName[@i], -1, 9999);
+			@pNameDrawX = round(@pX - @pNameDrawW * 0.5);
+			@pNameDrawY = round((@pY - 22) - @pNameDrawH * 0.5);
+			#endif
+			#if not GM80
+			#if not CJKTEXT
+			@pNameDrawW = string_width(@noteName[@i]);
+			@pNameDrawH = string_height(@noteName[@i]);
+			@pNameDrawX = round(@pX - @pNameDrawW * 0.5);
+			@pNameDrawY = round((@pY - 22) - @pNameDrawH * 0.5);
+			draw_set_halign(fa_left);
+			draw_set_valign(fa_top);
+			#endif
+			#endif
+			draw_set_color(c_black);
+			#if GM80
+			fw_draw_set_halign(fa_center);
+			fw_draw_set_valign(fa_middle);
+			__ONLINE_fw_use_font(@noteName[@i]);
+			fw_draw_text_ext(@pX - 1, @pY - 22, @noteName[@i], 9999);
+			fw_draw_text_ext(@pX + 1, @pY - 22, @noteName[@i], 9999);
+			fw_draw_text_ext(@pX, @pY - 23, @noteName[@i], 9999);
+			fw_draw_text_ext(@pX, @pY - 21, @noteName[@i], 9999);
+			#endif
+			#if CJKTEXT
+			global.__ONLINE_cjkHalign = 0;
+			global.__ONLINE_cjkValign = 0;
+			__ONLINE_cjk_draw_text(@pNameDrawX - 1, @pNameDrawY, @noteName[@i], 9999);
+			__ONLINE_cjk_draw_text(@pNameDrawX + 1, @pNameDrawY, @noteName[@i], 9999);
+			__ONLINE_cjk_draw_text(@pNameDrawX, @pNameDrawY - 1, @noteName[@i], 9999);
+			__ONLINE_cjk_draw_text(@pNameDrawX, @pNameDrawY + 1, @noteName[@i], 9999);
+			#endif
+			#if not GM80
+			#if not CJKTEXT
+			draw_text(@pNameDrawX - 1, @pNameDrawY, @noteName[@i]);
+			draw_text(@pNameDrawX + 1, @pNameDrawY, @noteName[@i]);
+			draw_text(@pNameDrawX, @pNameDrawY - 1, @noteName[@i]);
+			draw_text(@pNameDrawX, @pNameDrawY + 1, @noteName[@i]);
+			#endif
+			#endif
+			draw_set_color(@pNC);
+			#if GM80
+			fw_draw_text_ext(@pX, @pY - 22, @noteName[@i], 9999);
+			#endif
+			#if CJKTEXT
+			__ONLINE_cjk_draw_text(@pNameDrawX, @pNameDrawY, @noteName[@i], 9999);
+			#endif
+			#if not GM80
+			#if not CJKTEXT
+			draw_text(@pNameDrawX, @pNameDrawY, @noteName[@i]);
+			draw_set_halign(fa_center);
+			draw_set_valign(fa_middle);
+			#endif
+			#endif
+		}
+	}
+	// anchor crosshair while the wheel/palette is active (所见即所发: the
+	// note lands here even when the wheel itself is edge-clamped away)
+	// (defensive: the notes loop above can leave GM draw alignment dirty —
+	// the GM8 fw align stubs pass through to draw_set_halign/valign)
+	draw_set_halign(fa_center);
+	draw_set_valign(fa_middle);
+	if(@noteMode >= 2){
+		draw_set_alpha(0.9);
+		draw_set_color(c_black);
+		draw_line_width(@noteAnchorX - 7, @noteAnchorY, @noteAnchorX + 7, @noteAnchorY, 3);
+		draw_line_width(@noteAnchorX, @noteAnchorY - 7, @noteAnchorX, @noteAnchorY + 7, 3);
+		draw_set_color(c_white);
+		draw_line_width(@noteAnchorX - 7, @noteAnchorY, @noteAnchorX + 7, @noteAnchorY, 1);
+		draw_line_width(@noteAnchorX, @noteAnchorY - 7, @noteAnchorX, @noteAnchorY + 7, 1);
+	}
+	// level-1 wheel (mode 2): corners = quick icons, edges = tools, center =
+	// last-used icon
+	if(@noteMode == 2){
+		@wcx = @noteCX;
+		@wcy = @noteCY;
+		@wstep = 38;
+		@wTeam = @team;
+		if(@wTeam < 0 || @wTeam > 7) @wTeam = 0;
+		draw_set_alpha(0.5);
+		draw_set_color(c_black);
+		draw_circle(@wcx, @wcy, 80, false);
+		for(@row = 0; @row < 3; @row += 1){
+			for(@col = 0; @col < 3; @col += 1){
+				@cellIdx = @row * 3 + @col;
+				@cx = round(@wcx + (@col - 1) * @wstep);
+				@cy = round(@wcy + (@row - 1) * @wstep);
+				// corners/center carry icons; W edge = more icons (active);
+				// N/E/S edges = tools that land in N2/N3 (drawn disabled)
+				@cellIcon = -1;
+				if(@cellIdx == 0) @cellIcon = 8;
+				if(@cellIdx == 2) @cellIcon = 0;
+				if(@cellIdx == 6) @cellIcon = 9;
+				if(@cellIdx == 8) @cellIcon = 2;
+				if(@cellIdx == 4) @cellIcon = @noteLastIcon;
+				draw_set_alpha(0.22);
+				draw_set_color(c_black);
+				draw_circle(@cx, @cy, 14, false);
+				if(@cellIdx == @noteWheelHover){
+					draw_set_alpha(0.62);
+					draw_set_color(@teamColors[@wTeam]);
+					draw_circle(@cx, @cy, 12, false);
+					draw_set_alpha(1);
+					draw_set_color(c_white);
+					draw_circle(@cx, @cy, 13, true);
+				}else{
+					draw_set_alpha(0.34);
+					draw_set_color(c_dkgray);
+					draw_circle(@cx, @cy, 12, true);
+				}
+				if(@cellIcon >= 0){
+					@note_draw_icon(@cellIcon, @cx, @cy, 0.8, 1, current_time);
+				}else if(@cellIdx == 1){
+					// arrow tool (active)
+					draw_set_alpha(1);
+					draw_set_color(c_white);
+					draw_line_width(@cx - 5, @cy + 5, @cx + 3, @cy - 3, 2);
+					draw_triangle(@cx + 1, @cy - 7, @cx + 7, @cy - 1, @cx + 6, @cy - 6, false);
+				}else if(@cellIdx == 5){
+					// brush tool
+					draw_set_alpha(1);
+					draw_set_color(c_white);
+					draw_line_width(@cx - 5, @cy + 5, @cx + 3, @cy - 3, 3);
+					draw_triangle(@cx + 2, @cy - 2, @cx + 7, @cy - 7, @cx + 6, @cy - 1, false);
+				}else if(@cellIdx == 7){
+					// text tool (active)
+					draw_set_alpha(1);
+					draw_set_color(c_white);
+					draw_text(@cx, @cy, "T");
+				}else if(@cellIdx == 3){
+					// more icons: opens the palette
+					draw_set_alpha(1);
+					draw_set_color(c_white);
+					draw_circle(@cx - 4, @cy - 4, 2, false);
+					draw_circle(@cx + 4, @cy - 4, 2, false);
+					draw_circle(@cx - 4, @cy + 4, 2, false);
+					draw_circle(@cx + 4, @cy + 4, 2, false);
+				}
+			}
+		}
+	}
+	// icon matrix (mode 3): modal 8x6 grid, all icons at once (no paging).
+	// identity mapping cell == iconId; cells 10-15 are undecided placeholders.
+	if(@noteMode == 3){
+		@wcx = @noteCX;
+		@wcy = @noteCY;
+		@wTeam = @team;
+		if(@wTeam < 0 || @wTeam > 7) @wTeam = 0;
+		draw_set_alpha(0.72);
+		draw_set_color(c_black);
+		draw_roundrect(@wcx - 160, @wcy - 124, @wcx + 160, @wcy + 124, false);
+		draw_set_alpha(1);
+		draw_set_color(c_dkgray);
+		draw_roundrect(@wcx - 160, @wcy - 124, @wcx + 160, @wcy + 124, true);
+		@wstep = 36;
+		for(@cellIdx = 0; @cellIdx < 48; @cellIdx += 1){
+			@cx = round(@wcx +((@cellIdx mod 8) - 3.5) * @wstep);
+			@cy = round(@wcy + ((@cellIdx div 8) - 2.5) * @wstep);
+			@npPh = 0;
+			if(@cellIdx > 9 && @cellIdx < 16) @npPh = 1;
+			draw_set_alpha(0.22);
+			draw_set_color(c_black);
+			draw_circle(@cx, @cy, 14, false);
+			if(@cellIdx == @notePaletteHover && @npPh == 0){
+				draw_set_alpha(0.62);
+				draw_set_color(@teamColors[@wTeam]);
+				draw_circle(@cx, @cy, 12, false);
+				draw_set_alpha(1);
+				draw_set_color(c_white);
+				draw_circle(@cx, @cy, 13, true);
+			}else{
+				draw_set_alpha(0.34);
+				draw_set_color(c_dkgray);
+				draw_circle(@cx, @cy, 12, true);
+			}
+			if(@npPh){
+				// undecided slot: dotted placeholder
+				draw_set_alpha(0.30);
+				draw_set_color(c_gray);
+				draw_circle(@cx, @cy, 5, true);
+			}else{
+				@note_draw_icon(@cellIdx, @cx, @cy, 0.9, 1, current_time);
+			}
+			if(@cellIdx == @notePaletteLast){
+				draw_set_alpha(1);
+				draw_set_color(@teamColors[@wTeam]);
+				draw_circle(@cx, @cy + 18, 2, false);
+			}
+		}
+	}
+	// in-progress polyline preview (mode 4): staged segments + node dots +
+	// live segment to the cursor with arrowhead, plus a controls hint
+	if(@noteMode == 4){
+		@pvTeam = @team;
+		if(@pvTeam < 0 || @pvTeam > 7) @pvTeam = 0;
+		draw_set_alpha(0.9);
+		draw_set_color(@teamColors[@pvTeam]);
+		for(@pvI = 0; @pvI < @noteStageN - 1; @pvI += 1){
+			draw_line_width(@noteStageX[@pvI], @noteStageY[@pvI], @noteStageX[@pvI + 1], @noteStageY[@pvI + 1], 3);
+			draw_circle(@noteStageX[@pvI], @noteStageY[@pvI], 3, false);
+		}
+		@pvLX = @noteStageX[@noteStageN - 1];
+		@pvLY = @noteStageY[@noteStageN - 1];
+		draw_circle(@pvLX, @pvLY, 3, false);
+		if(point_distance(@pvLX, @pvLY, mouse_x, mouse_y) > 2){
+			draw_line_width(@pvLX, @pvLY, mouse_x, mouse_y, 3);
+			@pvDir = point_direction(@pvLX, @pvLY, mouse_x, mouse_y);
+			draw_triangle(mouse_x, mouse_y, mouse_x + lengthdir_x(12, @pvDir + 150), mouse_y + lengthdir_y(12, @pvDir + 150), mouse_x + lengthdir_x(12, @pvDir - 150), mouse_y + lengthdir_y(12, @pvDir - 150), false);
+		}
+		draw_set_alpha(0.8);
+		draw_set_color(c_white);
+		draw_set_halign(fa_left);
+		draw_set_valign(fa_top);
+		draw_text(round(mouse_x + 14), round(mouse_y + 10), "LMB node / H done / RMB undo");
+		draw_set_halign(fa_center);
+		draw_set_valign(fa_middle);
+	}
+	// in-progress stroke preview (mode 5): the staged drawing so far
+	// (sub-path breaks respected) + cursor dot
+	if(@noteMode == 5){
+		@pvTeam = @team;
+		if(@pvTeam < 0 || @pvTeam > 7) @pvTeam = 0;
+		draw_set_alpha(0.9);
+		draw_set_color(@teamColors[@pvTeam]);
+		if(@noteStageN >= 2){
+			for(@pvI = 0; @pvI < @noteStageN - 1; @pvI += 1){
+				if(@noteStageBrk[@pvI + 1] == 0){
+					draw_line_width(@noteStageX[@pvI], @noteStageY[@pvI], @noteStageX[@pvI + 1], @noteStageY[@pvI + 1], 3);
+				}
+				if(@noteStageBrk[@pvI] == 1 || @pvI == 0){
+					draw_circle(@noteStageX[@pvI], @noteStageY[@pvI], 2.5, false);
+				}
+			}
+		}
+		draw_circle(mouse_x, mouse_y, 2, false);
+		draw_set_alpha(0.8);
+		draw_set_color(c_white);
+		draw_set_halign(fa_left);
+		draw_set_valign(fa_top);
+		draw_text(round(mouse_x + 14), round(mouse_y + 10), "LMB draw / H done / RMB undo");
+		draw_set_halign(fa_center);
+		draw_set_valign(fa_middle);
+	}
+	// modal UI cursor: the game's own cursor sprite draws below our layer, so
+	// repaint a crosshair on top while any notes UI is open (mode >= 2)
+	if(@noteMode >= 2){
+		draw_set_alpha(1);
+		draw_set_color(c_black);
+		draw_line_width(mouse_x - 6, mouse_y, mouse_x + 6, mouse_y, 3);
+		draw_line_width(mouse_x, mouse_y - 6, mouse_x, mouse_y + 6, 3);
+		draw_set_color(c_white);
+		draw_line_width(mouse_x - 6, mouse_y, mouse_x + 6, mouse_y, 1);
+		draw_line_width(mouse_x, mouse_y - 6, mouse_x, mouse_y + 6, 1);
+	}
+	draw_set_alpha(@pdAlpha);
+	draw_set_color(@pdColor);
+	draw_set_halign(fa_left);
+	draw_set_valign(fa_top);
+	if(font_exists(0)){
+		draw_set_font(0);
+	}
+}
