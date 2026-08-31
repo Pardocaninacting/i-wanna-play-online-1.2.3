@@ -112,7 +112,9 @@ if(@naCount >= @naCap && @naOldestSlot >= 0){
 @noteTeamArr[@naSlot] = argument7;
 @noteT[@naSlot] = current_time;
 @noteSeqArr[@naSlot] = @noteSeq;
+@noteWireArr[@naSlot] = argument8;
 @noteSeq += 1;
+@noteDirty = 1;
 @notePtsN[@naSlot] = 0;
 @noteText[@naSlot] = "";
 if(argument0 == 1 || argument0 == 2){
@@ -138,12 +140,14 @@ return @naSlot;
 // this new never talks to a pre-v4 server in practice; the guard keeps the
 // script safe if it ever does).
 // args: 0 iconId, 1 x, 2 y
+@nfSeq = @note_next_seq();
 if(@socket != -1 && @connected && @protocolVersion >= 4){
     __ONLINE_buffer_clear(@buffer);
     #if not GMNET
         __ONLINE_buffer_write_uint8(@buffer, 20);
         __ONLINE_buffer_write_uint8(@buffer, 0);
         __ONLINE_buffer_write_int32(@buffer, room);
+        __ONLINE_buffer_write_uint16(@buffer, @nfSeq);
         __ONLINE_buffer_write_float32(@buffer, argument1);
         __ONLINE_buffer_write_float32(@buffer, argument2);
         __ONLINE_buffer_write_uint8(@buffer, argument0);
@@ -152,13 +156,14 @@ if(@socket != -1 && @connected && @protocolVersion >= 4){
         __ONLINE_buffer_write_u8(@buffer, 20);
         __ONLINE_buffer_write_u8(@buffer, 0);
         __ONLINE_buffer_write_i32(@buffer, room);
+        __ONLINE_buffer_write_u16(@buffer, @nfSeq);
         __ONLINE_buffer_write_float(@buffer, argument1);
         __ONLINE_buffer_write_float(@buffer, argument2);
         __ONLINE_buffer_write_u8(@buffer, argument0);
     #endif
     __ONLINE_socket_write_message(@socket, @buffer);
 }
-@note_add(0, room, argument1, argument2, argument0, @selfID, @name, @team);
+@note_add(0, room, argument1, argument2, argument0, @selfID, @name, @team, @nfSeq);
 @noteLastIcon = argument0;
 #if STUDIO
     audio_play_sound(@sndChatbox, 0, false);
@@ -307,7 +312,7 @@ if(@ntTeam < 0 || @ntTeam > 7){
         @ntTeam = 0;
     }
 }
-if(@noteCanvasMode != 2 && argument0 != @selfID && !@noteHideAll && !@noteHideOthers){
+if(!argument1 && @noteCanvasMode != 2 && argument0 != @selfID && !@noteHideAll && !@noteHideOthers){
     #if STUDIO
         audio_play_sound(@sndChatbox, 0, false);
     #endif
@@ -324,6 +329,7 @@ return 0;
 // bit is informational only. self = world instance.
 // args: none
 if(@noteStageN < 2) return 0;
+@nfSeq = @note_next_seq();
 if(@socket != -1 && @connected && @protocolVersion >= 4){
     __ONLINE_buffer_clear(@buffer);
     @npFlags = 1;
@@ -332,6 +338,7 @@ if(@socket != -1 && @connected && @protocolVersion >= 4){
         __ONLINE_buffer_write_uint8(@buffer, 20);
         __ONLINE_buffer_write_uint8(@buffer, 1);
         __ONLINE_buffer_write_int32(@buffer, room);
+        __ONLINE_buffer_write_uint16(@buffer, @nfSeq);
         __ONLINE_buffer_write_uint8(@buffer, @npFlags);
         __ONLINE_buffer_write_uint8(@buffer, @noteStageN);
         for(@npI = 0; @npI < @noteStageN; @npI += 1){
@@ -343,6 +350,7 @@ if(@socket != -1 && @connected && @protocolVersion >= 4){
         __ONLINE_buffer_write_u8(@buffer, 20);
         __ONLINE_buffer_write_u8(@buffer, 1);
         __ONLINE_buffer_write_i32(@buffer, room);
+        __ONLINE_buffer_write_u16(@buffer, @nfSeq);
         __ONLINE_buffer_write_u8(@buffer, @npFlags);
         __ONLINE_buffer_write_u8(@buffer, @noteStageN);
         for(@npI = 0; @npI < @noteStageN; @npI += 1){
@@ -352,7 +360,7 @@ if(@socket != -1 && @connected && @protocolVersion >= 4){
     #endif
     __ONLINE_socket_write_message(@socket, @buffer);
 }
-@note_add(1, room, @noteStageX[0], @noteStageY[0], 0, @selfID, @name, @team);
+@note_add(1, room, @noteStageX[0], @noteStageY[0], 0, @selfID, @name, @team, @nfSeq);
 #if STUDIO
     audio_play_sound(@sndChatbox, 0, false);
 #endif
@@ -365,12 +373,14 @@ return 0;
 // Submits a TEXT note (sub 3, stringNT payload) at a world position.
 // args: 0 x, 1 y, 2 text (already truncated/escaped by the caller)
 if(argument2 == "") return 0;
+@nfSeq = @note_next_seq();
 if(@socket != -1 && @connected && @protocolVersion >= 4){
     __ONLINE_buffer_clear(@buffer);
     #if not GMNET
         __ONLINE_buffer_write_uint8(@buffer, 20);
         __ONLINE_buffer_write_uint8(@buffer, 3);
         __ONLINE_buffer_write_int32(@buffer, room);
+        __ONLINE_buffer_write_uint16(@buffer, @nfSeq);
         __ONLINE_buffer_write_float32(@buffer, argument0);
         __ONLINE_buffer_write_float32(@buffer, argument1);
         __ONLINE_buffer_write_string(@buffer, argument2);
@@ -379,6 +389,7 @@ if(@socket != -1 && @connected && @protocolVersion >= 4){
         __ONLINE_buffer_write_u8(@buffer, 20);
         __ONLINE_buffer_write_u8(@buffer, 3);
         __ONLINE_buffer_write_i32(@buffer, room);
+        __ONLINE_buffer_write_u16(@buffer, @nfSeq);
         __ONLINE_buffer_write_float(@buffer, argument0);
         __ONLINE_buffer_write_float(@buffer, argument1);
         __ONLINE_buffer_write_string(@buffer, argument2);
@@ -386,7 +397,7 @@ if(@socket != -1 && @connected && @protocolVersion >= 4){
     __ONLINE_socket_write_message(@socket, @buffer);
 }
 @noteStageText = argument2;
-@note_add(3, room, argument0, argument1, 0, @selfID, @name, @team);
+@note_add(3, room, argument0, argument1, 0, @selfID, @name, @team, @nfSeq);
 #if STUDIO
     audio_play_sound(@sndChatbox, 0, false);
 #endif
@@ -635,6 +646,7 @@ if(@noteStageN < 1) return 0;
 if(@noteStageN < 1) return 0;
 @nfSid = @noteStrokeSeq;
 @noteStrokeSeq = (@noteStrokeSeq + 1) mod 256;
+@nfSeq = @note_next_seq();
 @nfOfs = 0;
 @nfChunk = 0;
 while(@nfOfs < @noteStageN){
@@ -653,6 +665,7 @@ while(@nfOfs < @noteStageN){
             __ONLINE_buffer_write_uint8(@buffer, 20);
             __ONLINE_buffer_write_uint8(@buffer, 2);
             __ONLINE_buffer_write_int32(@buffer, room);
+            __ONLINE_buffer_write_uint16(@buffer, @nfSeq);
             __ONLINE_buffer_write_uint8(@buffer, @nfSid);
             __ONLINE_buffer_write_uint8(@buffer, @nfChunk + @nfFlags);
             __ONLINE_buffer_write_uint8(@buffer, @nfN);
@@ -667,6 +680,7 @@ while(@nfOfs < @noteStageN){
             __ONLINE_buffer_write_u8(@buffer, 20);
             __ONLINE_buffer_write_u8(@buffer, 2);
             __ONLINE_buffer_write_i32(@buffer, room);
+            __ONLINE_buffer_write_u16(@buffer, @nfSeq);
             __ONLINE_buffer_write_u8(@buffer, @nfSid);
             __ONLINE_buffer_write_u8(@buffer, @nfChunk + @nfFlags);
             __ONLINE_buffer_write_u8(@buffer, @nfN);
@@ -682,7 +696,7 @@ while(@nfOfs < @noteStageN){
     @nfOfs += @nfN;
     @nfChunk += 1;
 }
-@note_add(2, room, @noteStageX[0], @noteStageY[0], 0, @selfID, @name, @team);
+@note_add(2, room, @noteStageX[0], @noteStageY[0], 0, @selfID, @name, @team, @nfSeq);
 #if STUDIO
     audio_play_sound(@sndChatbox,  0, false);
 #endif
@@ -742,7 +756,8 @@ return 0;
 // sub-path (break flag at its first point). Final chunk commits one kind-2
 // note via the staging arrays. Orphan slots expire after 5s (the STROKE rate
 // limiter can legitimately drop chunks).
-// args: 0 senderID   (caller has just read sub + room into @ntSub/@ntRoom)
+// args: 0 senderID, 1 replay (past-toast, silent), 2 wire seq
+// (caller has just read sub + room + seq into @ntSub/@ntRoom/@ntSeq)
 #if not GMNET
     @nsSid = __ONLINE_buffer_read_uint8(@buffer);
     @nsChunk = __ONLINE_buffer_read_uint8(@buffer);
@@ -833,8 +848,11 @@ if(@nsChunk >= 128 && @noteStrokeN[@nsSlot] >= 1){
         @noteStageY[@nsI] = @noteStrokePtsY[@nsSlot, @nsI];
         @noteStageBrk[@nsI] = @noteStrokeBrk[@nsSlot, @nsI];
     }
-    @note_sender_info(argument0);
-    @note_add(2, @ntRoom, @noteStageX[0], @noteStageY[0], 0, argument0, @ntName, @ntTeam);
+    @note_sender_info(argument0, argument1);
+    if(!@note_dup(2, @ntRoom, @noteStageX[0], @noteStageY[0], @noteStageN, @ntName)){
+        @ntSlot = @note_add(2, @ntRoom, @noteStageX[0], @noteStageY[0], 0, argument0, @ntName, @ntTeam, argument2);
+        if(argument1) @noteT[@ntSlot] = current_time - 999999999;
+    }
     @noteStrokeN[@nsSlot] = 0;
     @noteStrokeOwner[@nsSlot] = "";
 }
@@ -1373,3 +1391,182 @@ if(@showArrows || @spectating){
 		draw_set_font(0);
 	}
 }
+
+///// script @note_next_seq
+// Per-session sender-side note sequence (u16). Combined with the sender id it
+// uniquely identifies a note for dedup (sync replay) and DELETE.
+// args: none
+@noteSeqSend = (@noteSeqSend + 1) mod 65536;
+return @noteSeqSend;
+
+///// script @note_persist
+// Writes the notes store to "@notes" (next to the game / sandbox on GMS) so
+// drawings survive game_restart and relaunch. Entries keep their sender seq
+// so a server sync replay dedups against them. Loaded entries come back
+// past-toast (visible in canvas mode, silent in transient).
+// args: none
+__ONLINE_buffer_clear(@savesBuffer);
+#if not GMNET
+    __ONLINE_buffer_write_uint32(@savesBuffer, 1313428292);   // magic
+    __ONLINE_buffer_write_uint8(@savesBuffer, 1);             // format v1
+#endif
+#if GMNET
+    __ONLINE_buffer_write_u32(@savesBuffer, 1313428292);
+    __ONLINE_buffer_write_u8(@savesBuffer, 1);
+#endif
+@npcN = 0;
+for(@npcI = 0; @npcI < @noteMax; @npcI += 1){
+    if(@noteSeqArr[@npcI] >= 0) @npcN += 1;
+}
+#if not GMNET
+    __ONLINE_buffer_write_uint16(@savesBuffer, @npcN);
+#endif
+#if GMNET
+    __ONLINE_buffer_write_u16(@savesBuffer, @npcN);
+#endif
+for(@npcI = 0; @npcI < @noteMax; @npcI += 1){
+    if(@noteSeqArr[@npcI] < 0) continue;
+    #if not GMNET
+        __ONLINE_buffer_write_uint8(@savesBuffer, @noteKindArr[@npcI]);
+        __ONLINE_buffer_write_int32(@savesBuffer, @noteRoomArr[@npcI]);
+        __ONLINE_buffer_write_float32(@savesBuffer, @noteX[@npcI]);
+        __ONLINE_buffer_write_float32(@savesBuffer, @noteY[@npcI]);
+        __ONLINE_buffer_write_uint8(@savesBuffer, @noteIcon[@npcI]);
+        __ONLINE_buffer_write_uint8(@savesBuffer, @noteTeamArr[@npcI]);
+        __ONLINE_buffer_write_uint16(@savesBuffer, @noteWireArr[@npcI]);
+        __ONLINE_buffer_write_string(@savesBuffer, @noteName[@npcI]);
+    #endif
+    #if GMNET
+        __ONLINE_buffer_write_u8(@savesBuffer, @noteKindArr[@npcI]);
+        __ONLINE_buffer_write_i32(@savesBuffer, @noteRoomArr[@npcI]);
+        __ONLINE_buffer_write_float(@savesBuffer, @noteX[@npcI]);
+        __ONLINE_buffer_write_float(@savesBuffer, @noteY[@npcI]);
+        __ONLINE_buffer_write_u8(@savesBuffer, @noteIcon[@npcI]);
+        __ONLINE_buffer_write_u8(@savesBuffer, @noteTeamArr[@npcI]);
+        __ONLINE_buffer_write_u16(@savesBuffer, @noteWireArr[@npcI]);
+        __ONLINE_buffer_write_string(@savesBuffer, @noteName[@npcI]);
+    #endif
+    if(@noteKindArr[@npcI] == 1 || @noteKindArr[@npcI] == 2){
+        #if not GMNET
+            __ONLINE_buffer_write_uint16(@savesBuffer, @notePtsN[@npcI]);
+        #endif
+        #if GMNET
+            __ONLINE_buffer_write_u16(@savesBuffer, @notePtsN[@npcI]);
+        #endif
+        for(@npcJ = 0; @npcJ < @notePtsN[@npcI]; @npcJ += 1){
+            #if not GMNET
+                __ONLINE_buffer_write_float32(@savesBuffer, @notePtsX[@npcI, @npcJ]);
+                __ONLINE_buffer_write_float32(@savesBuffer, @notePtsY[@npcI, @npcJ]);
+                __ONLINE_buffer_write_uint8(@savesBuffer, @notePtsBrk[@npcI, @npcJ]);
+            #endif
+            #if GMNET
+                __ONLINE_buffer_write_float(@savesBuffer, @notePtsX[@npcI, @npcJ]);
+                __ONLINE_buffer_write_float(@savesBuffer, @notePtsY[@npcI, @npcJ]);
+                __ONLINE_buffer_write_u8(@savesBuffer, @notePtsBrk[@npcI, @npcJ]);
+            #endif
+        }
+    }
+    if(@noteKindArr[@npcI] == 3){
+        __ONLINE_buffer_write_string(@savesBuffer, @noteText[@npcI]);
+    }
+}
+#if not GMNET
+    __ONLINE_buffer_write_to_file(@savesBuffer, "@notes");
+#endif
+#if GMNET
+    __ONLINE_buffer_save(@savesBuffer, "@notes");
+#endif
+return @npcN;
+
+///// script @note_persist_load
+// Restores the notes store written by @note_persist. Silently no-ops on a
+// missing/corrupt file. Restored notes are past-toast (old news).
+// args: none
+if(!file_exists("@notes")) return 0;
+__ONLINE_buffer_clear(@savesBuffer);
+#if not GMNET
+    __ONLINE_buffer_read_from_file(@savesBuffer, "@notes");
+    if(__ONLINE_buffer_read_uint32(@savesBuffer) != 1313428292) return 0;
+    if(__ONLINE_buffer_read_uint8(@savesBuffer) != 1) return 0;
+    @nplN = __ONLINE_buffer_read_uint16(@savesBuffer);
+#endif
+#if GMNET
+    __ONLINE_buffer_load(@savesBuffer, "@notes");
+    if(__ONLINE_buffer_read_u32(@savesBuffer) != 1313428292) return 0;
+    if(__ONLINE_buffer_read_u8(@savesBuffer) != 1) return 0;
+    @nplN = __ONLINE_buffer_read_u16(@savesBuffer);
+#endif
+if(@nplN < 0 || @nplN > 256) return 0;
+for(@nplI = 0; @nplI < @nplN; @nplI += 1){
+    #if not GMNET
+        @nplKind = __ONLINE_buffer_read_uint8(@savesBuffer);
+        @nplRoom = __ONLINE_buffer_read_int32(@savesBuffer);
+        @nplX = __ONLINE_buffer_read_float32(@savesBuffer);
+        @nplY = __ONLINE_buffer_read_float32(@savesBuffer);
+        @nplIcon = __ONLINE_buffer_read_uint8(@savesBuffer);
+        @nplTeam = __ONLINE_buffer_read_uint8(@savesBuffer);
+        @nplSeq = __ONLINE_buffer_read_uint16(@savesBuffer);
+    #endif
+    #if GMNET
+        @nplKind = __ONLINE_buffer_read_u8(@savesBuffer);
+        @nplRoom = __ONLINE_buffer_read_i32(@savesBuffer);
+        @nplX = __ONLINE_buffer_read_float(@savesBuffer);
+        @nplY = __ONLINE_buffer_read_float(@savesBuffer);
+        @nplIcon = __ONLINE_buffer_read_u8(@savesBuffer);
+        @nplTeam = __ONLINE_buffer_read_u8(@savesBuffer);
+        @nplSeq = __ONLINE_buffer_read_u16(@savesBuffer);
+    #endif
+    @nplName = __ONLINE_buffer_read_string(@savesBuffer);
+    @noteStageText = "";
+    if(@nplKind == 1 || @nplKind == 2){
+        #if not GMNET
+            @noteStageN = __ONLINE_buffer_read_uint16(@savesBuffer);
+        #endif
+        #if GMNET
+            @noteStageN = __ONLINE_buffer_read_u16(@savesBuffer);
+        #endif
+        if(@noteStageN < 0 || @noteStageN > 480) return 0;
+        for(@nplJ = 0; @nplJ < @noteStageN; @nplJ += 1){
+            #if not GMNET
+                @noteStageX[@nplJ] = __ONLINE_buffer_read_float32(@savesBuffer);
+                @noteStageY[@nplJ] = __ONLINE_buffer_read_float32(@savesBuffer);
+                @noteStageBrk[@nplJ] = __ONLINE_buffer_read_uint8(@savesBuffer);
+            #endif
+            #if GMNET
+                @noteStageX[@nplJ] = __ONLINE_buffer_read_float(@savesBuffer);
+                @noteStageY[@nplJ] = __ONLINE_buffer_read_float(@savesBuffer);
+                @noteStageBrk[@nplJ] = __ONLINE_buffer_read_u8(@savesBuffer);
+            #endif
+        }
+    }
+    if(@nplKind == 3){
+        @noteStageText = __ONLINE_buffer_read_string(@savesBuffer);
+    }
+    @nplSlot = @note_add(@nplKind, @nplRoom, @nplX, @nplY, @nplIcon, "", @nplName, @nplTeam, @nplSeq);
+    // restored entries are old news: past-toast, no arrival sound
+    @noteT[@nplSlot] = current_time - 999999999;
+}
+return @nplN;
+
+///// script @note_dup
+// Content-based duplicate check for incoming notes (sync replays can collide
+// with locally persisted notes; sender ids are per-connection and useless
+// across sessions, so we match content: kind + room + anchor + icon/count +
+// sender name). Returns 1 when a live slot already holds an equal note.
+// args: 0 kind, 1 room, 2 x, 3 y, 4 aux (iconId / point count), 5 sender name
+for(@ndI = 0; @ndI < @noteMax; @ndI += 1){
+    if(@noteSeqArr[@ndI] < 0) continue;
+    if(@noteKindArr[@ndI] != argument0) continue;
+    if(@noteRoomArr[@ndI] != argument1) continue;
+    if(@noteName[@ndI] != argument5) continue;
+    if(abs(@noteX[@ndI] - argument2) >= 2) continue;
+    if(abs(@noteY[@ndI] - argument3) >= 2) continue;
+    if(argument0 == 0){
+        if(@noteIcon[@ndI] != argument4) continue;
+    }
+    if(argument0 == 1 || argument0 == 2){
+        if(@notePtsN[@ndI] != argument4) continue;
+    }
+    return 1;
+}
+return 0;

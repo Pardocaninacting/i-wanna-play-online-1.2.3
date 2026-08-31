@@ -7,7 +7,7 @@ export const PORT_UDP = parseInt(process.env.PORT_SOCKETS_UDP || "8003");
 
 export const LAST_VERSION = "1.2.3_beta_5";
 export const MIN_CLIENT_VERSION = "1.1.9";
-export const PROTOCOL_VERSION = 4;
+export const PROTOCOL_VERSION = 5;
 export const MIN_PROTOCOL_VERSION = 1;
 export const MAX_PLAYERS_PER_IP = 8;
 export const HEARTBEAT_INTERVAL_SEC = 5;
@@ -24,6 +24,12 @@ export const MAX_SYNC_NAME_LEN = 32;       // bytes of an entry name
 export const MAX_TEAMS = 8;
 export const TCP_RATE_LIMIT = 60;  // per second (legitimate bursts: rapid save-on-death loops, boss-flag CUSTOM_DATA, chat, etc.)
 export const UDP_RATE_LIMIT = 100; // per second
+
+// N4: per-game session caches (notes replay + last save), dropped after the
+// game has been empty for GAME_CACHE_EXPIRY_MS.
+export const NOTE_CACHE_MAX_PER_GAME = 256;   // ring entries (a multi-chunk stroke = 1 entry per chunk)
+export const NOTE_SYNC_MIN_MS = 2000;         // per-player pull throttle
+export const GAME_CACHE_EXPIRY_MS = 600000;   // 10 min empty grace
 
 export const RATING_COOLDOWN_SEC = 300;     // 5 min between ratings per player
 export const RATING_MAX_PER_GAME = 500;     // max stored ratings per game

@@ -41,7 +41,7 @@ else{
 @tcpPort = %arg2;
 @udpPort = %arg3;
 @version = "%arg5";
-@protocolVersion = 4;
+@protocolVersion = 5;
 @race = false;
 @password = "";
 @vis = 0;
@@ -257,12 +257,19 @@ for(@i = 0; @i < @noteMax; @i += 1){
 	@noteTeamArr[@i] = 0;
 	@noteT[@i] = -99999;
 	@noteSeqArr[@i] = -1;
+	@noteWireArr[@i] = -1;
 	@notePtsN[@i] = 0;
 	@noteText[@i] = "";
 }
 @noteStageN = 0;           // in-progress polyline/stroke staging (also used by receive)
 @noteStageText = "";
 @noteAtlasSpr = -1;
+@noteSeqSend = 0;         // sender-side note id counter (wire seq)
+@notePrevRoom = -1;         // room-change detector drives NOTE_SYNC pulls
+@noteSyncLastMs = 0;
+@noteDirty = 0;             // notes store needs a persist flush
+@noteFlushMs = 0;
+// cached save rides tempOnline2 into the first normal loadGame (no auto-teleport)
 @noteDrawing = 0;          // brush mode: LMB stroke in progress
 @noteDrawRunStart = 0;     // brush mode: current sub-path start index
 @noteStrokeSeq = 0;        // sender-side stroke id counter
@@ -1074,3 +1081,5 @@ for(@skI = 0; @skI < instance_number(@onlinePlayer); @skI += 1){
 // frees exactly this id next time). -1 = atlas missing; iconId 16-31 then
 // render as the vector HERE fallback.
 @note_atlas_load();
+// N4: restore the notes store from the previous session (past-toast)
+@note_persist_load();

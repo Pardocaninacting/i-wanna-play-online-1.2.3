@@ -134,6 +134,9 @@ if(@objListEdited){
 }
 ds_list_destroy(@obj_list);
 #endif
+// N4: flush the notes store (drawings survive restart/relaunch)
+@noteDirty = 0;
+@note_persist();
 // NOTES: persist the last-used quick icon (only when changed this session)
 if(@noteLastIcon != @noteLastIconLoaded){
 	ini_open("@config.ini");

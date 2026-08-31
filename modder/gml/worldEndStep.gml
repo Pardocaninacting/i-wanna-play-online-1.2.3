@@ -551,21 +551,29 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				@pingPtype = __ONLINE_buffer_read_u8(@buffer);
 			#endif
 			@note_sender_info(@pingSenderID);
-			@note_add(0, @pingPRoom, @pingPx, @pingPy, @pingPtype, @pingSenderID, @ntName, @ntTeam);
+			@note_add(0, @pingPRoom, @pingPx, @pingPy, @pingPtype, @pingSenderID, @ntName, @ntTeam, -1);
 			break;
 		case 20:
-			// NOTE (protocol v4+): stringNT senderId, u8 subType, i32 room,
-			// then the per-subtype body. Subtype 2 (STROKE) lands in N3 — its
-			// body is left unread here and dropped with the message frame.
+			// NOTE (protocol v5+): stringNT senderId, u8 subType(+0x20 = sync
+			// replay marker), i32 room, u16 seq, then the per-subtype body.
+			// Replays store directly into the past-toast state (no pop-in
+			// animation, no sound) and content-dedup against the local store.
 			@ntSender = __ONLINE_buffer_read_string(@buffer);
 			#if not GMNET
 				@ntSub = __ONLINE_buffer_read_uint8(@buffer);
 				@ntRoom = __ONLINE_buffer_read_int32(@buffer);
+				@ntSeq = __ONLINE_buffer_read_uint16(@buffer);
 			#endif
 			#if GMNET
 				@ntSub = __ONLINE_buffer_read_u8(@buffer);
 				@ntRoom = __ONLINE_buffer_read_i32(@buffer);
+				@ntSeq = __ONLINE_buffer_read_u16(@buffer);
 			#endif
+			@ntReplay = 0;
+			if(@ntSub >= 32){
+				@ntReplay = 1;
+				@ntSub -= 32;
+			}
 			if(@ntSub == 0){
 				#if not GMNET
 					@ntX = __ONLINE_buffer_read_float32(@buffer);
@@ -577,8 +585,11 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 					@ntY = __ONLINE_buffer_read_float(@buffer);
 					@ntIcon = __ONLINE_buffer_read_u8(@buffer);
 				#endif
-				@note_sender_info(@ntSender);
-				@note_add(0, @ntRoom, @ntX, @ntY, @ntIcon, @ntSender, @ntName, @ntTeam);
+				@note_sender_info(@ntSender, @ntReplay);
+				if(!(@ntReplay && @note_dup(0, @ntRoom, @ntX, @ntY, @ntIcon, @ntName))){
+					@ntSlot = @note_add(0, @ntRoom, @ntX, @ntY, @ntIcon, @ntSender, @ntName, @ntTeam, @ntSeq);
+					if(@ntReplay) @noteT[@ntSlot] = current_time - 999999999;
+				}
 			}
 			if(@ntSub == 1){
 				// POLYLINE: u8 flags (informational; chevrons derive from the
@@ -602,17 +613,21 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 							@noteStageX[@i] = __ONLINE_buffer_read_float(@buffer);
 							@noteStageY[@i] = __ONLINE_buffer_read_float(@buffer);
 						#endif
+						@noteStageBrk[@i] = 0;
 					}
-					@note_sender_info(@ntSender);
-					@note_add(1, @ntRoom, @noteStageX[0], @noteStageY[0], 0, @ntSender, @ntName, @ntTeam);
+					@note_sender_info(@ntSender, @ntReplay);
+					if(!(@ntReplay && @note_dup(1, @ntRoom, @noteStageX[0], @noteStageY[0], @ntN, @ntName))){
+						@ntSlot = @note_add(1, @ntRoom, @noteStageX[0], @noteStageY[0], 0, @ntSender, @ntName, @ntTeam, @ntSeq);
+						if(@ntReplay) @noteT[@ntSlot] = current_time - 999999999;
+					}
 				}
 			}
 			if(@ntSub == 2){
-				// STROKE chunk: reassembled per (sender, strokeId) by the lib
-				// (final chunk commits the note)
-				@note_stroke_recv(@ntSender);
+				// STROKE chunk: reassembled per (sender, strokeId) by the lib;
+				// replay + dedup are applied at commit time inside the lib
+				@note_stroke_recv(@ntSender, @ntReplay, @ntSeq);
 			}
-			if(@ntSub ==  3){
+			if(@ntSub == 3){
 				// TEXT: f32 x, f32 y, stringNT utf8
 				#if not GMNET
 					@ntX = __ONLINE_buffer_read_float32(@buffer);
@@ -626,11 +641,15 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				#if STUDIO
 				@ntText = strip_non_bmp(@ntText);
 				#endif
-				@note_sender_info(@ntSender);
-				@noteStageText = @ntText;
-				@note_add(3, @ntRoom, @ntX, @ntY, 0, @ntSender, @ntName, @ntTeam);
+				@note_sender_info(@ntSender, @ntReplay);
+				if(!(@ntReplay && @note_dup(3, @ntRoom, @ntX, @ntY, 0, @ntName))){
+					@noteStageText = @ntText;
+					@ntSlot = @note_add(3, @ntRoom, @ntX, @ntY, 0, @ntSender, @ntName, @ntTeam, @ntSeq);
+					if(@ntReplay) @noteT[@ntSlot] = current_time - 999999999;
+				}
 			}
 			break;
+
 		case 13:
 			// SKIN NOTIFY: stringNT playerId, 16-byte hash, stringNT dir hint.
 			// Zero hash = the player has no skin selected.
@@ -928,6 +947,7 @@ switch(@socketState){
 				@reconnectAttempts = 0;
 				@listCounter = room_speed * 15;
 				@skinNetDirty = true;
+				@notePrevRoom = -1;
 				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
 					__ONLINE_buffer_write_uint8(@buffer, 3);
@@ -1669,6 +1689,71 @@ if(@udpState == 1){
 	if(@noteCanvasMode == 2) @a.@name = "Notes: off";
 	@a.@state = -2;
 }
+// NOTES sync + delete + persist flush (N4)
+	// pull the room's cached notes on room change (and after reconnect, which
+	// resets @notePrevRoom to -1); throttled to one pull per 2s
+	if(@connected && @protocolVersion >= 5){
+		if(room != @notePrevRoom){
+			@notePrevRoom = room;
+			if(current_time - @noteSyncLastMs > 2000){
+				@noteSyncLastMs = current_time;
+				__ONLINE_buffer_clear(@buffer);
+				#if not GMNET
+					__ONLINE_buffer_write_uint8(@buffer, 21);
+					__ONLINE_buffer_write_int32(@buffer, room);
+				#endif
+				#if GMNET
+					__ONLINE_buffer_write_u8(@buffer, 21);
+					__ONLINE_buffer_write_i32(@buffer, room);
+				#endif
+				__ONLINE_socket_write_message(@socket, @buffer);
+			}
+		}
+	}
+	// canvas mode + right-click on your OWN note = delete it (local + server
+	// cache; other clients keep theirs)
+	if(@noteCanvasMode == 1 && @noteMode == 0 && mouse_check_button_pressed(mb_right)){
+		@ndBest = -1;
+		@ndBestD = 24;
+		for(@ndI = 0; @ndI < @noteMax; @ndI += 1){
+			if(@noteSeqArr[@ndI] < 0) continue;
+			if(@noteRoomArr[@ndI] != room) continue;
+			if(@noteSenderArr[@ndI] != @selfID) continue;
+			@ndD = point_distance(mouse_x, mouse_y, @noteX[@ndI], @noteY[@ndI]);
+			if(@ndD < @ndBestD){
+				@ndBestD = @ndD;
+				@ndBest = @ndI;
+			}
+		}
+		if(@ndBest >= 0){
+			if(@connected && @protocolVersion >= 5 && @noteWireArr[@ndBest] > 0){
+				__ONLINE_buffer_clear(@buffer);
+				#if not GMNET
+					__ONLINE_buffer_write_uint8(@buffer, 20);
+					__ONLINE_buffer_write_uint8(@buffer, 4);
+					__ONLINE_buffer_write_int32(@buffer, room);
+					__ONLINE_buffer_write_uint16(@buffer, @noteWireArr[@ndBest]);
+				#endif
+				#if GMNET
+					__ONLINE_buffer_write_u8(@buffer, 20);
+					__ONLINE_buffer_write_u8(@buffer, 4);
+					__ONLINE_buffer_write_i32(@buffer, room);
+					__ONLINE_buffer_write_u16(@buffer, @noteWireArr[@ndBest]);
+				#endif
+				__ONLINE_socket_write_message(@socket, @buffer);
+			}
+			@noteSeqArr[@ndBest] = -1;
+			@noteDirty = 1;
+		}
+	}
+	// persist flush (throttled; also flushed on game end)
+	if(@noteDirty){
+		if(current_time - @noteFlushMs > 2000){
+			@noteFlushMs = current_time;
+			@noteDirty = 0;
+			@note_persist();
+		}
+	}
 // NOTES WHEEL (opcode 20 NOTE; tap-H re-fires the last icon, hold opens the
 // wheel: corners fire icons, W edge opens the modal icon palette, N/E/S tool
 // edges are inert until N2/N3)

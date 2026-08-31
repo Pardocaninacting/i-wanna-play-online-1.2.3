@@ -5,6 +5,7 @@ import { SmartBuffer } from "smart-buffer";
 import { Logger } from "tslog";
 import {
     PORT_HTTP, PORT_TCP, PORT_UDP, MIN_CLIENT_VERSION, PROTOCOL_VERSION, MIN_PROTOCOL_VERSION,
+    NOTE_CACHE_MAX_PER_GAME, NOTE_SYNC_MIN_MS, GAME_CACHE_EXPIRY_MS,
     MAX_PLAYERS_PER_IP, HEARTBEAT_INTERVAL_SEC, HEARTBEAT_TIMEOUT_SEC,
     UDP_CLEANUP_INTERVAL_MIN, UDP_EXPIRY_MIN,
     MAX_TCP_MESSAGE, MAX_TCP_BUFFER, MAX_UDP_MESSAGE, MAX_CUSTOM_SLOTS, MAX_PER_ENTRY_SLOTS,
@@ -71,6 +72,10 @@ interface TcpPlayer {
     /** Note relay rate limiting windows (NOTE), one bucket per subtype. */
     noteWindowStart: number[];
     noteCount: number[];
+    /** NOTE_SYNC pull throttle timestamp. */
+    noteSyncAt: number;
+    /** Whether the cached last-save was already sent to this client. */
+    saveCacheSent: boolean;
 }
 
 /* ── State ─────────────────────────────────────────── */
@@ -105,10 +110,10 @@ function supportsSkins(player: TcpPlayer): boolean {
 
 // Notes/annotations (NOTE) are gated on protocol v4: older clients are never
 // sent opcode 20 (unknown opcodes kick the receiver).
-const NOTE_PROTOCOL_VERSION = 4;
+const NOTE_PROTOCOL_VERSION = 5;
 // Per-subtype drop-not-kick limits per 10s window (BULLET pattern): one
 // spammed category must not starve the others. STROKE is counted per chunk.
-const NOTE_RATE_LIMITS = [20, 20, 100, 10];
+const NOTE_RATE_LIMITS = [20, 20, 100, 10, 20];
 
 function supportsNotes(player: TcpPlayer): boolean {
     return player.protocolVersion >= NOTE_PROTOCOL_VERSION;
@@ -442,6 +447,57 @@ function extractMessages(player: TcpPlayer): SmartBuffer[] {
 
 /* ── TCP message handler ───────────────────────────── */
 
+
+/* -- Session caches (N4): per-game note ring + last save ---------------- */
+
+interface NoteCacheEntry {
+    senderId: string;
+    senderName: string;
+    seq: number;
+    room: number;
+    /** body as read from the wire: subType, room, seq, payload (verbatim). */
+    body: Buffer;
+    ts: number;
+}
+
+const noteCache = new Map<string, NoteCacheEntry[]>();
+const saveCache = new Map<string, Map<number, { gravity: number; name: string; x: number; y: number; room: number }>>();
+const gameEmptySince = new Map<string, number>();
+
+function noteCacheAdd(game: string, senderId: string, senderName: string, seq: number, room: number, body: Buffer): void {
+    if (game === "") return;
+    let ring = noteCache.get(game);
+    if (!ring) { ring = []; noteCache.set(game, ring); }
+    ring.push({ senderId, senderName, seq, room, body: Buffer.from(body), ts: Date.now() });
+    if (ring.length > NOTE_CACHE_MAX_PER_GAME) ring.shift();
+}
+
+function noteCacheDelete(game: string, senderId: string, seq: number): void {
+    const ring = noteCache.get(game);
+    if (!ring) return;
+    for (let i = ring.length - 1; i >= 0; i--) {
+        if (ring[i].senderId === senderId && ring[i].seq === seq) ring.splice(i, 1);
+    }
+}
+
+function gameCacheSweep(): void {
+    // Drop the caches of games that have been empty for GAME_CACHE_EXPIRY_MS.
+    const now = Date.now();
+    const games = new Set<string>([...noteCache.keys(), ...saveCache.keys()]);
+    for (const g of games) {
+        const alive = tcpPlayers.some(p => !p.quitted && p.game === g);
+        if (alive) { gameEmptySince.delete(g); continue; }
+        const since = gameEmptySince.get(g) ?? now;
+        gameEmptySince.set(g, since);
+        if (now - since >= GAME_CACHE_EXPIRY_MS) {
+            noteCache.delete(g);
+            saveCache.delete(g);
+            gameEmptySince.delete(g);
+            log.info('cache expired for game ' + JSON.stringify(g));
+        }
+    }
+}
+
 function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
     let reply: SmartBuffer;
     switch (msg.readUInt8()) {
@@ -552,6 +608,11 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 reply.writeDoubleLE(y);
                 reply.writeInt16LE(room);
                 broadcastFromSameTeam(player, reply);
+                if (player.game !== "") {
+                    let perTeam = saveCache.get(player.game);
+                    if (!perTeam) { perTeam = new Map(); saveCache.set(player.game, perTeam); }
+                    perTeam.set(player.team, { gravity, name: player.name, x, y, room });
+                }
             }
             break;
 
@@ -645,7 +706,23 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 reply.writeUInt8(team);
                 broadcastFrom(player, reply);
             }
-            break;
+
+                if (!player.saveCacheSent && player.game !== "") {
+                    player.saveCacheSent = true;
+                    const cached = saveCache.get(player.game)?.get(player.team);
+                    if (cached) {
+                        const sMsg = new SmartBuffer();
+                        sMsg.writeUInt8(TcpMsg.SAVE);
+                        sMsg.writeUInt8(cached.gravity);
+                        sMsg.writeStringNT(cached.name);
+                        sMsg.writeInt32LE(cached.x);
+                        sMsg.writeDoubleLE(cached.y);
+                        sMsg.writeInt16LE(cached.room);
+                        sendTo(player, sMsg);
+                        log.info('SAVE cache -> ' + player.id + ' (' + JSON.stringify(player.name) + ') game=' + JSON.stringify(player.game) + ' team=' + player.team);
+                    }
+                }
+                        break;
 
         case TcpMsg.RATING:
             if (msg.remaining() < 2) { quitPlayer(player, "rating_short"); return; }
@@ -869,19 +946,22 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
             break;
 
         case TcpMsg.NOTE:
-            // Notes/annotations relay (protocol v4+). Same opcode both
-            // directions (PING pattern): S→C prepends stringNT senderId to
-            // the verbatim body. Relayed game-wide to note-capable peers;
-            // room isolation is the receiver's job (room id is in the body).
+            // Notes/annotations relay + per-game session cache (protocol
+            // v5+). Wire header: u8 subType, i32 room, u16 seq, then the
+            // per-subtype body. S→C prepends stringNT senderId; sync replays
+            // (NOTE_SYNC) set subType|0x20 so receivers store them already
+            // past-toast. sub 4 = DELETE (no body): drops the sender's note
+            // (matched by seq) from the server cache only, never relayed.
             if (!supportsNotes(player)) { quitPlayer(player, "note_version"); return; }
-            // Smallest legal body: ICON = sub(1)+room(4)+x(4)+y(4)+icon(1) = 14.
-            // Largest: STROKE = sub(1)+room(4)+strokeId(1)+chunk(1)+n(1)+8+239*4 = 972.
-            if (msg.remaining() < 14 || msg.remaining() > 980) { quitPlayer(player, "note_bad_size"); return; }
+            // Smallest legal: header(7) only (DELETE). Largest: STROKE chunk
+            // = 7 + strokeId(1)+chunk(1)+n(1)+8+239*4 = 974.
+            if (msg.remaining() < 7 || msg.remaining() > 980) { quitPlayer(player, "note_bad_size"); return; }
             {
                 const bodyStart = msg.readOffset;
                 const subType = msg.readUInt8();
-                if (subType > 3) { quitPlayer(player, "note_bad_subtype"); return; }
-                msg.readOffset += 4; // room (i32), relayed verbatim
+                if (subType > 4) { quitPlayer(player, "note_bad_subtype"); return; }
+                const room = msg.readInt32LE();
+                const seq = msg.readUInt16LE();
                 let ok = false;
                 if (subType === 0) {
                     // ICON: f32 x, f32 y, u8 iconId
@@ -892,30 +972,40 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                     const n = msg.readUInt8();
                     ok = n >= 2 && n <= 24 && msg.remaining() === 8 * n;
                 } else if (subType === 2) {
-                    // STROKE chunk: u8 strokeId, u8 chunk(bit7=last), u8 n(1..240),
-                    // i32 x0, i32 y0, then (n-1)×(i16 dx, i16 dy)
+                    // STROKE chunk: u8 strokeId, u8 chunk(bit6=pen-up, bit7=last),
+                    // u8 n(1..240), i32 x0, i32 y0, then (n-1)×(i16 dx, i16 dy)
                     msg.readOffset += 2; // strokeId + chunk
                     const n = msg.readUInt8();
                     ok = n >= 1 && n <= 240 && msg.remaining() === 8 + 4 * (n - 1);
-                } else {
+                } else if (subType === 3) {
                     // TEXT: f32 x, f32 y, stringNT utf8 (<=300 bytes of text)
                     if (msg.remaining() >= 10) {
                         msg.readOffset += 8; // x, y
                         const text = msg.readStringNT();
                         ok = msg.remaining() === 0 && Buffer.byteLength(text, "utf8") <= 300;
                     }
+                } else {
+                    // DELETE: no body beyond the header
+                    ok = msg.remaining() === 0;
                 }
                 if (!ok) { quitPlayer(player, "note_bad_body"); return; }
-                // Per-subtype drop-not-kick buckets (BULLET pattern).
+                // Per-subtype drop-not-kick buckets (BULLET pattern); DELETE
+                // shares the ICON bucket (both are small, human-rate messages).
                 const now = Date.now();
-                if (now - player.noteWindowStart[subType] >= 10000) {
-                    player.noteWindowStart[subType] = now;
-                    player.noteCount[subType] = 0;
+                const bucket = subType === 4 ? 0 : subType;
+                if (now - player.noteWindowStart[bucket] >= 10000) {
+                    player.noteWindowStart[bucket] = now;
+                    player.noteCount[bucket] = 0;
                 }
-                player.noteCount[subType] += 1;
-                if (player.noteCount[subType] > NOTE_RATE_LIMITS[subType]) break;
+                player.noteCount[bucket] += 1;
+                if (player.noteCount[bucket] > NOTE_RATE_LIMITS[bucket]) break;
+                if (subType === 4) {
+                    noteCacheDelete(player.game, player.id, seq);
+                    break;
+                }
                 msg.readOffset = bodyStart;
-                const body = msg.readBuffer(msg.remaining());
+                const body = msg.readBuffer(msg.remaining()); // subType..payload
+                noteCacheAdd(player.game, player.id, player.name, seq, room, body);
                 const notify = new SmartBuffer();
                 notify.writeUInt8(TcpMsg.NOTE);
                 notify.writeStringNT(player.id);
@@ -933,18 +1023,18 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                     log.debug(`NOTE ${player.id} -> ${relayCount} peers (sub=${subType})`);
                 }
                 // Legacy bridge: an ICON note with a legacy-compatible iconId
-                // (0..8) is synthesized into an opcode 11 PING for pre-v4
+                // (0..8) is synthesized into an opcode 11 PING for pre-v5
                 // peers, so old clients keep seeing markers. Each peer gets
                 // exactly one format (NOTE xor PING), so no dedup is needed.
                 if (subType === 0) {
-                    const iconId = body.readUInt8(12);
+                    const iconId = body.readUInt8(15);
                     if (iconId <= 8) {
                         const ping = new SmartBuffer();
                         ping.writeUInt8(TcpMsg.PING);
                         ping.writeStringNT(player.id);
-                        ping.writeInt32LE(body.readInt32LE(0)); // room
-                        ping.writeFloatLE(body.readFloatLE(4)); // x
-                        ping.writeFloatLE(body.readFloatLE(8)); // y
+                        ping.writeInt32LE(room);
+                        ping.writeFloatLE(body.readFloatLE(7));  // x
+                        ping.writeFloatLE(body.readFloatLE(11)); // y
                         ping.writeUInt8(iconId);
                         const pingFramed = frameMessage(ping.toBuffer());
                         ping.destroy();
@@ -957,6 +1047,37 @@ function handleTcpMessage(player: TcpPlayer, msg: SmartBuffer): void {
                 }
             }
             break;
+
+        case TcpMsg.NOTE_SYNC:
+            // C→S: i32 room — replay the cached notes for that room of the
+            // sender's game, each as a NOTE with subType|0x20 (past-toast).
+            // Pull model: the server never tracks the client's current room.
+            if (!supportsNotes(player)) { quitPlayer(player, "note_sync_version"); return; }
+            if (msg.remaining() !== 4) { quitPlayer(player, "note_sync_bad_size"); return; }
+            {
+                const syncRoom = msg.readInt32LE();
+                const now = Date.now();
+                if (now - player.noteSyncAt < NOTE_SYNC_MIN_MS) break;
+                player.noteSyncAt = now;
+                const ring = noteCache.get(player.game);
+                if (!ring) break;
+                let sent = 0;
+                for (const e of ring) {
+                    if (e.room !== syncRoom) continue;
+                    if (e.senderId === player.id) continue; // own notes are local already
+                    const m = new SmartBuffer();
+                    m.writeUInt8(TcpMsg.NOTE);
+                    m.writeStringNT(e.senderId);
+                    const replayBody = Buffer.from(e.body);
+                    replayBody[0] |= 0x20; // past-toast replay marker
+                    m.writeBuffer(replayBody);
+                    sendTo(player, m);
+                    sent++;
+                }
+                if (sent > 0) log.info(`NOTE_SYNC ${player.id} (${JSON.stringify(player.name)}) room=${syncRoom} -> ${sent} notes`);
+            }
+            break;
+
 
         default:
             quitPlayer(player, "unknown_opcode");
@@ -993,8 +1114,10 @@ createServer((socket: Socket) => {
         skinDlLimited: false,
         bulletWindowStart: 0,
         bulletCount: 0,
-        noteWindowStart: [0, 0, 0, 0],
-        noteCount: [0, 0, 0, 0],
+        noteWindowStart: [0, 0, 0, 0, 0],
+        noteCount: [0, 0, 0, 0, 0],
+        noteSyncAt: 0,
+        saveCacheSent: false,
     };
 
     tcpPlayers.push(player);
@@ -1063,6 +1186,7 @@ setInterval(() => {
     const now = Date.now();
     const expired = tcpPlayers.filter(p => p.lastHeartbeat + HEARTBEAT_TIMEOUT_SEC * 1000 < now);
     for (const p of expired) quitPlayer(p, `heartbeat_timeout(idle=${Math.floor((now - p.lastHeartbeat)/1000)}s)`);
+    gameCacheSweep();
 }, HEARTBEAT_INTERVAL_SEC * 1000);
 
 /* ── UDP server ────────────────────────────────────── */
