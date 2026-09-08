@@ -42,6 +42,11 @@ sealed class SharedSavePatch
     public string LoadAppendCode { get; set; }
     public UndertaleCode RootCodeToReplace { get; set; }
     public string RootReplacementCode { get; set; }
+    // Function-body insertion variant (GMS2.3 standalone function scripts).
+    public UndertaleCode SaveCodeToReplace { get; set; }
+    public string SaveReplacementCode { get; set; }
+    public UndertaleCode LoadCodeToReplace { get; set; }
+    public string LoadReplacementCode { get; set; }
 }
 
 sealed class ParseResult
@@ -1149,6 +1154,24 @@ static class Program
 
         if (saveScript.Code.ParentEntry is null && loadScript.Code.ParentEntry is null && CanDecompile(saveScript.Code) && CanDecompile(loadScript.Code))
         {
+            // GMS2.3 wraps script assets in `function name(...) { ... }`: appending
+            // at the end of the code entry drops the hook OUTSIDE the function,
+            // where it runs once at boot and never on save/load (IW69: saving and
+            // shared saves were completely dead). TheBiob parity: when the script
+            // is function-wrapped, insert into the function body; GMS1-style bare
+            // script bodies keep the old end-append behavior.
+            var saveSource = AppendCodeToFunctionBody(DecompileCode(saveScript.Code), NormalizeAssetName(saveScript.Name?.Content), saveAppendCode);
+            var loadSource = AppendCodeToFunctionBody(DecompileCode(loadScript.Code), NormalizeAssetName(loadScript.Name?.Content), loadAppendCode);
+            if (saveSource != null && loadSource != null)
+            {
+                return new SharedSavePatch()
+                {
+                    SaveCodeToReplace = saveScript.Code,
+                    SaveReplacementCode = saveSource,
+                    LoadCodeToReplace = loadScript.Code,
+                    LoadReplacementCode = loadSource,
+                };
+            }
             return new SharedSavePatch()
             {
                 SaveCodeToAppend = saveScript.Code,
@@ -1184,6 +1207,12 @@ static class Program
         if (patch.RootCodeToReplace != null)
         {
             importGroup.QueueReplace(patch.RootCodeToReplace, patch.RootReplacementCode);
+            return;
+        }
+        if (patch.SaveCodeToReplace != null)
+        {
+            importGroup.QueueReplace(patch.SaveCodeToReplace, patch.SaveReplacementCode);
+            importGroup.QueueReplace(patch.LoadCodeToReplace, patch.LoadReplacementCode);
             return;
         }
         importGroup.QueueAppend(patch.SaveCodeToAppend, patch.SaveAppendCode);
