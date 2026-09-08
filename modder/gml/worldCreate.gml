@@ -76,6 +76,9 @@ if(file_exists(@poFile)){
 	while(!file_text_eof(@f)){
 		@objline = file_text_read_string(@f);
 		file_text_readln(@f); // read_* leaves the cursor on the same line; without this the loop never reaches eof
+		// GM8.0 real() hard-errors on any non-digit byte, and legacy files were
+		// written with file_text_write_real which pads a leading space (" 1").
+		@objline = string_digits(@objline);
 		if(@objline != ""){
 			@obj_id = real(@objline) - 1; // stored +1: GM8 text files and 0 don't mix
 			if(object_exists(@obj_id)){

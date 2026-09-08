@@ -415,6 +415,9 @@ if(file_exists(@poFile)){
 	while(!file_text_eof(@poF)){
 		@objline = file_text_read_string(@poF);
 		file_text_readln(@poF); // read_* leaves the cursor on the same line; without this the loop never reaches eof
+		// Digits-only normalize: legacy files may carry write_real's leading
+		// space padding, and real() on non-digits is a hard error.
+		@objline = string_digits(@objline);
 		if(@objline != ""){
 			@obj_id = real(@objline) - 1; // stored +1: text files and 0 don't mix
 			if(object_exists(@obj_id)){

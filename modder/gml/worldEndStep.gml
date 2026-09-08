@@ -2882,7 +2882,7 @@ if(@debug_pick_player){
 			@objListEdited = false;
 			@f = file_text_open_write(@poFile);
 			for(@i = 0; @i < ds_list_size(@obj_list); @i += 1){
-				file_text_write_real(@f, ds_list_find_value(@obj_list, @i) + 1); // +1: GM8 text files and 0 don't mix
+				file_text_write_string(@f, string(ds_list_find_value(@obj_list, @i) + 1)); // +1: GM8 text files and 0 don't mix; write_string+string() avoids file_text_write_real's leading space, which GM8.0 real() rejects on read-back
 				file_text_writeln(@f);
 			}
 			file_text_close(@f);
