@@ -2,43 +2,18 @@
 // %arg0: The name of the world object
 // %arg1: The name of the player object
 // %arg2: The name of the player2 object if it exists
+// Save application only - the spectate-disconnect preamble lives in
+// loadGamePre.gml (always injected into loadGame). TheBiob parity: for
+// game_restart+tempfile engines (saveExe/tempExe present) the converter
+// injects THIS block into tempExe/saveExe instead of loadGame, so the online
+// save is applied AFTER the restart on the fresh boot state. Applying it
+// pre-restart moves the wrong instance: the game own loadGame creates a
+// spare player at (0,0) when only player2 exists, which then becomes a
+// leftover player object (B-to-A direction bug).
 if(instance_exists(%arg0)){
 	var @_w;
 	@_w = instance_find(%arg0, 0);
 	with(@_w){
-		if(@spectating){
-			if(@socket != -1){
-				__ONLINE_buffer_clear(@buffer);
-				#if not GMNET
-					__ONLINE_buffer_write_uint8(@buffer, 8);
-					__ONLINE_buffer_write_uint8(@buffer, @team);
-				#endif
-				#if GMNET
-					__ONLINE_buffer_write_u8(@buffer, 8);
-					__ONLINE_buffer_write_u8(@buffer, @team);
-				#endif
-				__ONLINE_socket_write_message(@socket, @buffer);
-				#if not GMNET
-					__ONLINE_socket_update_write(@socket);
-				#endif
-				#if GMNET
-					__ONLINE_socket_send(@socket);
-				#endif
-			}
-			if(@socket != -1){
-				__ONLINE_socket_destroy(@socket);
-				@socket = -1;
-			}
-			if(__ONLINE_udpsocket_exists(@udpsocket)){
-				__ONLINE_udpsocket_destroy(@udpsocket);
-			}
-			@udpsocket = -1;
-			@connected = false;
-			@udpReady = false;
-			@spectating = false;
-			@spectatingPrev = false;
-			@specPending = false;
-		}
 		if(@save_enabled || @saveForceLoad){
 		#if TEMPFILE
 			if(file_exists("tempOnline2")){
@@ -78,43 +53,19 @@ if(instance_exists(%arg0)){
 		#endif
 			if(@sSaved && room_exists(@sRoom)){
 				if(room == @sRoom){
-					var @p, @gravSwapped;
+					var @p, @pyoffset;
 					// Real player only - never a PLAYER_LIST alt/display object (C1).
 					@p = %arg1;
-					@gravSwapped = 0;
+					@pyoffset = 0;
 					#if PLAYER2
+						// TheBiob parity: NO object swap - the flipped state is driven by
+						// global.grav alone (the engine flips sprite + physics from it).
+						// The 4px offset keeps the flipped sprite from clipping.
 						if(@sGravity == 1){
-							if(instance_exists(%arg1)){
-								var @loadDepth;
-								@loadDepth = instance_find(%arg1, 0).depth;
-								#if GMS2
-									instance_create_depth(0, 0, @loadDepth, %arg2);
-								#endif
-								#if not GMS2
-									instance_create(0, 0, %arg2);
-								#endif
-								with(%arg1){
-									instance_destroy();
-								}
-								@gravSwapped = 1;
-							}
+							@pyoffset = 4;
+						}
+						if(!instance_exists(@p)){
 							@p = %arg2;
-						}else{
-							if(instance_exists(%arg2) && !instance_exists(%arg1)){
-								var @loadDepth;
-								@loadDepth = instance_find(%arg2, 0).depth;
-								#if GMS2
-									instance_create_depth(0, 0, @loadDepth, %arg1);
-								#endif
-								#if not GMS2
-									instance_create(0, 0, %arg1);
-								#endif
-								with(%arg2){
-									instance_destroy();
-								}
-								@gravSwapped = -1;
-							}
-							@p = %arg1;
 						}
 					#endif
 					@p = instance_find(@p, 0);
@@ -137,49 +88,25 @@ if(instance_exists(%arg0)){
 							global.grav = @sGravity;
 						#endif
 						@p.x = @sX;
-						@p.y = @sY;
+						@p.y = @sY + @pyoffset;
 					}
 					@sSaved = false;
 					@saveForceLoad = false;
 					room_goto(@sRoom);
 				}else{
-					var @p, @gravSwapped;
+					var @p, @pyoffset;
 					// Real player only - never a PLAYER_LIST alt/display object (C1).
 					@p = %arg1;
-					@gravSwapped = 0;
+					@pyoffset = 0;
 					#if PLAYER2
+						// TheBiob parity: NO object swap - the flipped state is driven by
+						// global.grav alone (the engine flips sprite + physics from it).
+						// The 4px offset keeps the flipped sprite from clipping.
 						if(@sGravity == 1){
-							if(instance_exists(%arg1)){
-								var @loadDepth;
-								@loadDepth = instance_find(%arg1, 0).depth;
-								#if GMS2
-									instance_create_depth(0, 0, @loadDepth, %arg2);
-								#endif
-								#if not GMS2
-									instance_create(0, 0, %arg2);
-								#endif
-								with(%arg1){
-									instance_destroy();
-								}
-								@gravSwapped = 1;
-							}
+							@pyoffset = 4;
+						}
+						if(!instance_exists(@p)){
 							@p = %arg2;
-						}else{
-							if(instance_exists(%arg2) && !instance_exists(%arg1)){
-								var @loadDepth;
-								@loadDepth = instance_find(%arg2, 0).depth;
-								#if GMS2
-									instance_create_depth(0, 0, @loadDepth, %arg1);
-								#endif
-								#if not GMS2
-									instance_create(0, 0, %arg1);
-								#endif
-								with(%arg2){
-									instance_destroy();
-								}
-								@gravSwapped = -1;
-							}
-							@p = %arg1;
 						}
 					#endif
 					if(instance_exists(@p)){
@@ -202,7 +129,7 @@ if(instance_exists(%arg0)){
 							global.grav = @sGravity;
 						#endif
 						@p.x = @sX;
-						@p.y = @sY;
+						@p.y = @sY + @pyoffset;
 					}
 					@sSaved = false;
 					@saveForceLoad = false;

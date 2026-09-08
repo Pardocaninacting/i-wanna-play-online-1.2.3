@@ -1022,10 +1022,10 @@ if(@showArrows || @spectating){
 	}
 	draw_set_halign(fa_left);
 	draw_set_valign(fa_top);
-	#if GM80
-	fw_draw_set_halign(fa_left);
-	fw_draw_set_valign(fa_top);
-	#endif
+	// GM80: no fw_draw_set_* restore here - the fw align stubs pass through
+	// to GM's draw state, and the other note draw sites deliberately leave
+	// center/middle set (see @note_draw_text). Restoring left/top here
+	// misaligns every glyph drawn later this frame.
 	#if CJKTEXT
 	global.__ONLINE_cjkHalign = 0;
 	global.__ONLINE_cjkValign = 0;

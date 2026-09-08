@@ -1227,8 +1227,10 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// Use a specific script name to detect Nikaple's Engine
 	if(scripts.some(script => script && script.name.equals(ascii("audio_togglesoundmuted"))))
 		GMLCode.addVariables("NIKAPLE");
-	// NOTE: NIKAPLE is upstream heritage; no GML consumes it, but README.md documents
-	// it in a usage example. Kept as an observation item (zero cost).
+	// NOTE: NIKAPLE is upstream heritage; no #if consumes it, but the converter
+	// itself reads it when choosing the loadGame injection target (Nikaple
+	// engines take the saveExe branch), and README.md documents it in a usage
+	// example.
 	// Use external_define/external_call for the NativeAOT x86 DLL.
 	// This DLL performs ANSI↔UTF-8 conversion needed for Chinese text support.
 	// GM82NET/GM82BUF games use aliased (gm82-style) wrapper names; others use
@@ -1983,13 +1985,24 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	saveGame.source = insertGMLScriptBeforeSuccessfulReturn(saveGame.source, await GMLCode.getGML("saveGame", world.name, player.name, player2 ? player2.name : Buffer.from(""), Buffer.from(saveGuard, 'ascii')));
 	// v2 (§11): runtime sync is fully driven by `__ONLINE_config.ini [sync]`; no GML codegen here.
 	loadGame.source = insertGMLScript(loadGame.source, await GMLCode.getGML("saveGame2", world.name, player.name, player2 ? player2.name : Buffer.from("")));
+	// Spectate-disconnect preamble: appended to loadGame for every engine family.
+	loadGame.source = insertGMLScript(loadGame.source, await GMLCode.getGML("loadGamePre", world.name, player.name, player2 ? player2.name : Buffer.from("")));
 	const loadGameContent: Buffer = await GMLCode.getGML("loadGame", world.name, player.name, player2 ? player2.name : Buffer.from(""));
-	loadGame.source = insertGMLScript(loadGame.source, loadGameContent);
-	if(saveExe !== undefined || tempExe !== undefined){
-		if(tempExe !== undefined)
-			tempExe.source = insertGMLScript(tempExe.source, loadGameContent);
-		else
-			saveExe.source = insertGMLScript(saveExe.source, loadGameContent);
+	// TheBiob parity: engines with the game_restart+tempfile save flow apply the
+	// online save AFTER the restart (tempExe > saveExe), never inside loadGame.
+	// A pre-restart application is wiped by the restart and, worse, moves the
+	// spare player the game's own loadGame creates when only player2 exists,
+	// leaving the real player2 behind as a leftover object once global.grav
+	// flips it (fish / Seven Colors / yuuutu dual-gravity bug).
+	if (GMLCode.is("NIKAPLE") && saveExe !== undefined) {
+		saveExe.source = insertGMLScript(saveExe.source, loadGameContent);
+	} else if ((saveExe === undefined && tempExe === undefined)
+			|| loadGame.source.indexOf(Buffer.from('execute_file')) >= 0) { // If execute_file is used, assume that saveExe and tempExe are unused
+		loadGame.source = insertGMLScript(loadGame.source, loadGameContent);
+	} else if (tempExe !== undefined) {
+		tempExe.source = insertGMLScript(tempExe.source, loadGameContent);
+	} else {
+		saveExe.source = insertGMLScript(saveExe.source, loadGameContent);
 	}
 	// Encoding-safe string truncation helper for Chinese text.
 	// GM8 string_copy operates on bytes; this iterates forward tracking multi-byte boundaries.

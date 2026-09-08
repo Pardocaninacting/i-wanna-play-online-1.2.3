@@ -17,26 +17,9 @@ if(!instance_exists(@userInterface)){
 if(@saveHistPending){
 	@_rp = %arg0;
 	#if PLAYER2
-		@_gravSwapped = 0;
-		#if not STUDIO
-			if(@saveHistPendingGrav == 1){
-				if(instance_exists(%arg0)){
-					instance_create(0, 0, %arg1);
-					with(%arg0){ instance_destroy(); }
-					@_gravSwapped = 1;
-				}
-				@_rp = %arg1;
-			}else{
-				if(instance_exists(%arg1) && !instance_exists(%arg0)){
-					instance_create(0, 0, %arg0);
-					with(%arg1){ instance_destroy(); }
-					@_gravSwapped = -1;
-				}
-			}
-		#endif
-		#if STUDIO
-			if(!instance_exists(@_rp)) @_rp = %arg1;
-		#endif
+		// TheBiob parity: NO object swap - the flipped state is driven by
+		// global.grav alone (the engine flips sprite + physics from it).
+		if(!instance_exists(@_rp)) @_rp = %arg1;
 	#endif
 	if(instance_exists(@_rp) && room == @saveHistPendingRoom){
 		#if STUDIO
@@ -58,6 +41,9 @@ if(@saveHistPending){
 		#endif
 		@_rp.x = @saveHistPendingX;
 		@_rp.y = @saveHistPendingY;
+		#if PLAYER2
+			if(@saveHistPendingGrav == 1) @_rp.y += 4;
+		#endif
 		@saveHistPending = false;
 	}
 }
@@ -66,39 +52,17 @@ if(@specPending){
 	if(room == @specRoom){
 		@p = %arg0;
 		#if PLAYER2
-			if(@specGrav == 1){
-				if(instance_exists(%arg0)){
-					@specDepth = instance_find(%arg0, 0).depth;
-					#if GMS2
-						instance_create_depth(0, 0, @specDepth, %arg1);
-					#endif
-					#if not GMS2
-						instance_create(0, 0, %arg1);
-					#endif
-					with(%arg0){
-						instance_destroy();
-					}
-				}
-				@p = %arg1;
-			}else{
-				if(instance_exists(%arg1) && !instance_exists(%arg0)){
-					@specDepth = instance_find(%arg1, 0).depth;
-					#if GMS2
-						instance_create_depth(0, 0, @specDepth, %arg0);
-					#endif
-					#if not GMS2
-						instance_create(0, 0, %arg0);
-					#endif
-					with(%arg1){
-						instance_destroy();
-					}
-				}
-			}
+			// TheBiob parity: NO object swap - the flipped state is driven by
+			// global.grav alone.
+			if(!instance_exists(@p)) @p = %arg1;
 		#endif
 		if(instance_exists(@p)){
 			@p = instance_find(@p, 0);
 			@p.x = @specX;
 			@p.y = @specY;
+			#if PLAYER2
+				if(@specGrav == 1) @p.y += 4;
+			#endif
 		}else{
 			#if GMS2
 				@p = instance_create_depth(@specX, @specY, 0, @specObj);
