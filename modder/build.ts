@@ -38,6 +38,24 @@ const build = async function(): Promise<string> {
 		}
 		console.log("GML ASCII check passed");
 	}
+	// IW69 lesson: a string literal ending in an odd-length backslash run
+	// (e.g. "...\") escapes its own closing quote under the GMS2.3 lexer,
+	// which then swallows every following line into the string and fails the
+	// whole conversion with "Direct newline found in string". GM8 tolerates
+	// it, so without this guard it only ever blows up on the GMS path.
+	{
+		const gmlDir: string = path.join(__dirname, "gml");
+		const badEscape: RegExp = /(?:^|[^\\])(?:\\\\)*\\"/;
+		for(const f of fs.readdirSync(gmlDir)){
+			if(!f.endsWith(".gml")) continue;
+			const lines: Array<string> = fs.readFileSync(path.join(gmlDir, f), "latin1").split(/\r\n|\r|\n/);
+			for(let li: number = 0; li < lines.length; ++li){
+				if(badEscape.test(lines[li]))
+					throw new Error(`gml/${f}:${li + 1} has a string literal ending in a backslash (breaks the GMS2 compiler; use chr(92) concatenation instead)`);
+			}
+		}
+		console.log("GML string-escape check passed");
+	}
 	await Utils.rimraf(buildDir);
 	console.log("Bundling JavaScript...");
 	await fs.mkdir(buildDir);

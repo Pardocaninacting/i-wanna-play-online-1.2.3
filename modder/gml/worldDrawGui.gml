@@ -1289,7 +1289,7 @@ if(@settingsOpen){
         if(@skinVisCount == 0){
             draw_set_color(c_gray);
             draw_set_halign(fa_center);
-            draw_text(@spX + @spW/2, @contentY + 120, "No skins found in iwposkins\");
+            draw_text(@spX + @spW/2, @contentY + 120, "No skins found in iwposkins" + chr(92));
             draw_set_halign(fa_left);
         }
         // Row after the list: Auto-download toggle (keyboard row @skinVisCount).
