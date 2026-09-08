@@ -1951,6 +1951,46 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			console.log(`[bullets] ${bulletGameObj.name.toString('ascii')}: local bullet re-skin Draw injected`);
 		}
 	}
+	// Deactivation whitelist (Seven Colors): engines that cull off-screen
+	// instances via instance_deactivate_* would also deactivate the online
+	// objects - the independent __ONLINE_world is in no game-side whitelist -
+	// which kills networking outright. Append explicit re-activation of our
+	// objects to any game code block that calls an instance_deactivate_*
+	// function, so our objects ride the same per-frame whitelist the game's
+	// own world object enjoys. instance_activate_object on an object with no
+	// live instances is a no-op, so firing this early is safe; code blocks
+	// that bail out via exit/return before the end would skip it, which no
+	// known deactivator does (objDeactive-style sweeps run straight-line).
+	{
+		const keepAliveNames: Array<string> = [
+			world.name.toString('ascii'),
+			onlinePlayer.name.toString('ascii'),
+			chatbox.name.toString('ascii'),
+			playerSaved.name.toString('ascii'),
+			ui.name.toString('ascii'),
+			bulletProxy.name.toString('ascii'),
+		];
+		let keepAliveCode: string = "\r\n/// ONLINE\r\n// Keep the online objects active across this deactivation sweep.\r\n";
+		for(const kaName of keepAliveNames)
+			keepAliveCode += "instance_activate_object(" + kaName + ");\r\n";
+		let deactivatorPatched: number = 0;
+		for(const actObj of objects){
+			if(!actObj || !actObj.events) continue;
+			for(const actEvList of actObj.events){
+				if(!actEvList) continue;
+				for(const [, actActions] of actEvList){
+					for(const actAction of actActions){
+						if(!actAction || !actAction.paramStrings || !actAction.paramStrings[0]) continue;
+						if(actAction.paramStrings[0].indexOf(Buffer.from("instance_deactivate_", 'ascii')) < 0) continue;
+						actAction.paramStrings[0] = Buffer.concat([actAction.paramStrings[0], Buffer.from(keepAliveCode, 'ascii')]);
+						deactivatorPatched++;
+					}
+				}
+			}
+		}
+		if(deactivatorPatched > 0)
+			console.log(`[compat] patched ${deactivatorPatched} deactivation code block(s) to keep online objects active`);
+	}
 	replaceChunk(exe, objectsOffsets, putAssets(exe, objects));
 	objects = null;
 	const saveGame: Script = await findAssetInteractive(scripts, ["save_save", "savegame", "saveGame", "SaveGame", "savedata_save", "scrSaveGame", "SaveFile", "ScsaveGame", "SCR_savegame", "saveSaveData"], "script saveGame", true, "iwpo.saveGame") as Script;

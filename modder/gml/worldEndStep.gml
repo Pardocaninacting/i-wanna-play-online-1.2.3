@@ -42,7 +42,16 @@ if(@saveHistPending){
 		@_rp.x = @saveHistPendingX;
 		@_rp.y = @saveHistPendingY;
 		#if PLAYER2
-			if(@saveHistPendingGrav == 1) @_rp.y += 4;
+			// Watcher compensation: fish/SevenColors-class engines self-convert the
+			// player object on a global.grav change (player->player2 lands at y-3,
+			// player2->player at y+4). Compensate only when a conversion will really
+			// fire - an unconditional +4 also landed on no-conversion loads (fast
+			// load arrived 4px low whenever the gravity state actually changed).
+			if(@saveHistPendingGrav == 1){
+				if(instance_exists(%arg0)) @_rp.y += 4;
+			}else{
+				if(!instance_exists(%arg0)) @_rp.y -= 4;
+			}
 		#endif
 		@saveHistPending = false;
 	}
@@ -61,7 +70,13 @@ if(@specPending){
 			@p.x = @specX;
 			@p.y = @specY;
 			#if PLAYER2
-				if(@specGrav == 1) @p.y += 4;
+				// Same watcher compensation as the fast-load rollback above:
+				// only when the gravity change will really convert the object.
+				if(@specGrav == 1){
+					if(instance_exists(%arg0)) @p.y += 4;
+				}else{
+					if(!instance_exists(%arg0)) @p.y -= 4;
+				}
 			#endif
 		}else{
 			#if GMS2
