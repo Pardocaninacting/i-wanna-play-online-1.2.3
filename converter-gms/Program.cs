@@ -325,13 +325,17 @@ static class Program
         if (activeFlags.Contains("PLAYER_LIST"))
         {
             var gapBody =
-                "var __gap_i, __gap_obj;\r\n" +
-                $"for (__gap_i = 0; __gap_i < ds_list_size({world.Name.Content}.__ONLINE_obj_list); __gap_i += 1) {{\r\n" +
-                $"__gap_obj = ds_list_find_value({world.Name.Content}.__ONLINE_obj_list, __gap_i);\r\n" +
+                "var __gap_i, __gap_obj, __gap_w;\r\n" +
+                // GMS2.3: go through the instance explicitly - reading the list
+                // through an object asset ref (`objWorld.__ONLINE_obj_list`)
+                // does not resolve the way GM8's object-name access does.
+                $"__gap_w = instance_find({world.Name.Content}, 0);\r\n" +
+                $"for (__gap_i = 0; __gap_i < ds_list_size(__gap_w.__ONLINE_obj_list); __gap_i += 1) {{\r\n" +
+                $"__gap_obj = ds_list_find_value(__gap_w.__ONLINE_obj_list, __gap_i);\r\n" +
                 "if (instance_exists(__gap_obj)) return __gap_obj;\r\n" +
                 "}\r\n" +
                 "return noone;";
-            var gapCode = UndertaleCode.CreateEmptyEntry(Data, "gml_Script___ONLINE_get_active_player");
+            var gapCode = UndertaleCode.CreateEmptyEntry(Data, ScriptCodeEntryName("__ONLINE_get_active_player"));
             Data.Scripts.Add(new UndertaleScript()
             {
                 Name = Data.Strings.MakeString("__ONLINE_get_active_player"),
@@ -587,6 +591,13 @@ static class Program
             return name.Substring(ScriptPrefix.Length);
         return name;
     }
+
+    // GMS2.3 registers callable global functions ONLY from code entries named
+    // gml_GlobalScript_<name>; gml_Script_* (the GMS1/2.2 convention) compiles
+    // fine but the function never enters the global table - calling it returns
+    // 0 without running the body (IW69: ghosts/chat/notes all silently dead).
+    static string ScriptCodeEntryName(string name) =>
+        (Data.IsVersionAtLeast(2, 3) ? "gml_GlobalScript_" : "gml_Script_") + name;
 
     // --- Object / Extension / Sound creation ---
 
@@ -1596,7 +1607,7 @@ static class Program
                 // AutoCreateAssets is off, so the script asset and its code entry are
                 // created explicitly here (mirroring CodeImportGroup's own scheme:
                 // code entry "gml_Script_<name>" plus script asset "<name>").
-                var code = UndertaleCode.CreateEmptyEntry(Data, "gml_Script_" + name);
+                var code = UndertaleCode.CreateEmptyEntry(Data, ScriptCodeEntryName(name));
                 Data.Scripts.Add(new UndertaleScript()
                 {
                     Name = Data.Strings.MakeString(name),
