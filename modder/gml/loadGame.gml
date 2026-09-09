@@ -72,16 +72,8 @@ if(instance_exists(%arg0)){
 					if(instance_exists(@p)){
 						#if STUDIO
 							#if GRAVITY
-							if(global.grav != @sGravity){
-								#if SCR_FLIP_GRAV
-									scrFlipGrav();
-								#endif
-								#if not SCR_FLIP_GRAV
-									with(@p){
-										event_user(0);
-									}
-								#endif
-							}
+							@flip_grav(@sGravity);
+
 							#endif
 						#endif
 						#if not STUDIO
@@ -113,16 +105,8 @@ if(instance_exists(%arg0)){
 						@p = instance_find(@p, 0);
 						#if STUDIO
 							#if GRAVITY
-							if(global.grav != @sGravity){
-								#if SCR_FLIP_GRAV
-									scrFlipGrav();
-								#endif
-								#if not SCR_FLIP_GRAV
-									with(@p){
-										event_user(0);
-									}
-								#endif
-							}
+							@flip_grav(@sGravity);
+
 							#endif
 						#endif
 						#if not STUDIO

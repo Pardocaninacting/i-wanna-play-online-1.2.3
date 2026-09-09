@@ -183,6 +183,34 @@ static class Program
         if (Data.Scripts.ByName("scrFlipGrav") != null)
             activeFlags.Add("SCR_FLIP_GRAV");
 
+        // Gravity-flip support: figure out HOW this game flips gravity and which
+        // sign convention global.grav uses. scrFlipGrav/event_user(0) toggle;
+        // player_flip(target) is the +/-1 family (e.g. "I wanna call it good
+        // enough") that plain event_user(0) silently never flips. The generated
+        // __ONLINE_flip_grav(target) wrapper gives the shared templates one call
+        // site; GRAVSIGN switches the wire byte to the +/-1 encoding so it
+        // round-trips (a raw uint8 write clamps -1 to 0 and breaks the compare).
+        var flipScript = FindScript("scrFlipGrav", "scr_flip_grav");
+        var flipViaPlayerFlip = false;
+        if (flipScript == null)
+        {
+            flipScript = FindScript("player_flip", "playerFlip", "player_flip_grav", "scrPlayerFlip");
+            flipViaPlayerFlip = flipScript != null;
+        }
+        var gravSigned = false;
+        if (activeFlags.Contains("GRAVITY"))
+        {
+            var gsd = GetDefine("iwpo.grav_signed");
+            if (gsd != null)
+                gravSigned = gsd == "true" || gsd == "1";
+            else
+                gravSigned = ScanForSignedGravity();
+            if (gravSigned)
+                activeFlags.Add("GRAVSIGN");
+        }
+        if (activeFlags.Contains("GRAVITY"))
+            Console.WriteLine($"Gravity flip: {(flipScript != null ? flipScript.Name?.Content : "event_user(0) fallback")}{(gravSigned ? " (signed +/-1)" : "")}");
+
         // The skin system (script assets + player draw injection + sprite mapping)
         // can be turned off entirely via the iwpo.no_skins define.
         var skinsEnabled = !GetDefineFlag("iwpo.no_skins");
@@ -345,6 +373,36 @@ static class Program
             if (Data.IsVersionAtLeast(2, 3))
                 gapBody = $"function __ONLINE_get_active_player() {{\r\n{gapBody}\r\n}}";
             importGroup.QueueReplace(gapCode, gapBody);
+        }
+
+        // Uniform gravity-flip wrapper: one script the shared templates call
+        // (__ONLINE_flip_grav(target)), generated per-game with the right flip
+        // call baked in. Self-guards on global.grav == target so call sites stay
+        // unconditional. Only when the game has global.grav (GRAVITY flag).
+        if (activeFlags.Contains("GRAVITY"))
+        {
+            string flipCore;
+            if (flipViaPlayerFlip)
+                flipCore = $"{flipScript.Name.Content}(__ONLINE_tg);";
+            else if (flipScript != null)
+                flipCore = $"{flipScript.Name.Content}();";
+            else
+                flipCore = $"with({player.Name.Content}) {{ event_user(0); }}";
+            var flipSrcBody =
+                "if (global.grav == __ONLINE_tg) return 0;\r\n" +
+                flipCore + "\r\n" +
+                "return 0;";
+            var flipCode = UndertaleCode.CreateEmptyEntry(Data, ScriptCodeEntryName("__ONLINE_flip_grav"));
+            Data.Scripts.Add(new UndertaleScript()
+            {
+                Name = Data.Strings.MakeString("__ONLINE_flip_grav"),
+                Code = flipCode,
+            });
+            if (Data.IsVersionAtLeast(2, 3))
+                flipSrcBody = $"function __ONLINE_flip_grav(__ONLINE_tg) {{\r\n{flipSrcBody}\r\n}}";
+            else
+                flipSrcBody = $"var __ONLINE_tg = argument0;\r\n{flipSrcBody}";
+            importGroup.QueueReplace(flipCode, flipSrcBody);
         }
 
         var worldCreateCode = RenderTemplate(activeFlags, "worldCreateGMS", Config.GameId, Config.Server,
@@ -1246,6 +1304,23 @@ static class Program
     {
         try { _ = DecompileCode(code); return true; }
         catch { return false; }
+    }
+
+    // The +/-1 gravity convention (player_flip family) shows up as a negation of
+    // global.grav somewhere in the game's scripts; 0/1-convention games never
+    // negate it. Scripts only - flip scripts are scripts; a game that flips in an
+    // object event can force it via iwpo.grav_signed.
+    static bool ScanForSignedGravity()
+    {
+        var negation = new Regex(@"-\s*global\.grav\b", RegexOptions.Compiled);
+        foreach (var script in Data.Scripts)
+        {
+            if (script?.Code == null) continue;
+            string src;
+            try { src = DecompileCode(script.Code); } catch { continue; }
+            if (src != null && negation.IsMatch(src)) return true;
+        }
+        return false;
     }
 
     static string AppendCodeToFunctionBody(string rootCode, string functionName, string appendCode)

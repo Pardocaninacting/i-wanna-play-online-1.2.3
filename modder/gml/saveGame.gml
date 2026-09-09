@@ -44,7 +44,14 @@ if(instance_exists(%arg0)){
 							__ONLINE_buffer_write_uint8(@buffer, 5);
 							#if STUDIO
 								#if GRAVITY
-									__ONLINE_buffer_write_uint8(@buffer, global.grav);
+									#if GRAVSIGN
+										// +/-1 convention: (grav+1)/2 maps to 0/1 so the
+										// wire byte round-trips (raw uint8 would clamp -1 to 0).
+										__ONLINE_buffer_write_uint8(@buffer, (global.grav+1)/2);
+									#endif
+									#if not GRAVSIGN
+										__ONLINE_buffer_write_uint8(@buffer, global.grav);
+									#endif
 								#endif
 								#if not GRAVITY
 									__ONLINE_buffer_write_uint8(@buffer, 1);

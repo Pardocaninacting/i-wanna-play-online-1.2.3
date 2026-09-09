@@ -24,16 +24,8 @@ if(@saveHistPending){
 	if(instance_exists(@_rp) && room == @saveHistPendingRoom){
 		#if STUDIO
 			#if GRAVITY
-			if(global.grav != @saveHistPendingGrav){
-				#if SCR_FLIP_GRAV
-					scrFlipGrav();
-				#endif
-				#if not SCR_FLIP_GRAV
-					with(@_rp){
-						event_user(0);
-					}
-				#endif
-			}
+			@flip_grav(@saveHistPendingGrav);
+
 			#endif
 		#endif
 		#if not STUDIO
@@ -88,16 +80,8 @@ if(@specPending){
 		}
 		#if STUDIO
 			#if GRAVITY
-			if(global.grav != @specGrav){
-				#if SCR_FLIP_GRAV
-					scrFlipGrav();
-				#endif
-				#if not SCR_FLIP_GRAV
-					with(@p){
-						event_user(0);
-					}
-				#endif
-			}
+			@flip_grav(@specGrav);
+
 			#endif
 		#endif
 		#if not STUDIO
@@ -255,7 +239,13 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			// SOMEONE SAVED
 			if(!@race){
 				#if not GMNET
-					@sGravity = __ONLINE_buffer_read_uint8(@buffer);
+					#if GRAVSIGN
+						// +/-1 convention: wire byte is (grav+1)/2, decode back.
+						@sGravity = __ONLINE_buffer_read_uint8(@buffer)*2-1;
+					#endif
+					#if not GRAVSIGN
+						@sGravity = __ONLINE_buffer_read_uint8(@buffer);
+					#endif
 					@sName = __ONLINE_buffer_read_string(@buffer);
 					@sX = __ONLINE_buffer_read_int32(@buffer);
 					@sY = __ONLINE_buffer_read_float64(@buffer);
@@ -2142,16 +2132,8 @@ if(@specProgress >= 1){
 			}
 			#if STUDIO
 				#if GRAVITY
-				if(global.grav != @specGrav){
-					#if SCR_FLIP_GRAV
-						scrFlipGrav();
-					#endif
-					#if not SCR_FLIP_GRAV
-						with(@p){
-							event_user(0);
-						}
-					#endif
-				}
+				@flip_grav(@specGrav);
+
 				#endif
 			#endif
 			#if not STUDIO
@@ -2352,16 +2334,8 @@ if(@spectating){
 			}
 			#if STUDIO
 				#if GRAVITY
-				if(global.grav != @specGrav){
-					#if SCR_FLIP_GRAV
-						scrFlipGrav();
-					#endif
-					#if not SCR_FLIP_GRAV
-						with(@p){
-							event_user(0);
-						}
-					#endif
-				}
+				@flip_grav(@specGrav);
+
 				#endif
 			#endif
 			#if not STUDIO

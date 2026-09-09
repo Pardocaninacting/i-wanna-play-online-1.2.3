@@ -669,7 +669,12 @@ if file_exists(@savesPath) {
 				}else{
 					@saveHistHotkey[@shI] = 0;
 				}
-				@saveHistGrav[@shI] = __ONLINE_buffer_read_uint8(@buffer);
+				#if GRAVSIGN
+					@saveHistGrav[@shI] = __ONLINE_buffer_read_uint8(@buffer)*2-1;
+				#endif
+				#if not GRAVSIGN
+					@saveHistGrav[@shI] = __ONLINE_buffer_read_uint8(@buffer);
+				#endif
 				@saveHistX[@shI] = __ONLINE_buffer_read_int32(@buffer);
 				@saveHistY[@shI] = __ONLINE_buffer_read_float64(@buffer);
 				@saveHistRoom[@shI] = __ONLINE_buffer_read_int16(@buffer);
@@ -709,7 +714,12 @@ if file_exists(@savesPath) {
 			@saveHistFav[@shI] = 0;
 			@saveHistHotkey[@shI] = 0;
 			#if not GMNET
-				@saveHistGrav[@shI] = __ONLINE_buffer_read_uint8(@buffer);
+				#if GRAVSIGN
+					@saveHistGrav[@shI] = __ONLINE_buffer_read_uint8(@buffer)*2-1;
+				#endif
+				#if not GRAVSIGN
+					@saveHistGrav[@shI] = __ONLINE_buffer_read_uint8(@buffer);
+				#endif
 				@saveHistX[@shI] = __ONLINE_buffer_read_int32(@buffer);
 				@saveHistY[@shI] = __ONLINE_buffer_read_float64(@buffer);
 				@saveHistRoom[@shI] = __ONLINE_buffer_read_int16(@buffer);
