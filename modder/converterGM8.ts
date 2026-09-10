@@ -1079,8 +1079,15 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// Instead of piggybacking on the game's world object we inject our own invisible
 	// persistent object and place it as the first instance of the first room.
 	// iwpo.insert_custom_world=false/0 restores the legacy behaviour.
+	// inject_into_step implies the legacy object: that flag exists for community-GM8.2-
+	// runtime games (yuuutu-era sources, e.g. IWKTS2) where Step/EndStep events of
+	// INJECTED objects never dispatch - the custom world is itself such an object,
+	// so with C2 on its tick never runs and all online logic dies right after the
+	// (working) Create event. An explicit iwpo.insert_custom_world=true still wins.
 	const customWorldRaw: string = defines.has("iwpo.insert_custom_world") ? (defines.get("iwpo.insert_custom_world") as string).toLowerCase() : "";
-	const customWorld: boolean = customWorldRaw !== "false" && customWorldRaw !== "0";
+	const customWorld: boolean = customWorldRaw !== "" ? (customWorldRaw !== "false" && customWorldRaw !== "0") : !injectIntoStep;
+	if(!customWorld && customWorldRaw === "" && injectIntoStep)
+		console.log("[compat] inject_into_step=1: using the game's native world object (custom world cannot tick on this runtime class)");
 	let world: GMObject = gameWorld;
 	if(customWorld){
 		GMLCode.addVariables("CUSTOM_WORLD_OBJ");

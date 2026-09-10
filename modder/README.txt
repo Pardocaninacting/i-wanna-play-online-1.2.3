@@ -61,7 +61,7 @@ GM8.2 tick injection compatibility:
   [settings]
   inject_into_step=1
 
-  When enabled, IWPO runs the main world tick from Step and schedules helper ticks from that reliable world tick, while helper Draw events remain draw-only. Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
+  When enabled, IWPO runs the main world tick from Step and schedules helper ticks from that reliable world tick, while helper Draw events remain draw-only. On these runtimes the injected objects' own Step/EndStep events never dispatch, so this mode also falls back to the game's native world object instead of the injected __ONLINE_world (override with iwpo.insert_custom_world=true if ever needed). Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
 
 Files to keep with the converted game:
  - the converted exe or online folder

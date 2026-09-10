@@ -80,7 +80,7 @@ A small number of games built by compiling older yuuutu-engine source directly w
 inject_into_step=1
 ```
 
-When enabled, IWPO runs the main `world` tick from Step and schedules helper ticks from that reliable world tick, while helper Draw events remain draw-only. Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
+When enabled, IWPO runs the main `world` tick from Step and schedules helper ticks from that reliable world tick, while helper Draw events remain draw-only. On these runtimes the injected objects' own Step/EndStep events never dispatch, so this mode also falls back to the game's native world object instead of the injected `__ONLINE_world` (override with `iwpo.insert_custom_world=true` if ever needed). Use this only as a compatibility workaround for affected games. Ordinary GM8.2 games should keep the default End Step injection.
 
 ## Edit the GML files
 The GML files contain the code that will be injected into the game.
