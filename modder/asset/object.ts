@@ -101,11 +101,13 @@ export class GMObject extends Asset {
 	}
 	// GM8.2-native Draw GUI event (event group 11, the trigger group GM8.2
 	// repurposed): runs once per frame after all regular draws, in window pixel
-	// coordinates. GM8.0/8.1 runners keep group 11 as triggers and never
+	// coordinates. The subtype must match the index of the game's "Draw GUI"
+	// trigger asset - the runner dispatches Draw GUI at that subtype only
+	// (TV: 0, DLDC: 1). GM8.0/8.1 runners keep group 11 as triggers and never
 	// dispatch it as a draw event - attaching HUD code there silently never
 	// runs (E2 regression). Only use when isGM82 detection fired.
-	public addDrawGuiCode(GML: Buffer): void {
-		this.addCode(GML, 11, 0);
+	public addDrawGuiCode(GML: Buffer, subType: number = 0): void {
+		this.addCode(GML, 11, subType);
 	}
 	public addGameEndCode(GML: Buffer): void {
 		this.addCode(GML, 7, 3);

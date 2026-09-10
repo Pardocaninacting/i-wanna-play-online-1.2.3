@@ -921,6 +921,23 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		throw new Error("Triggers header");
 	let triggers: Array<Trigger> = getAssets(exe, Trigger.deserialize) as Array<Trigger>;
 	const triggerCount: number = triggers.length; // GM8.2 detection signal (see isGM82)
+	// GM8.2's native Draw GUI event is group 11 dispatched at the subtype equal
+	// to the index of the trigger NAMED "Draw GUI" (the runner keys on the name).
+	// It is NOT always 0: DLDC's renex trigger table has it at index 1, so our
+	// HUD attached at subtype 0 was bound to the always-on "Early Step" trigger
+	// and ran in the step phase - tick alive, but every draw went nowhere.
+	let drawGuiSubType: number = 0;
+	let drawGuiTriggerFound: boolean = false;
+	{
+		for(let ti: number = 0; ti < triggers.length; ++ti){
+			const tg: Trigger = triggers[ti];
+			if(tg && tg.name && tg.name.toString('ascii').toLowerCase() === "draw gui"){
+				drawGuiSubType = ti;
+				drawGuiTriggerFound = true;
+				break;
+			}
+		}
+	}
 	triggers = null;
 	if(exe.readUInt32LE() != 800)
 		throw new Error("Constants header");
@@ -1124,7 +1141,14 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		// E1 probe: group-8 text never rasterizes, group-11 does). GM8.0/8.1
 		// runners treat group 11 as triggers (never dispatched as a draw event),
 		// so they must keep the regular-Draw path.
-		console.log("[hud] GM8.2 detected; HUD uses the native Draw GUI event (group 11)");
+		console.log("[hud] GM8.2 detected; HUD uses the native Draw GUI event (group 11, subtype " + drawGuiSubType + ")");
+		if(triggerCount > 0 && !drawGuiTriggerFound){
+			// With a trigger table present but no trigger NAMED "Draw GUI",
+			// subtype 0 binds to trigger 0 and our draw code fires in the step
+			// phase (invisible). The named trigger should always exist in GM8.2
+			// games - warn loudly if it does not.
+			console.log("[hud] WARNING: game has triggers but none named 'Draw GUI'; HUD may not render");
+		}
 		GMLCode.addVariables("GM8GUI");
 	}
 	if (cjkBackend === 'gm') {
@@ -1860,7 +1884,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		playerSaved.addDrawGuiCode(concatBuffers([
 			Buffer.from("global.__ONLINE_guiAlive = true;\r\n", 'ascii'),
 			playerSavedDrawGml,
-		])); // screen-space: GM8.2 native Draw GUI (see below)
+		]), drawGuiSubType); // screen-space: GM8.2 native Draw GUI (see below)
 		playerSaved.addDrawCode(concatBuffers([
 			Buffer.from("if(!global.__ONLINE_guiAlive){\r\n", 'ascii'),
 			playerSavedDrawGml,
@@ -1907,7 +1931,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		ui.addDrawGuiCode(concatBuffers([
 			Buffer.from("global.__ONLINE_guiAlive = true;\r\n", 'ascii'),
 			wrapWithWorld(drawGuiGml),
-		]));
+		]), drawGuiSubType);
 		// group-8 self-heal fallback (see the guiAlive note at playerSaved)
 		ui.addDrawCode(concatBuffers([
 			Buffer.from("if(!global.__ONLINE_guiAlive){\r\n", 'ascii'),
