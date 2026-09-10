@@ -1418,10 +1418,17 @@ if(@settingsOpen){
 	// Convert the authoritative room-space mouse into the same view-port space
 	// the prelude established (@hudView < 0 means room space). window_mouse_get
 	// would include letterbox offsets under scaling/fullscreen and disagree
-	// with the HUD rectangles.
+	// with the HUD rectangles. The runner rotates the view about its center and
+	// its mouse_x/y are rotation-aware, so the forward transform must be too
+	// (nezumi probe: at angle==0 this reduces exactly to translate+scale).
 	if(@hudView >= 0){
-		@mx = (mouse_x - view_xview[@hudView]) * view_wport[@hudView] / view_wview[@hudView];
-		@my = (mouse_y - view_yview[@hudView]) * view_hport[@hudView] / view_hview[@hudView];
+		@mA = degtorad(view_angle[@hudView]);
+		@mDX = mouse_x - view_xview[@hudView] - view_wview[@hudView] / 2;
+		@mDY = mouse_y - view_yview[@hudView] - view_hview[@hudView] / 2;
+		@mCos = cos(@mA);
+		@mSin = sin(@mA);
+		@mx = view_wport[@hudView] / 2 + (@mDX * @mCos + @mDY * @mSin) * view_wport[@hudView] / view_wview[@hudView];
+		@my = view_hport[@hudView] / 2 + (@mDY * @mCos - @mDX * @mSin) * view_hport[@hudView] / view_hview[@hudView];
 	}else{
 		@mx = mouse_x;
 		@my = mouse_y;
