@@ -2017,8 +2017,16 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		}else if(gameConfig.version === GameVersion.GameMaker80 || saveGameContent.indexOf("///savedata_save(force)") >= 0){ // renex engine saves (WannaFest22)
 			savePositionVariable = "true";
 		}else{
-			// GM8-safe spelling of TheBiob's "(argument_count == 0 || argument[0] == true)".
-			savePositionVariable = "(argument_count == 0 || argument0)";
+			// GM8.2 double trap: a bare `argument0` read makes the script require
+			// >=1 args at call time (The Job Won't Save You: save_save() with 0
+			// args errored "requires at least 1 arguments"), and the array
+			// spelling `argument[0]` is no escape either because GM8's `||` does
+			// not short-circuit - the right side is still evaluated with 0 args
+			// and errors "Illegal array index". So under GM8.2 no guard that
+			// reads the argument is safe. Games reaching this default branch have
+			// real save scripts, so broadcast unconditionally there. GM8.0/8.1
+			// read a missing argument0 as 0 without erroring, keep the old guard.
+			savePositionVariable = isGM82 ? "true" : "(argument_count == 0 || argument0)";
 		}
 	}
 	const saveGuard: string = "if((" + roomGuard + ") && (" + savePositionVariable + ")){";
