@@ -330,6 +330,7 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			#if GMNET
 				@serverProtocol = __ONLINE_buffer_read_u8(@buffer);
 			#endif
+			global.__ONLINE_sp = @serverProtocol;
 			break;
 		case 7:
 			// CUSTOM DATA
@@ -931,7 +932,12 @@ switch(@socketState){
 				@listCounter = room_speed * 15;
 				@skinNetDirty = true;
 				@notePrevRoom = -1;
-				@serverProtocol = 0;
+				// @serverProtocol is deliberately NOT reset here: the new
+				// connection's SERVER_HELLO may already have been processed
+				// earlier this frame (the message pump runs before this
+				// block), so resetting would stick the gate at 0 until the
+				// next connect. The hello re-sets it on every new connection;
+				// a dead link is covered by @connected.
 				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
 					__ONLINE_buffer_write_uint8(@buffer, 3);
