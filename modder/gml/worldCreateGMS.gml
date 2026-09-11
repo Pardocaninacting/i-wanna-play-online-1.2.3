@@ -221,7 +221,6 @@ for(@i = 0; @i < @noteMax; @i += 1){
 }
 @noteStageN = 0;           // in-progress polyline/stroke staging (also used by receive)
 @noteStageText = "";
-@serverProtocol = 0;      // set by SERVER_HELLO; note sends gate on this, never on our own version
 @noteAtlasSpr = -1;
 @noteSeqSend = 0;         // sender-side note id counter (wire seq)
 @notePrevRoom = -1;         // room-change detector drives NOTE_SYNC pulls

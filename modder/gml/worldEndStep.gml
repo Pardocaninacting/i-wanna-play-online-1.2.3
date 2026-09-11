@@ -323,14 +323,15 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			}
 			break;
 		case 22:
-			// SERVER_HELLO: capability advertisement (note sends gate on this)
+			// SERVER_HELLO: server protocol advertisement. Read and discard -
+			// the production server is always current, so note sends are not
+			// gated on it (the gate proved fragile across game_restart).
 			#if not GMNET
-				@serverProtocol = __ONLINE_buffer_read_uint8(@buffer);
+				__ONLINE_buffer_read_uint8(@buffer);
 			#endif
 			#if GMNET
-				@serverProtocol = __ONLINE_buffer_read_u8(@buffer);
+				__ONLINE_buffer_read_u8(@buffer);
 			#endif
-			global.__ONLINE_sp = @serverProtocol;
 			break;
 		case 7:
 			// CUSTOM DATA
@@ -932,12 +933,6 @@ switch(@socketState){
 				@listCounter = room_speed * 15;
 				@skinNetDirty = true;
 				@notePrevRoom = -1;
-				// @serverProtocol is deliberately NOT reset here: the new
-				// connection's SERVER_HELLO may already have been processed
-				// earlier this frame (the message pump runs before this
-				// block), so resetting would stick the gate at 0 until the
-				// next connect. The hello re-sets it on every new connection;
-				// a dead link is covered by @connected.
 				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
 					__ONLINE_buffer_write_uint8(@buffer, 3);
@@ -1682,7 +1677,7 @@ if(@udpState == 1){
 // NOTES sync + delete + persist flush (N4)
 	// pull the room's cached notes on room change (and after reconnect, which
 	// resets @notePrevRoom to -1); throttled to one pull per 2s
-	if(@connected && @serverProtocol >= 5){
+	if(@connected){
 		if(room != @notePrevRoom){
 			if(current_time - @noteSyncLastMs > 2000){
 				@notePrevRoom = room;
@@ -1722,7 +1717,7 @@ if(@udpState == 1){
 			}
 		}
 		if(@ndBest >= 0){
-			if(@connected && @serverProtocol >= 5 && @noteWireArr[@ndBest] > 0){
+			if(@connected && @noteWireArr[@ndBest] > 0){
 				__ONLINE_buffer_clear(@buffer);
 				#if not GMNET
 					__ONLINE_buffer_write_uint8(@buffer, 20);

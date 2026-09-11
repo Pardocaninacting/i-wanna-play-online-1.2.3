@@ -142,7 +142,7 @@ return @naSlot;
 // script safe if it ever does).
 // args: 0 iconId, 1 x, 2 y
 @nfSeq = @note_next_seq();
-if(@socket != -1 && @connected && @serverProtocol >= 5){
+if(@socket != -1 && @connected){
     __ONLINE_buffer_clear(@buffer);
     #if not GMNET
         __ONLINE_buffer_write_uint8(@buffer, 20);
@@ -331,7 +331,7 @@ return 0;
 // args: none
 if(@noteStageN < 2) return 0;
 @nfSeq = @note_next_seq();
-if(@socket != -1 && @connected && @serverProtocol >= 5){
+if(@socket != -1 && @connected){
     __ONLINE_buffer_clear(@buffer);
     @npFlags = 1;
     if(@noteStageN > 2) @npFlags = 3;
@@ -375,7 +375,7 @@ return 0;
 // args: 0 x, 1 y, 2 text (already truncated/escaped by the caller)
 if(argument2 == "") return 0;
 @nfSeq = @note_next_seq();
-if(@socket != -1 && @connected && @serverProtocol >= 5){
+if(@socket != -1 && @connected){
     __ONLINE_buffer_clear(@buffer);
     #if not GMNET
         __ONLINE_buffer_write_uint8(@buffer, 20);
@@ -660,7 +660,7 @@ while(@nfOfs < @noteStageN){
     @nfFlags = 0;
     if(@noteStageBrk[@nfOfs]) @nfFlags = 64;
     if(@nfOfs + @nfN >= @noteStageN) @nfFlags += 128;
-    if(@socket != -1 && @connected && @serverProtocol >= 5){
+    if(@socket != -1 && @connected){
         __ONLINE_buffer_clear(@buffer);
         #if not GMNET
             __ONLINE_buffer_write_uint8(@buffer, 20);

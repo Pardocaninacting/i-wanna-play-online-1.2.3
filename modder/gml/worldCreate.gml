@@ -266,14 +266,6 @@ for(@i = 0; @i < @noteMax; @i += 1){
 }
 @noteStageN = 0;           // in-progress polyline/stroke staging (also used by receive)
 @noteStageText = "";
-@serverProtocol = 0;      // set by SERVER_HELLO; note sends gate on this, never on our own version
-// TEMPFILE/game_restart engines (yuuutu): game_restart recreates this object,
-// resetting @serverProtocol to 0 while the socket sails on with no new hello -
-// the note gate would stay closed for the rest of the session (nezumi: markers
-// work at the title screen, die once the level loads). Globals survive
-// game_restart, so the hello value rides a global shadow across it.
-if(!variable_global_exists("__ONLINE_sp")) global.__ONLINE_sp = 0;
-@serverProtocol = global.__ONLINE_sp;
 @noteAtlasSpr = -1;
 @noteSeqSend = 0;         // sender-side note id counter (wire seq)
 @notePrevRoom = -1;         // room-change detector drives NOTE_SYNC pulls
