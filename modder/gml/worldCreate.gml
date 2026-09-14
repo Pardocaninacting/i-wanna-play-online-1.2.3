@@ -37,12 +37,15 @@ else{
 @selfID = "";
 @name = "";
 @selfGameID = "%arg0";
+// QoL: the base game id is kept separate from the session key; @account_apply
+// rebuilds @selfGameID as base + key on every (re)login, so name/key edits in
+// the settings menu never accumulate keys.
+@accBaseGameID = @selfGameID;
 @server = "%arg1";
 @tcpPort = %arg2;
 @udpPort = %arg3;
 @version = "%arg5";
 @protocolVersion = 5;
-@race = false;
 @password = "";
 @vis = 0;
 @save_enabled = 1;
@@ -755,7 +758,6 @@ if file_exists(@savesPath) {
 			if(string_length(@selfGameID) > string_length("%arg0")){
 				@password = string_copy(@selfGameID, string_length("%arg0") + 1, string_length(@selfGameID) - string_length("%arg0"));
 			}
-			@race = __ONLINE_buffer_read_uint8(@buffer);
 			@n = __ONLINE_buffer_read_uint16(@buffer);
 			@vis = __ONLINE_buffer_read_uint16(@buffer);
 			@save_enabled = __ONLINE_buffer_read_uint16(@buffer);
@@ -773,7 +775,6 @@ if file_exists(@savesPath) {
 			if(string_length(@selfGameID) > string_length("%arg0")){
 				@password = string_copy(@selfGameID, string_length("%arg0") + 1, string_length(@selfGameID) - string_length("%arg0"));
 			}
-			@race = __ONLINE_buffer_read_u8(@buffer);
 			@n = __ONLINE_buffer_read_u16(@buffer);
 			@vis = __ONLINE_buffer_read_u16(@buffer);
 			@save_enabled = __ONLINE_buffer_read_u16(@buffer);
@@ -882,49 +883,45 @@ if file_exists(@savesPath) {
 #endif
 	@socket = __ONLINE_socket_create();
 		@socketConnectResult = __ONLINE_socket_connect(@socket, @server, @tcpPort);
-	#if STUDIO
-		@name = get_string("Enter your name:", "");
-	#endif
-	#if not STUDIO
-		#if CJKTEXT
-		@name = __ONLINE_ansi_to_utf8(wd_input_box("Name", "Enter your name:", ""));
+	// QoL: credentials come from the account store - env (P1) -> this folder (P2)
+	// -> global %APPDATA%\iwpo\account.ini (P3). The dialogs below only run on the
+	// very first launch, when nothing is stored anywhere; every later launch goes
+	// straight into the game. RACE was removed entirely (the team system and the
+	// T-key save toggle cover it).
+	if(!@account_load()){
+		#if STUDIO
+			@accName = get_string("Enter your name:", "");
 		#endif
-		#if not CJKTEXT
-		@name = wd_input_box("Name", "Enter your name:", "");
+		#if not STUDIO
+			#if CJKTEXT
+			@accName = __ONLINE_ansi_to_utf8(wd_input_box("Name", "Enter your name:", ""));
+			#endif
+			#if not CJKTEXT
+			@accName = wd_input_box("Name", "Enter your name:", "");
+			#endif
 		#endif
-	#endif
-	if(@name == ""){
-		@name = "Anonymous";
+		@accName = @account_trim(@accName);
+		if(@accName == "") @accName = "Anonymous";
+		#if STUDIO
+			@accPassword = get_string("Session key (empty = open session):", "");
+		#endif
+		#if not STUDIO
+			#if CJKTEXT
+			@accPassword = __ONLINE_ansi_to_utf8(wd_input_box("Password", "Session key (empty = open session):", ""));
+			#endif
+			#if not CJKTEXT
+			@accPassword = wd_input_box("Password", "Session key (empty = open session):", "");
+			#endif
+		#endif
+		@accPassword = @account_trim(@accPassword);
+		@accStore = 0;
+		@account_save();
 	}
-	@name = string_replace_all(@name, "#", "\#");
-	if(string_length(@name) > 20){
-		@name = string_copy(@name, 0, 20);
-	}
-	#if STUDIO
-		@password = get_string("Enter a password:", "");
-	#endif
-	#if not STUDIO
-		#if CJKTEXT
-		@password = __ONLINE_ansi_to_utf8(wd_input_box("Password", "Leave it empty for no password:", ""));
-		#endif
-		#if not CJKTEXT
-		@password = wd_input_box("Password", "Leave it empty for no password:", "");
-		#endif
-	#endif
-	if(string_length(@password) > 20){
-		@password = string_copy(@password, 0, 20);
-	}
-	@selfGameID += @password;
-	#if STUDIO
-		@race = show_question("Do you want to enable RACE mod? (shared saves will be disabled)");
-	#endif
-	#if not STUDIO
-		wd_message_set_text("Do you want to enable RACE mod? (shared saves will be disabled)");
-		@race = wd_message_show(wd_mk_information, wd_mb_yes, wd_mb_no, 0) == wd_mb_yes;
-	#endif
+	@account_apply();
+	// The socket layer queues writes until the TCP handshake completes
+	// (TcpSocketState.WriteMessage -> writeBuffer, flushed by UpdateWrite once
+	// connected), so NAME can be queued immediately - no startup wait needed.
 	__ONLINE_buffer_clear(@buffer);
-	@hasPassword = 0;
-	if(string_length(string(@password)) > 0) @hasPassword = 1;
 	#if not GMNET
 		__ONLINE_buffer_write_uint8(@buffer, 3);
 		__ONLINE_buffer_write_string(@buffer, @name);

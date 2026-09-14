@@ -9,7 +9,6 @@
 			__ONLINE_buffer_write_string(@buffer, @selfID);
 			__ONLINE_buffer_write_string(@buffer, @name);
 			__ONLINE_buffer_write_string(@buffer, @selfGameID);
-			__ONLINE_buffer_write_uint8(@buffer, @race);
 			@n = instance_number(@onlinePlayer);
 			__ONLINE_buffer_write_uint16(@buffer, @n);
 			__ONLINE_buffer_write_uint16(@buffer, @vis);
@@ -39,7 +38,6 @@
 			__ONLINE_buffer_write_string(@buffer, @selfID);
 			__ONLINE_buffer_write_string(@buffer, @name);
 			__ONLINE_buffer_write_string(@buffer, @selfGameID);
-			__ONLINE_buffer_write_u8(@buffer, @race);
 			@n = instance_number(@onlinePlayer);
 			__ONLINE_buffer_write_u16(@buffer, @n);
 			__ONLINE_buffer_write_u16(@buffer, @vis);

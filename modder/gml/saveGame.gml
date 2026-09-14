@@ -38,7 +38,6 @@ if(instance_exists(%arg0)){
 				if(instance_exists(@p)){
 					@p = instance_find(@p, 0);
 					// NETWORK BROADCAST
-					if(!@race){
 						__ONLINE_buffer_clear(@buffer);
 						#if not GMNET
 							__ONLINE_buffer_write_uint8(@buffer, 5);
@@ -105,7 +104,6 @@ if(instance_exists(%arg0)){
 							__ONLINE_buffer_write_i16(@buffer, room);
 						#endif
 						__ONLINE_socket_write_message(@socket, @buffer);
-					}
 					// SAVE HISTORY
 					var @selfGrav, @shIdx, @shNow;
 					@shNow = current_time;

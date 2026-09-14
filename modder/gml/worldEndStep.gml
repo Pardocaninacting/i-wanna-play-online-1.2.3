@@ -237,7 +237,6 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			break;
 		case 5:
 			// SOMEONE SAVED
-			if(!@race){
 				#if not GMNET
 					#if GRAVSIGN
 						// +/-1 convention: wire byte is (grav+1)/2, decode back.
@@ -310,7 +309,6 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 				#if not STUDIO
 					sound_play(@sndSaved);
 				#endif
-			}
 			break;
 		case 6:
 			// SELF ID
