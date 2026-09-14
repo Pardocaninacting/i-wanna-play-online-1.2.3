@@ -34,6 +34,28 @@
 // each other). Never describe it as authentication in UI text.
 // ============================================================================
 
+///// script @account_dir
+// Normalises a directory into "ends with exactly one separator".
+// The engines disagree about the trailing slash of program_directory /
+// working_directory (the existing config code at worldCreate.gml:547 has to
+// append one defensively), and APPDATA never has one. Without this,
+// program_directory + "__ONLINE_account.ini" can become
+// "C:\game\folder__ONLINE_account.ini" and silently miss the file.
+// GM8.0 has neither string_ends_with nor string_delete_trailing; both separators
+// are single bytes, so ord(string_char_at()) is enough.
+// args: dir -> dir with exactly one trailing separator
+var _d, _c, _n;
+_d = argument0;
+if(_d == "") return _d;
+_n = string_length(_d);
+while(_n > 0){
+  _c = ord(string_char_at(_d, _n));
+  if(_c == 92 || _c == 47){ _n -= 1; }else{ break; }
+}
+_d = string_copy(_d, 1, _n);
+_d += chr(92);
+return _d;
+
 ///// script @account_paths
 // Resolves the two file locations into globals. Safe to call repeatedly.
 // args: none -> 0
@@ -43,25 +65,37 @@ var _appdata;
 _appdata = environment_get_variable("APPDATA");
 if(_appdata != ""){
   // P3: per-user, writable, survives game uninstalls.
-  @accGlobalDir = _appdata + chr(92) + "iwpo" + chr(92);
+  @accGlobalDir = @account_dir(_appdata) + "iwpo" + chr(92);
   @accGlobalPath = @accGlobalDir + "account.ini";
 }else{
   // No APPDATA (rare): fall back to the working directory so the feature still
   // works, even though it is then per-install rather than per-user.
-  @accGlobalPath = working_directory + "__ONLINE_account.ini";
+  @accGlobalPath = @account_dir(working_directory) + "__ONLINE_account.ini";
 }
-@accLocalPath = program_directory + "__ONLINE_account.ini";
+@accLocalPath = @account_dir(program_directory) + "__ONLINE_account.ini";
 return 0;
 
 ///// script @account_ini_read
 // Parses argument0 and fills the account globals. argument1 = 1 when this is the
 // global file (its "store" key is honoured; a local file always means local).
 // Returns 1 when a usable (non-empty) name was found, else 0.
+//
+// Name/password are stored twice: a generic "name"/"password" pair and an
+// engine-tagged pair (name_gbk/password_gbk on GM8.0, name_utf8/password_utf8
+// elsewhere). One global file can therefore serve both a GM8.0 install (ANSI
+// strings) and a GM8.1+/GMS install (UTF-8 strings) without the CJK names
+// turning into mojibake; the tagged key wins, the generic one is the fallback
+// written for compatibility.
 // args: path, isGlobal -> 1/0
 globalvar @accName, @accPassword, @accStore;
 var _f, _line, _lp, _key, _val, _inSec, _found, _storeVal;
+var _genName, _genPass, _tagName, _tagPass;
 _found = 0;
 _storeVal = -1;
+_genName = "";
+_genPass = "";
+_tagName = "";
+_tagPass = "";
 if(!file_exists(argument0)) return 0;
 _f = file_text_open_read(argument0);
 if(_f < 0) return 0;
@@ -80,8 +114,10 @@ while(!file_text_eof(_f)){
       if(_lp > 1){
         _key = @account_lower(@account_trim(string_copy(_line, 1, _lp - 1)));
         _val = @account_trim(string_copy(_line, _lp + 1, string_length(_line) - _lp));
-        if(_key == "name"){ @accName = _val; if(_val != "") _found = 1; }
-        else if(_key == "password"){ @accPassword = _val; }
+        if(_key == "name"){ _genName = _val; }
+        else if(_key == "password"){ _genPass = _val; }
+        else if(_key == "name_gbk" || _key == "name_utf8"){ _tagName = _val; }
+        else if(_key == "password_gbk" || _key == "password_utf8"){ _tagPass = _val; }
         else if(_key == "store"){
           if(@account_lower(_val) == "local") _storeVal = 1; else _storeVal = 0;
         }
@@ -90,6 +126,14 @@ while(!file_text_eof(_f)){
   }
 }
 file_text_close(_f);
+if(_tagName != ""){
+  @accName = _tagName;
+  @accPassword = _tagPass;
+}else{
+  @accName = _genName;
+  @accPassword = _genPass;
+}
+if(@accName != "") _found = 1;
 if(argument1 == 1){
   if(_storeVal >= 0) @accStore = _storeVal; else @accStore = 0;
 }else{
@@ -106,7 +150,7 @@ return _found;
 // args: none -> 1 on success, 0 on failure (caller shows the red hint and may
 // offer "Store in: This folder" as a fallback)
 globalvar @accName, @accPassword, @accStore, @accGlobalDir, @accGlobalPath, @accLocalPath, @accWritePath;
-var _path, _f, _store;
+var _path, _f, _store, _tag;
 if(@accStore == 1) _path = @accLocalPath; else _path = @accGlobalPath;
 if(@accStore != 1){
   if(@accGlobalDir != ""){
@@ -120,9 +164,25 @@ if(_f < 0){
 }
 file_text_write_string(_f, "[account]");
 file_text_writeln(_f);
+// Generic pair first (readable by any engine / older builds), then the
+// engine-tagged pair that wins on read (see @account_ini_read).
 file_text_write_string(_f, "name=" + @accName);
 file_text_writeln(_f);
 file_text_write_string(_f, "password=" + @accPassword);
+file_text_writeln(_f);
+// NOTE: no #else here - the GM8 render pipeline (getGMLCode.parseGML) only
+// understands #if / #if not / #endif, so an #else would survive into the game
+// code and fail to compile.
+_tag = "";
+#if GM80
+_tag = "_gbk";
+#endif
+#if not GM80
+_tag = "_utf8";
+#endif
+file_text_write_string(_f, "name" + _tag + "=" + @accName);
+file_text_writeln(_f);
+file_text_write_string(_f, "password" + _tag + "=" + @accPassword);
 file_text_writeln(_f);
 if(@accStore == 1) _store = "local"; else _store = "global";
 file_text_write_string(_f, "store=" + _store);
