@@ -583,7 +583,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	if(isUpxPacked){
 		const antidec: boolean = await isAntidecProtected(input);
 		if(antidec){
-			console.log(`UPX + Antidec GM8.0 host detected${fishClassGame ? " (fish-class)" : ""}; using safe CJK stub fallback (fw plugin cannot initialize on this runner image).`);
+			console.log(`UPX + Antidec GM8.0 host detected${fishClassGame ? " (fish-class)" : ""}; FoxWriting cannot initialize on this runner image, using the GML atlas CJK renderer.`);
 			fishCjkRuntimeBlocked = true;
 		}
 	}
@@ -923,6 +923,9 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		(loadedGM ? 'gm' : 'none');
 	const useUtf8: boolean = gameConfig.version !== GameVersion.GameMaker80;
 	console.log(`CJK backend: ${cjkBackend}`);
+	// Set when FoxWriting cannot be loaded and the GML bitmap-atlas pack takes over
+	// the fw_* API (assets must be deployed next to the exe for that).
+	let atlasCjkActive: boolean = false;
 
 	exe.writeOffset = extensionCountPos;
 	exe.writeUInt32LE(extensions.length);
@@ -1463,18 +1466,22 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		// fw_* stubs are needed whenever the GML emits the fw_* branch (cjkBackend === 'fw'
 		// with no real FoxWriting). gm_* stubs are needed when the GML emits the gm_* branch
 		// (cjkBackend === 'gm' with no real GaseousMarble — rare; mostly defensive).
+		// With FoxWriting unavailable we no longer emit no-op stubs: gml/cjkAtlas.gml is a
+		// pure-GML bitmap-atlas pack that implements the same fw_* API surface on top of
+		// __ONLINE_font.png + __ONLINE_font.gbk, so CJK text still renders with no DLL.
+		// (UPX + Antidec GM8.0 runners cannot host FoxWriting at all - see 945b287.)
 		if(cjkBackend === 'fw' && !loadedFW){
-			addStubScript("fw_add_font_from_file", "return -1;");
-			addStubScript("fw_add_font", "return -1;");
-			addStubScript("fw_set_font_offset", "return 0;");
-			addStubScript("fw_draw_set_font", "return 0;");
-			addStubScript("fw_draw_set_halign", "draw_set_halign(argument0); return 0;");
-			addStubScript("fw_draw_set_valign", "draw_set_valign(argument0); return 0;");
-			addStubScript("fw_draw_set_line_spacing", "return 0;");
-			addStubScript("fw_draw_text_ext", "draw_text_ext(argument0, argument1, argument2, -1, argument3); return 0;");
-			addStubScript("fw_string_width", "return string_width(argument0);");
-			addStubScript("fw_string_width_ext", "return string_width_ext(argument0, argument1, argument2);");
-			addStubScript("fw_string_height_ext", "return string_height_ext(argument0, argument1, argument2);");
+			atlasCjkActive = true;
+			const atlasSections: Array<{name: string, code: Buffer}> = splitMarkedScripts(await renderSkinGml("cjkAtlas"));
+			if(atlasSections.length === 0)
+				throw new Error(`gml/cjkAtlas.gml has no "///// script <name>" sections`);
+			for(const section of atlasSections){
+				const atlasScript: Script = new Script();
+				atlasScript.name = Buffer.from(section.name, 'ascii');
+				atlasScript.source = section.code;
+				scripts.push(atlasScript);
+			}
+			console.log(`[cjk] FoxWriting unavailable; GML atlas renderer active (${atlasSections.length} scripts, GB2312 atlas, no DLL)`);
 		}
 		if(cjkBackend === 'gm' && !loadedGM){
 			addStubScript("gm_font", "return 0;");
@@ -1579,7 +1586,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			includedfiles.push(newIncludedfile("__ONLINE_sndChatbox.wav"));
 			includedfiles.push(newIncludedfile("__ONLINE_sndSaved.wav"));
 		}
-		if (gm80AsciiFontPath !== null) {
+		if (gm80AsciiFontPath !== null && !atlasCjkActive) {
 			const asciiFont: IncludedFile = newIncludedfileFromPath("__ONLINE_ascii.ttf", gm80AsciiFontPath);
 			asciiFont.exportSettings = 2; // Export to game directory (working_directory)
 			includedfiles.push(asciiFont);
@@ -1593,6 +1600,17 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			const fontGly: IncludedFile = newIncludedfile("__ONLINE_font.gly");
 			fontGly.exportSettings = 2; // Export to game directory (working_directory)
 			includedfiles.push(fontGly);
+		}
+		// GML atlas CJK font (the fw-unavailable fallback): the renderer loads both
+		// files from the game directory at first use. The TTF above is not needed in
+		// that mode (fw_add_font_from_file is served by the atlas).
+		if (atlasCjkActive) {
+			const atlasPng: IncludedFile = newIncludedfile("__ONLINE_font.png");
+			atlasPng.exportSettings = 2;
+			includedfiles.push(atlasPng);
+			const atlasIdx: IncludedFile = newIncludedfile("__ONLINE_font.gbk");
+			atlasIdx.exportSettings = 2;
+			includedfiles.push(atlasIdx);
 		}
 
 		replaceChunk(exe, includedfilesOffsets, putAssetRefs(exe, includedfiles));
