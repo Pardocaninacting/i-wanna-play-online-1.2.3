@@ -37,7 +37,11 @@ if(view_enabled){
 		}
 	}
 }
-if(view_current == @hudFirst){
+if(@hudFirst < 0 || view_current == @hudFirst){
+	// QoL fix: with views enabled but none visible (menu / title rooms) the old
+	// guard (@hudFirst == -1) never matched view_current, so the whole HUD -
+	// chat, notes and the O settings panel - silently vanished in those rooms.
+	// Draw the single HUD pass in the current view instead.
 	// Draw in view-port space (not window space): the D3D viewport follows the
 	// port, so this stays correct under window scaling / letterboxed
 	// fullscreen, and the HUD scales together with the game image. The
@@ -486,283 +490,84 @@ if(@settingsOpen){
 	draw_set_halign(fa_left);
 	// TAB 0: SETTINGS
 	if(@settingsTab == 0){
-		@rowY = @contentY + 4;
-		if(@kbFocus == 1){
-			@kbHi = @contentY + 1 + @kbRow[0] * 28;
-			draw_set_color(make_color_rgb(220, 200, 60));
-			draw_rectangle(@spX + 4, @kbHi, @spX + @spW - 4, @kbHi + 26, true);
-		}
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Team:");
-		@btnLX = @spX + 190;
-		@btnLY = @rowY;
-		@btnLW = 20;
-		@btnLH = 18;
-		draw_set_color(c_gray);
-		draw_rectangle(@btnLX, @btnLY, @btnLX + @btnLW, @btnLY + @btnLH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		draw_text(@btnLX + @btnLW/2, @rowY, "<");
-		@teamNames[0] = "None";
-		@teamNames[1] = "Red";
-		@teamNames[2] = "Blue";
-		@teamNames[3] = "Yellow";
-		@teamNames[4] = "Purple";
-		@teamNames[5] = "Green";
-		@teamNames[6] = "Orange";
-		@teamNames[7] = "Cyan";
-		draw_set_color(@teamColors[@team]);
-		draw_text(@spX + 280, @rowY, string(@team) + " " + @teamNames[@team]);
-		@btnRX = @spX + 350;
-		@btnRY = @rowY;
-		@btnRW = 20;
-		@btnRH = 18;
-		draw_set_color(c_gray);
-		draw_rectangle(@btnRX, @btnRY, @btnRX + @btnRW, @btnRY + @btnRH, false);
-		draw_set_color(c_white);
-		draw_text(@btnRX + @btnRW/2, @rowY, ">");
-		@rowY = @contentY + 32;
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Lerp:");
-		@btnLerpX = @spX + 252;
-		@btnLerpY = @rowY;
-		@btnLerpW = 56;
-		@btnLerpH = 18;
-		if(@lerpEnabled){
-			draw_set_color(make_color_rgb(40, 160, 40));
-		}else{
-			draw_set_color(c_gray);
-		}
-		draw_rectangle(@btnLerpX, @btnLerpY, @btnLerpX + @btnLerpW, @btnLerpY + @btnLerpH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		if(@lerpEnabled){
-			draw_text(@btnLerpX + @btnLerpW/2, @rowY, "ON");
-		}else{
-			draw_text(@btnLerpX + @btnLerpW/2, @rowY, "OFF");
-		}
-		@rowY = @contentY + 60;
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Save:");
-		@btnSaveX = @spX + 252;
-		@btnSaveY = @rowY;
-		@btnSaveW = 56;
-		@btnSaveH = 18;
-		if(@save_enabled){
-			draw_set_color(make_color_rgb(40, 160, 40));
-		}else{
-			draw_set_color(c_gray);
-		}
-		draw_rectangle(@btnSaveX, @btnSaveY, @btnSaveX + @btnSaveW, @btnSaveY + @btnSaveH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		if(@save_enabled){
-			draw_text(@btnSaveX + @btnSaveW/2, @rowY, "ON");
-		}else{
-			draw_text(@btnSaveX + @btnSaveW/2, @rowY, "OFF");
-		}
-		@rowY = @contentY + 88;
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Fast:");
-		@btnFastX = @spX + 252;
-		@btnFastY = @rowY;
-		@btnFastW = 56;
-		@btnFastH = 18;
-		if(@fastLoadEnabled){
-			draw_set_color(make_color_rgb(40, 160, 40));
-		}else{
-			draw_set_color(c_gray);
-		}
-		draw_rectangle(@btnFastX, @btnFastY, @btnFastX + @btnFastW, @btnFastY + @btnFastH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		if(@fastLoadEnabled){
-			draw_text(@btnFastX + @btnFastW/2, @rowY, "ON");
-		}else{
-			draw_text(@btnFastX + @btnFastW/2, @rowY, "OFF");
-		}
-		@rowY = @contentY + 116;
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Visual:");
-		@btnVLX = @spX + 190;
-		@btnVLY = @rowY;
-		@btnVLW = 20;
-		@btnVLH = 18;
-		draw_set_color(c_gray);
-		draw_rectangle(@btnVLX, @btnVLY, @btnVLX + @btnVLW, @btnVLY + @btnVLH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		draw_text(@btnVLX + @btnVLW/2, @rowY, "<");
-		@visNames[0] = "All";
-		@visNames[1] = "No Names";
-		@visNames[2] = "Hidden";
-		draw_set_color(c_white);
-		draw_text(@spX + 280, @rowY, @visNames[@vis]);
-		@btnVRX = @spX + 350;
-		@btnVRY = @rowY;
-		@btnVRW = 20;
-		@btnVRH = 18;
-		draw_set_color(c_gray);
-		draw_rectangle(@btnVRX, @btnVRY, @btnVRX + @btnVRW, @btnVRY + @btnVRH, false);
-		draw_set_color(c_white);
-		draw_text(@btnVRX + @btnVRW/2, @rowY, ">");
-		@rowY = @contentY + 144;
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Indicator:");
-		@btnIndX = @spX + 252;
-		@btnIndY = @rowY;
-		@btnIndW = 56;
-		@btnIndH = 18;
-		if(@showArrows){
-			draw_set_color(make_color_rgb(40, 160, 40));
-		}else{
-			draw_set_color(c_gray);
-		}
-		draw_rectangle(@btnIndX, @btnIndY, @btnIndX + @btnIndW, @btnIndY + @btnIndH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		if(@showArrows){
-			draw_text(@btnIndX + @btnIndW/2, @rowY, "ON");
-		}else{
-			draw_text(@btnIndX + @btnIndW/2, @rowY, "OFF");
-		}
-		@rowY = @contentY + 172;
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Spec Cam:");
-		@btnCamLX = @spX + 190;
-		@btnCamLY = @rowY;
-		@btnCamLW = 20;
-		@btnCamLH = 18;
-		draw_set_color(c_gray);
-		draw_rectangle(@btnCamLX, @btnCamLY, @btnCamLX + @btnCamLW, @btnCamLY + @btnCamLH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		draw_text(@btnCamLX + @btnCamLW/2, @rowY, "<");
-		@camModeNames[0] = "Follow";
-		@camModeNames[1] = "Screen";
-		draw_set_color(c_white);
-		draw_text(@spX + 280, @rowY, @camModeNames[@specCamMode]);
-		@btnCamRX = @spX + 350;
-		@btnCamRY = @rowY;
-		@btnCamRW = 20;
-		@btnCamRH = 18;
-		draw_set_color(c_gray);
-		draw_rectangle(@btnCamRX, @btnCamRY, @btnCamRX + @btnCamRW, @btnCamRY + @btnCamRH, false);
-		draw_set_color(c_white);
-		draw_text(@btnCamRX + @btnCamRW/2, @rowY, ">");
-		#if PLAYER_LIST
-			@rowY = @contentY + 200;
+		// QoL: one declarative table drives the layout, so the draw code, the
+		// keyboard navigation and the mouse hit test can never drift apart.
+		@stg_build_rows(@contentY);
+		@rowI = 0;
+		while(@rowI < @stgN){
+			@rowY = @stgY[@rowI];
+			@rowK = @stgKind[@rowI];
+			if(@rowK != 0 && @rowK != 1){
+				if(@kbFocus == 1 && @kbRow[0] == @rowI){
+					draw_set_color(make_color_rgb(220, 200, 60));
+					draw_rectangle(@spX + 4, @rowY - 2, @spX + @spW - 4, @rowY + @stgRowH - 3, true);
+				}else if(@stg_in_rect(@mx, @my, @spX + 4, @rowY - 2, @spX + @spW - 4, @rowY + @stgRowH - 3)){
+					draw_set_color(make_color_rgb(110, 110, 110));
+					draw_rectangle(@spX + 4, @rowY - 2, @spX + @spW - 4, @rowY + @stgRowH - 3, true);
+				}
+			}
 			draw_set_halign(fa_left);
-			draw_set_color(c_white);
-			draw_text(@spX + 16, @rowY, "Player Objects:");
-			@btnPickX = @spX + 252;
-			@btnPickY = @rowY;
-			@btnPickW = 56;
-			@btnPickH = 18;
-			draw_set_color(c_gray);
-			draw_rectangle(@btnPickX, @btnPickY, @btnPickX + @btnPickW, @btnPickY + @btnPickH, false);
-			draw_set_color(c_white);
-			draw_set_halign(fa_center);
-			draw_text(@btnPickX + @btnPickW/2, @rowY, "Pick");
-			draw_set_halign(fa_left);
-		#endif
-		#if PLAYER_LIST
-			@rowY = @contentY + 228;
-		#endif
-		#if not PLAYER_LIST
-			@rowY = @contentY + 200;
-		#endif
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Reconnect:");
-		@btnRecX = @spX + 252;
-		@btnRecY = @rowY;
-		@btnRecW = 56;
-		@btnRecH = 18;
-		draw_set_color(c_gray);
-		draw_rectangle(@btnRecX, @btnRecY, @btnRecX + @btnRecW, @btnRecY + @btnRecH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		draw_text(@btnRecX + @btnRecW/2, @rowY, "Now");
-		draw_set_halign(fa_left);
-		// S5 (PVP): mode cycles Off/Team/FFA. The bullet visibility toggle is
-		// locked ON while PVP is enabled (a PVP player must never hide the
-		// bullets that can kill them). The mode row is N/A when the converter
-		// could not resolve a kill script for this game.
-		#if PLAYER_LIST
-			@rowY = @contentY + 256;
-		#endif
-		#if not PLAYER_LIST
-			@rowY = @contentY + 228;
-		#endif
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "PVP:");
-		if(@pvpAvail){
-			@btnPvpLX = @spX + 190;
-			@btnPvpLY = @rowY;
-			@btnPvpLW = 20;
-			@btnPvpLH = 18;
-			draw_set_color(c_gray);
-			draw_rectangle(@btnPvpLX, @btnPvpLY, @btnPvpLX + @btnPvpLW, @btnPvpLY + @btnPvpLH, false);
-			draw_set_color(c_white);
-			draw_set_halign(fa_center);
-			draw_text(@btnPvpLX + @btnPvpLW/2, @rowY, "<");
-			@pvpModeNames[0] = "Off";
-			@pvpModeNames[1] = "Team";
-			@pvpModeNames[2] = "FFA";
-			draw_set_color(c_white);
-			draw_text(@spX + 280, @rowY, @pvpModeNames[@pvpMode]);
-			@btnPvpRX = @spX + 350;
-			@btnPvpRY = @rowY;
-			@btnPvpRW = 20;
-			@btnPvpRH = 18;
-			draw_set_color(c_gray);
-			draw_rectangle(@btnPvpRX, @btnPvpRY, @btnPvpRX + @btnPvpRW, @btnPvpRY + @btnPvpRH, false);
-			draw_set_color(c_white);
-			draw_text(@btnPvpRX + @btnPvpRW/2, @rowY, ">");
+			if(@rowK == 0){
+				draw_set_color(make_color_rgb(170, 170, 170));
+				draw_text(@spX + 14, @rowY, @stgLabel[@rowI]);
+			}else if(@rowK == 1){
+				draw_set_color(@stg_status_color());
+				draw_circle(@spX + 20, @rowY + @stgRowH / 2, 4, false);
+				draw_set_color(c_white);
+				draw_text(@spX + 32, @rowY + 2, @stg_status_text());
+			}else{
+				draw_set_color(c_white);
+				draw_text(@spX + 14, @rowY + 2, @stgLabel[@rowI]);
+				@rowV = @stg_value(@rowI);
+				draw_set_halign(fa_center);
+				if(@rowK == 5){
+					draw_set_color(c_gray);
+					draw_rectangle(@spX + 150, @rowY, @spX + 270, @rowY + @stgRowH - 4, false);
+					draw_set_color(c_white);
+					draw_text(@spX + 210, @rowY + 1, @rowV);
+				}else if(@rowK == 3){
+					draw_set_color(c_gray);
+					draw_rectangle(@spX + 334, @rowY, @spX + 356, @rowY + @stgRowH - 4, false);
+					draw_rectangle(@spX + 356, @rowY, @spX + 378, @rowY + @stgRowH - 4, false);
+					draw_set_color(c_white);
+					draw_text(@spX + 345, @rowY + 1, "<");
+					draw_text(@spX + 367, @rowY + 1, ">");
+					draw_text(@spX + 300, @rowY + 1, @rowV);
+				}else if(@rowK == 4){
+					if(@rowV == "ON"){
+						draw_set_color(make_color_rgb(40, 160, 40));
+					}else{
+						draw_set_color(c_gray);
+					}
+					draw_rectangle(@spX + 150, @rowY, @spX + 206, @rowY + @stgRowH - 4, false);
+					draw_set_color(c_white);
+					draw_text(@spX + 178, @rowY + 1, @rowV);
+				}else{
+					draw_set_color(make_color_rgb(70, 70, 70));
+					draw_rectangle(@spX + 150, @rowY, @spX + 378, @rowY + @stgRowH - 4, false);
+					draw_set_color(c_white);
+					draw_set_halign(fa_left);
+					draw_text(@spX + 156, @rowY + 1, @rowV);
+				}
+			}
+			@rowI += 1;
 		}
-		if(!@pvpAvail){
-			draw_set_color(c_gray);
-			draw_set_halign(fa_center);
-			draw_text(@spX + 280, @rowY, "N/A");
-		}
-		#if PLAYER_LIST
-			@rowY = @contentY + 284;
-		#endif
-		#if not PLAYER_LIST
-			@rowY = @contentY + 256;
-		#endif
 		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Bullets:");
-		@btnBshX = @spX + 252;
-		@btnBshY = @rowY;
-		@btnBshW = 56;
-		@btnBshH = 18;
-		if(@bulletShow){
-			draw_set_color(make_color_rgb(40, 160, 40));
+		if(@stg_toast_active()){
+			if(@stgToastKind == 0){
+				draw_set_color(make_color_rgb(60, 200, 90));
+			}else if(@stgToastKind == 1){
+				draw_set_color(make_color_rgb(220, 200, 60));
+			}else{
+				draw_set_color(make_color_rgb(220, 90, 90));
+			}
+			draw_text(@spX + 14, @spY + @spH - 32, @stgToastMsg);
+		}
+		draw_set_color(make_color_rgb(170, 170, 170));
+		if(@kbFocus == 1 && @kbRow[0] >= 0 && @kbRow[0] < @stgN){
+			draw_text(@spX + 14, @spY + @spH - 16, @stg_hint(@kbRow[0]));
 		}else{
-			draw_set_color(c_gray);
-		}
-		draw_rectangle(@btnBshX, @btnBshY, @btnBshX + @btnBshW, @btnBshY + @btnBshH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		if(@bulletShow){
-			draw_text(@btnBshX + @btnBshW/2, @rowY, "ON");
-		}else{
-			draw_text(@btnBshX + @btnBshW/2, @rowY, "OFF");
-		}
-		if(@pvpMode != 0){
-			draw_set_color(c_gray);
-			draw_set_halign(fa_left);
-			draw_text(@spX + 316, @rowY, "(locked)");
+			draw_text(@spX + 14, @spY + @spH - 16, "Up/Down Move   Enter Edit/Apply   Left/Right Change   O Close");
 		}
 	}
 	// TAB 1: SAVES
@@ -1451,111 +1256,17 @@ if(@settingsOpen){
 		}
 		if(!@tabClicked && @settingsTab == 0){
 			@kbFocus = 1;
-			if(@mx >= @btnLX && @mx <= @btnLX + @btnLW && @my >= @btnLY && @my <= @btnLY + @btnLH){
-				@team -= 1;
-				if(@team < 0) @team = 7;
-				@teamChanged = true;
-			}
-			if(@mx >= @btnRX && @mx <= @btnRX + @btnRW && @my >= @btnRY && @my <= @btnRY + @btnRH){
-				@team += 1;
-				if(@team > 7) @team = 0;
-				@teamChanged = true;
-			}
-			if(@mx >= @btnLerpX && @mx <= @btnLerpX + @btnLerpW && @my >= @btnLerpY && @my <= @btnLerpY + @btnLerpH){
-				@lerpEnabled = !@lerpEnabled;
-				@lerpChanged = true;
-			}
-			if(@mx >= @btnSaveX && @mx <= @btnSaveX + @btnSaveW && @my >= @btnSaveY && @my <= @btnSaveY + @btnSaveH){
-				@save_enabled = 1 - @save_enabled;
-				@saveChanged = true;
-			}
-			if(@mx >= @btnFastX && @mx <= @btnFastX + @btnFastW && @my >= @btnFastY && @my <= @btnFastY + @btnFastH){
-				@fastLoadEnabled = !@fastLoadEnabled;
-				@fastLoadChanged = true;
-			}
-			if(@mx >= @btnVLX && @mx <= @btnVLX + @btnVLW && @my >= @btnVLY && @my <= @btnVLY + @btnVLH){
-				@vis -= 1;
-				if(@vis < 0) @vis = 2;
-				@visChanged = true;
-			}
-			if(@mx >= @btnVRX && @mx <= @btnVRX + @btnVRW && @my >= @btnVRY && @my <= @btnVRY + @btnVRH){
-				@vis += 1;
-				if(@vis > 2) @vis = 0;
-				@visChanged = true;
-			}
-			if(@mx >= @btnIndX && @mx <= @btnIndX + @btnIndW && @my >= @btnIndY && @my <= @btnIndY + @btnIndH){
-				@showArrows = !@showArrows;
-				#if GMS2
-					@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
-				#endif
-				#if not GMS2
-					@a = instance_create(0, 0, @playerSaved);
-				#endif
-				if(@showArrows){
-					@a.@name = "Indicator: on";
+			@stg_build_rows(@contentY);
+			@rowHit = @stg_row_at(@my, 4);
+			if(@rowHit >= 0){
+				@kbRow[0] = @rowHit;
+				@rowK = @stg_kind_of(@rowHit);
+				if(@rowK == 3 && @mx >= @spX + 334 && @mx <= @spX + 356){
+					@stg_act_dir(@rowHit, -1);
+				}else if(@rowK == 3 && @mx >= @spX + 356 && @mx <= @spX + 378){
+					@stg_act_dir(@rowHit, 1);
 				}else{
-					@a.@name = "Indicator: off";
-				}
-				@a.@state = -2;
-			}
-			if(@mx >= @btnCamLX && @mx <= @btnCamLX + @btnCamLW && @my >= @btnCamLY && @my <= @btnCamLY + @btnCamLH){
-				@specCamMode = 1 - @specCamMode;
-				#if GMS2
-					@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
-				#endif
-				#if not GMS2
-					@a = instance_create(0, 0, @playerSaved);
-				#endif
-				if(@specCamMode == 0){
-					@a.@name = "Cam: Follow";
-				}else{
-					@a.@name = "Cam: Screen";
-				}
-				@a.@state = -2;
-			}
-			if(@mx >= @btnCamRX && @mx <= @btnCamRX + @btnCamRW && @my >= @btnCamRY && @my <= @btnCamRY + @btnCamRH){
-				@specCamMode = 1 - @specCamMode;
-				#if GMS2
-					@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
-				#endif
-				#if not GMS2
-					@a = instance_create(0, 0, @playerSaved);
-				#endif
-				if(@specCamMode == 0){
-					@a.@name = "Cam: Follow";
-				}else{
-					@a.@name = "Cam: Screen";
-				}
-				@a.@state = -2;
-			}
-			#if PLAYER_LIST
-				if(@mx >= @btnPickX && @mx <= @btnPickX + @btnPickW && @my >= @btnPickY && @my <= @btnPickY + @btnPickH){
-					@settingsOpen = false;
-					@debug_pick_player = true;
-				}
-			#endif
-			if(@mx >= @btnRecX && @mx <= @btnRecX + @btnRecW && @my >= @btnRecY && @my <= @btnRecY + @btnRecH){
-				@manualReconnect = true;
-				@settingsOpen = false;
-			}
-			if(@pvpAvail){
-				if(@mx >= @btnPvpLX && @mx <= @btnPvpLX + @btnPvpLW && @my >= @btnPvpLY && @my <= @btnPvpLY + @btnPvpLH){
-					@pvpMode -= 1;
-					if(@pvpMode < 0) @pvpMode = 2;
-					@pvpChanged = true;
-				}
-				if(@mx >= @btnPvpRX && @mx <= @btnPvpRX + @btnPvpRW && @my >= @btnPvpRY && @my <= @btnPvpRY + @btnPvpRH){
-					@pvpMode += 1;
-					if(@pvpMode > 2) @pvpMode = 0;
-					@pvpChanged = true;
-				}
-			}
-			// Locked while PVP is on (see the draw side); the worldEndStep
-			// consumer re-forces visibility on mode change as a second guard.
-			if(@pvpMode == 0){
-				if(@mx >= @btnBshX && @mx <= @btnBshX + @btnBshW && @my >= @btnBshY && @my <= @btnBshY + @btnBshH){
-					@bulletShow = 1 - @bulletShow;
-					@bulletShowChanged = true;
+					@stg_act(@rowHit);
 				}
 			}
 		}

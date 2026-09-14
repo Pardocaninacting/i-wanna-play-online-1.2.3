@@ -1735,7 +1735,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 					skinScriptNames.add(n);
 			}
 		}
-		for(const packFile of ["md5", "skinLib", "bulletShare", "notesLib", "accountLib"]){
+		for(const packFile of ["md5", "skinLib", "bulletShare", "notesLib", "accountLib", "settingsLib"]){
 			const sections: Array<{name: string, code: Buffer}> = splitMarkedScripts(await renderSkinGml(packFile));
 			if(sections.length === 0)
 				throw new Error(`Skin system GML gml/${packFile}.gml has no "///// script <name>" sections`);

@@ -2931,79 +2931,38 @@ if(@settingsOpen && @keybindEditing < 0){
 		}
 	}
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 0){
+		// QoL: the same row table the panel draws from.
+		@stg_build_rows(@contentY);
+		if(@kbRow[0] < 0 || @kbRow[0] >= @stgN) @kbRow[0] = @stg_first_row();
 		if(keyboard_check_pressed(vk_up)){
-			if(@kbRow[0] <= 0){
-				@kbRow[0] = 0;
+			@rowPrev = @stg_next_row(@kbRow[0], -1);
+			if(@rowPrev == @kbRow[0]){
 				@kbFocus = 0;
+				@kbRow[0] = @stg_first_row();
 			}else{
-				@kbRow[0] -= 1;
+				@kbRow[0] = @rowPrev;
 			}
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_down)){
-			#if PLAYER_LIST
-				@kbRow[0] += 1; if(@kbRow[0] > 8) @kbRow[0] = 8;
-			#endif
-			#if not PLAYER_LIST
-				@kbRow[0] += 1; if(@kbRow[0] > 7) @kbRow[0] = 7;
-			#endif
+			@kbRow[0] = @stg_next_row(@kbRow[0], 1);
 			@kbAct = 1;
 		}
-		#if PLAYER_LIST
-			if(keyboard_check_pressed(vk_enter) && @kbRow[0] == 7){
-				@settingsOpen = false;
-				@debug_pick_player = true;
-				@kbAct = 1;
-			}
-			if(keyboard_check_pressed(vk_enter) && @kbRow[0] == 8){
-				@manualReconnect = true;
-				@settingsOpen = false;
-				@kbAct = 1;
-			}
-		#endif
-		#if not PLAYER_LIST
-			if(keyboard_check_pressed(vk_enter) && @kbRow[0] == 7){
-				@manualReconnect = true;
-				@settingsOpen = false;
-				@kbAct = 1;
-			}
-		#endif
 		if(keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
 			if(keyboard_check_pressed(vk_right)) @kbDir = 1; else @kbDir = -1;
-			if(@kbRow[0] == 0){
-				@team += @kbDir;
-				if(@team < 0) @team = 7;
-				if(@team > 7) @team = 0;
-				@teamChanged = true;
-			}else if(@kbRow[0] == 1){
-				@lerpEnabled = !@lerpEnabled;
-				@lerpChanged = true;
-			}else if(@kbRow[0] == 2){
-				@save_enabled = 1 - @save_enabled;
-				@saveChanged = true;
-				if(!@save_enabled){
-					#if TEMPFILE
-						if(file_exists("tempOnline2")){
-							file_delete("tempOnline2");
-						}
-					#endif
-					@sSaved = false;
-				}
-			}else if(@kbRow[0] == 3){
-				@fastLoadEnabled = !@fastLoadEnabled;
-				@fastLoadChanged = true;
-			}else if(@kbRow[0] == 4){
-				@vis += @kbDir;
-				if(@vis < 0) @vis = 2;
-				if(@vis > 2) @vis = 0;
-				@visChanged = true;
-			}else if(@kbRow[0] == 5){
-				@showArrows = !@showArrows;
-			}else if(@kbRow[0] == 6){
-				@specCamMode += @kbDir;
-				if(@specCamMode < 0) @specCamMode = 1;
-				if(@specCamMode > 1) @specCamMode = 0;
+			@stg_act_dir(@kbRow[0], @kbDir);
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)){
+			if(@stgClearRow >= 0){
+				@acc_clear_commit();
+			}else{
+				@stg_act(@kbRow[0]);
 			}
+			@kbAct = 1;
+		}
+		if(@stgClearRow >= 0 && (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_backspace))){
+			@acc_clear_cancel();
 			@kbAct = 1;
 		}
 	}

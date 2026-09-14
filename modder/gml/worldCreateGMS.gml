@@ -37,6 +37,8 @@ set_utf8_mode(1);
 @udpPort = %arg3;
 @version = "%arg5";
 @protocolVersion = 5;
+// QoL: prime the settings row table / toast state (see gml/settingsLib.gml).
+@stg_init();
 @password = "";
 @vis = 0;
 @save_enabled = %arg6;
