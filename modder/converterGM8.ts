@@ -1472,7 +1472,18 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		// (UPX + Antidec GM8.0 runners cannot host FoxWriting at all - see 945b287.)
 		if(cjkBackend === 'fw' && !loadedFW){
 			atlasCjkActive = true;
-			const atlasSections: Array<{name: string, code: Buffer}> = splitMarkedScripts(await renderSkinGml("cjkAtlas"));
+			// Optical baseline shift for the bitmap atlas (iwpo.cjk.yoffset).
+			// The 16pt atlas face carries its ink ~6 px higher in the GM line box
+			// than the FoxWriting/GDI+ text the HUD and note offsets were tuned
+			// against, so the glyphs are dropped by that much by default.
+			const cjkYOffsetRaw: string = defines.has("iwpo.cjk.yoffset") ? (defines.get("iwpo.cjk.yoffset") as string).trim() : "";
+			let cjkYOffset: number = 6;
+			if(cjkYOffsetRaw !== ""){
+				const parsed: number = Number(cjkYOffsetRaw);
+				if(Number.isFinite(parsed)) cjkYOffset = parsed;
+				else console.warn(`[cjk] iwpo.cjk.yoffset="${cjkYOffsetRaw}" is not a number; using ${cjkYOffset}`);
+			}
+			const atlasSections: Array<{name: string, code: Buffer}> = splitMarkedScripts(await GMLCode.getGML("cjkAtlas", Buffer.from(String(cjkYOffset), 'ascii')));
 			if(atlasSections.length === 0)
 				throw new Error(`gml/cjkAtlas.gml has no "///// script <name>" sections`);
 			for(const section of atlasSections){
@@ -1481,7 +1492,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 				atlasScript.source = section.code;
 				scripts.push(atlasScript);
 			}
-			console.log(`[cjk] FoxWriting unavailable; GML atlas renderer active (${atlasSections.length} scripts, GB2312 atlas, no DLL)`);
+			console.log(`[cjk] FoxWriting unavailable; GML atlas renderer active (${atlasSections.length} scripts, GB2312 atlas, yOffset=${cjkYOffset}, no DLL)`);
 		}
 		if(cjkBackend === 'gm' && !loadedGM){
 			addStubScript("gm_font", "return 0;");

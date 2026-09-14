@@ -36,6 +36,7 @@ globalvar @cjkAtlasReady, @cjkAtlasSprite, @cjkAtlasLineH, @cjkAtlasCount;
 globalvar @cjkAtlasX, @cjkAtlasY, @cjkAtlasW, @cjkAtlasAdv, @cjkAtlasLeft, @cjkAtlasIdx;
 globalvar @cjkAtlasFontN, @cjkAtlasFontSize, @cjkAtlasScale, @cjkAtlasCurFont;
 globalvar @cjkAtlasHAlign, @cjkAtlasVAlign, @cjkAtlasLineSpacing, @cjkAtlasFontOX, @cjkAtlasFontOY;
+globalvar @cjkAtlasYOffset;
 globalvar @cjkLines, @cjkLineW, @cjkLineN;
 var _f, _i, _n, _b0, _b1, _b2, _b3, _key, _pat, _fname;
 if(@cjkAtlasReady == 1) return 1;
@@ -51,6 +52,11 @@ if(@cjkAtlasReady == -1) return 0;
 @cjkAtlasLineSpacing = -1;
 @cjkAtlasFontOX = 0;
 @cjkAtlasFontOY = 0;
+// Optical baseline shift, baked in by the converter (iwpo.cjk.yoffset, default
+// 6 px). The bitmap atlas is a 16pt face whose ink sits higher in the GM line
+// box than the FoxWriting/GDI+ text the HUD offsets were tuned against, so the
+// glyphs are dropped by this many pixels to line up with the surrounding UI.
+@cjkAtlasYOffset = %arg0;
 @cjkLines[0] = "";
 @cjkLineW[0] = 0;
 @cjkLineN = 0;
@@ -233,10 +239,11 @@ return @cjkLineN;
 // vertical drift. The atlas is authored so a whole-pixel blit is 1:1.
 globalvar @cjkLines, @cjkLineW, @cjkLineN, @cjkAtlasSprite, @cjkAtlasLineH, @cjkAtlasScale;
 globalvar @cjkAtlasHAlign, @cjkAtlasVAlign, @cjkAtlasFontOX, @cjkAtlasFontOY, @cjkAtlasCurFont;
+globalvar @cjkAtlasYOffset;
 var _li, _lx, _ly, _len, _i, _step, _slot, _c, _col, _al, _gx, _gy;
 _col = draw_get_color();
 _al = draw_get_alpha();
-_ly = argument1;
+_ly = argument1 + @cjkAtlasYOffset;
 if(@cjkAtlasVAlign == 1){
   _ly -= @cjkLineN * argument2 / 2;
 }else{
