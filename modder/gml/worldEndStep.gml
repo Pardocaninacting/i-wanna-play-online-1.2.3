@@ -1629,10 +1629,18 @@ if(@udpState == 1){
 	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyPlayerList) && !@settingsOpen && !@noteNoClick){
 	@showPlayerList = !@showPlayerList;
 }
-	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keySettings) && !@noteNoClick){
+	// QoL: F1 is an IME-safe alternate for the settings panel - with a Chinese
+	// IME active the runner never sees the letter key (the IME swallows it), which
+	// is why "O does nothing" sometimes. The O key stays configurable
+	// (key_settings in the per-game ini).
+	if(!@loadHotkeyConsumed && (keyboard_check_pressed(@keySettings) || keyboard_check_pressed(vk_f1)) && !@noteNoClick){
 		@settingsOpen = !@settingsOpen;
 		if(@settingsOpen){
-			@kbFocus = 1;
+			// Focus starts on the TAB BAR, not inside the row list: Left/Right then
+			// switches tabs (the intuitive first action) and a stray Enter cannot
+			// fire a row action by accident.
+			@kbFocus = 0;
+			@kbRow[0] = @stg_first_row();
 			@keybindEditing = -1;
 		}else{
 			@keybindEditing = -1;

@@ -753,14 +753,18 @@ if file_exists(@savesPath) {
 	}
 	if(!@restoredFromTemp){
 #endif
+	// QoL: read the account store UNCONDITIONALLY (outside the TEMPFILE block, so
+	// engines without tempOnline reach it too) and on every create - game_restart
+	// wipes globals and re-enters this event through the tempOnline path.
+	@accLoaded = @account_load();
 	@socket = socket_create();
 	socket_connect(@socket, @server, @tcpPort);
 	// QoL: credentials come from the account store - env (P1) -> this folder (P2)
 	// -> global %APPDATA%\iwpo\account.ini (P3). The dialogs only run on the very
-	// first launch. RACE was removed (team system + T-key save toggle cover it).
-	// The socket layer queues writes until the handshake completes, so NAME below
-	// can be queued right away.
-	if(!@account_load()){
+	// first launch (@accLoaded == 0). RACE was removed (team system + T-key save
+	// toggle cover it). The socket layer queues writes until the handshake
+	// completes, so NAME below can be queued right away.
+	if(!@accLoaded){
 		#if STUDIO
 			@accName = get_string("Enter your name:", "");
 		#endif

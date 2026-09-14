@@ -490,64 +490,100 @@ if(@settingsOpen){
 	draw_set_halign(fa_left);
 	// TAB 0: SETTINGS
 	if(@settingsTab == 0){
-		// QoL: one declarative table drives the layout, so the draw code, the
-		// keyboard navigation and the mouse hit test can never drift apart.
+		// QoL: one declarative table drives the layout (see gml/settingsLib.gml).
 		@stg_build_rows(@contentY);
 		@rowI = 0;
+		@rowHover = @stg_hit_row(@mx, @my);
 		while(@rowI < @stgN){
 			@rowY = @stgY[@rowI];
 			@rowK = @stgKind[@rowI];
-			if(@rowK != 0 && @rowK != 1){
-				if(@kbFocus == 1 && @kbRow[0] == @rowI){
-					draw_set_color(make_color_rgb(220, 200, 60));
-					draw_rectangle(@spX + 4, @rowY - 2, @spX + @spW - 4, @rowY + @stgRowH - 3, true);
-				}else if(@stg_in_rect(@mx, @my, @spX + 4, @rowY - 2, @spX + @spW - 4, @rowY + @stgRowH - 3)){
-					draw_set_color(make_color_rgb(110, 110, 110));
-					draw_rectangle(@spX + 4, @rowY - 2, @spX + @spW - 4, @rowY + @stgRowH - 3, true);
+			@rowX = @stgX[@rowI];
+			@rowCX = @stgCX[@rowI];
+			@rowCW = @stgCW[@rowI];
+			@rowSty = @stgStyle[@rowI];
+			@rowSel = (@kbFocus == 1 && @kbRow[0] == @rowI);
+			if(@rowK != 0 && @rowK != 1 && @rowK != 7){
+				if(@rowSel){
+					draw_set_color(make_color_rgb(225, 205, 90));
+					draw_rectangle(@rowX - 8, @rowY - 1, @rowX + @rowCW + 178, @rowY + @stgRowH - 3, true);
+				}else if(@rowHover == @rowI){
+					draw_set_color(make_color_rgb(115, 115, 115));
+					draw_rectangle(@rowX - 8, @rowY - 1, @rowX + @rowCW + 178, @rowY + @stgRowH - 3, true);
 				}
 			}
 			draw_set_halign(fa_left);
 			if(@rowK == 0){
-				draw_set_color(make_color_rgb(170, 170, 170));
-				draw_text(@spX + 14, @rowY, @stgLabel[@rowI]);
+				draw_set_color(make_color_rgb(150, 190, 230));
+				draw_text(@rowX, @rowY, @stgLabel[@rowI]);
+				draw_set_color(make_color_rgb(70, 80, 95));
+				draw_rectangle(@rowX, @rowY + 12, @spX + @spW - 18, @rowY + 13, false);
+			}else if(@rowK == 7){
+				@rowSplit = string_pos("|", @stgLabel[@rowI]);
+				draw_set_color(make_color_rgb(150, 190, 230));
+				draw_text(@rowX, @rowY, string_copy(@stgLabel[@rowI], 1, @rowSplit - 1));
+				draw_text(@rowCX, @rowY, string_delete(@stgLabel[@rowI], 1, @rowSplit));
+				draw_set_color(make_color_rgb(70, 80, 95));
+				draw_rectangle(@rowX, @rowY + 12, @spX + @spW - 18, @rowY + 13, false);
 			}else if(@rowK == 1){
 				draw_set_color(@stg_status_color());
-				draw_circle(@spX + 20, @rowY + @stgRowH / 2, 4, false);
+				draw_circle(@rowX + 8, @rowY + 9, 5, false);
 				draw_set_color(c_white);
-				draw_text(@spX + 32, @rowY + 2, @stg_status_text());
+				draw_text(@rowX + 20, @rowY + 2, @stg_status_text());
+				draw_set_color(make_color_rgb(150, 150, 150));
+				draw_set_halign(fa_right);
+				draw_text(@spX + @spW - 18, @rowY + 2, "Server: " + @stg_server_text());
 			}else{
 				draw_set_color(c_white);
-				draw_text(@spX + 14, @rowY + 2, @stgLabel[@rowI]);
+				draw_text(@rowX, @rowY + 4, @stgLabel[@rowI]);
 				@rowV = @stg_value(@rowI);
-				draw_set_halign(fa_center);
+				@rowBY = @rowY + 2;
+				@rowBH = @stgRowH - 6;
 				if(@rowK == 5){
+					// button: grey plate with a lighter top edge
 					draw_set_color(c_gray);
-					draw_rectangle(@spX + 150, @rowY, @spX + 270, @rowY + @stgRowH - 4, false);
+					draw_rectangle(@rowCX, @rowBY, @rowCX + 150, @rowBY + @rowBH, false);
+					draw_set_color(make_color_rgb(120, 120, 120));
+					draw_rectangle(@rowCX, @rowBY, @rowCX + 150, @rowBY + 1, false);
 					draw_set_color(c_white);
-					draw_text(@spX + 210, @rowY + 1, @rowV);
+					draw_set_halign(fa_center);
+					draw_text(@rowCX + 75, @rowBY + 3, @rowV);
 				}else if(@rowK == 3){
-					draw_set_color(c_gray);
-					draw_rectangle(@spX + 334, @rowY, @spX + 356, @rowY + @stgRowH - 4, false);
-					draw_rectangle(@spX + 356, @rowY, @spX + 378, @rowY + @stgRowH - 4, false);
+					draw_set_color(make_color_rgb(45, 45, 50));
+					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, false);
+					draw_set_color(make_color_rgb(90, 90, 96));
+					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, true);
 					draw_set_color(c_white);
-					draw_text(@spX + 345, @rowY + 1, "<");
-					draw_text(@spX + 367, @rowY + 1, ">");
-					draw_text(@spX + 300, @rowY + 1, @rowV);
+					draw_set_halign(fa_right);
+					draw_text(@rowCX + @rowCW - 4, @rowBY + 3, @rowV);
+					draw_set_halign(fa_center);
+					draw_set_color(c_gray);
+					draw_rectangle(@rowCX + @rowCW + 6, @rowBY, @rowCX + @rowCW + 26, @rowBY + @rowBH, false);
+					draw_rectangle(@rowCX + @rowCW + 28, @rowBY, @rowCX + @rowCW + 48, @rowBY + @rowBH, false);
+					draw_set_color(c_white);
+					draw_text(@rowCX + @rowCW + 16, @rowBY + 3, "<");
+					draw_text(@rowCX + @rowCW + 38, @rowBY + 3, ">");
 				}else if(@rowK == 4){
 					if(@rowV == "ON"){
-						draw_set_color(make_color_rgb(40, 160, 40));
+						draw_set_color(make_color_rgb(50, 170, 80));
 					}else{
-						draw_set_color(c_gray);
+						draw_set_color(make_color_rgb(90, 90, 90));
 					}
-					draw_rectangle(@spX + 150, @rowY, @spX + 206, @rowY + @stgRowH - 4, false);
+					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, false);
 					draw_set_color(c_white);
-					draw_text(@spX + 178, @rowY + 1, @rowV);
+					draw_set_halign(fa_center);
+					draw_text(@rowCX + @rowCW / 2, @rowBY + 3, @rowV);
 				}else{
-					draw_set_color(make_color_rgb(70, 70, 70));
-					draw_rectangle(@spX + 150, @rowY, @spX + 378, @rowY + @stgRowH - 4, false);
+					// text field (name / session key)
+					draw_set_color(make_color_rgb(35, 35, 40));
+					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, false);
+					draw_set_color(make_color_rgb(95, 95, 100));
+					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, true);
 					draw_set_color(c_white);
-					draw_set_halign(fa_left);
-					draw_text(@spX + 156, @rowY + 1, @rowV);
+					draw_text(@rowCX + 6, @rowBY + 3, @rowV);
+					if(@rowSty == 3){
+						draw_set_color(make_color_rgb(150, 150, 150));
+						draw_text(@rowCX + @rowCW + 8, @rowBY + 3, @stg_source_text());
+					}
 				}
 			}
 			@rowI += 1;
@@ -555,19 +591,21 @@ if(@settingsOpen){
 		draw_set_halign(fa_left);
 		if(@stg_toast_active()){
 			if(@stgToastKind == 0){
-				draw_set_color(make_color_rgb(60, 200, 90));
+				draw_set_color(make_color_rgb(90, 220, 120));
 			}else if(@stgToastKind == 1){
-				draw_set_color(make_color_rgb(220, 200, 60));
+				draw_set_color(make_color_rgb(230, 210, 90));
 			}else{
-				draw_set_color(make_color_rgb(220, 90, 90));
+				draw_set_color(make_color_rgb(230, 110, 110));
 			}
-			draw_text(@spX + 14, @spY + @spH - 32, @stgToastMsg);
+			draw_text(@spX + 18, @spY + @spH - 34, @stgToastMsg);
 		}
-		draw_set_color(make_color_rgb(170, 170, 170));
+		draw_set_color(make_color_rgb(70, 80, 95));
+		draw_rectangle(@spX + 18, @spY + @spH - 22, @spX + @spW - 18, @spY + @spH - 21, false);
+		draw_set_color(make_color_rgb(160, 160, 160));
 		if(@kbFocus == 1 && @kbRow[0] >= 0 && @kbRow[0] < @stgN){
-			draw_text(@spX + 14, @spY + @spH - 16, @stg_hint(@kbRow[0]));
+			draw_text(@spX + 18, @spY + @spH - 18, @stg_hint(@kbRow[0]));
 		}else{
-			draw_text(@spX + 14, @spY + @spH - 16, "Up/Down Move   Enter Edit/Apply   Left/Right Change   O Close");
+			draw_text(@spX + 18, @spY + @spH - 18, "Up/Down rows   Left/Right tabs or values   Enter edit   F1 close");
 		}
 	}
 	// TAB 1: SAVES
@@ -1257,13 +1295,15 @@ if(@settingsOpen){
 		if(!@tabClicked && @settingsTab == 0){
 			@kbFocus = 1;
 			@stg_build_rows(@contentY);
-			@rowHit = @stg_row_at(@my, 4);
+			@rowHit = @stg_hit_row(@mx, @my);
 			if(@rowHit >= 0){
 				@kbRow[0] = @rowHit;
 				@rowK = @stg_kind_of(@rowHit);
-				if(@rowK == 3 && @mx >= @spX + 334 && @mx <= @spX + 356){
+				@rowCX = @stgCX[@rowHit];
+				@rowCW = @stgCW[@rowHit];
+				if(@rowK == 3 && @mx >= @rowCX + @rowCW + 6 && @mx <= @rowCX + @rowCW + 26){
 					@stg_act_dir(@rowHit, -1);
-				}else if(@rowK == 3 && @mx >= @spX + 356 && @mx <= @spX + 378){
+				}else if(@rowK == 3 && @mx >= @rowCX + @rowCW + 28 && @mx <= @rowCX + @rowCW + 48){
 					@stg_act_dir(@rowHit, 1);
 				}else{
 					@stg_act(@rowHit);

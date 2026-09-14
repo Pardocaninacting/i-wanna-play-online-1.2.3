@@ -883,14 +883,20 @@ if file_exists(@savesPath) {
 	}
 	if(!@restoredFromTemp){
 #endif
+	// QoL: read the account store UNCONDITIONALLY (outside the TEMPFILE block:
+	// engines without tempOnline never execute the part above) and on every
+	// create, because game_restart wipes globals and re-enters this event through
+	// the tempOnline path - without this the acc* globals stay unset and the
+	// settings panel dies on its first frame ("Cannot compare arguments").
+	@accLoaded = @account_load();
 	@socket = __ONLINE_socket_create();
 		@socketConnectResult = __ONLINE_socket_connect(@socket, @server, @tcpPort);
 	// QoL: credentials come from the account store - env (P1) -> this folder (P2)
 	// -> global %APPDATA%\iwpo\account.ini (P3). The dialogs below only run on the
-	// very first launch, when nothing is stored anywhere; every later launch goes
-	// straight into the game. RACE was removed entirely (the team system and the
-	// T-key save toggle cover it).
-	if(!@account_load()){
+	// very first launch (@accLoaded == 0), when nothing is stored anywhere; every
+	// later launch goes straight into the game. RACE was removed entirely (the
+	// team system and the T-key save toggle cover it).
+	if(!@accLoaded){
 		#if STUDIO
 			@accName = get_string("Enter your name:", "");
 		#endif
