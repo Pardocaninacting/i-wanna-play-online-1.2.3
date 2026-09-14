@@ -224,9 +224,16 @@ return @cjkLineN;
 ///// script @cjk_atlas_draw
 // Draws the lines produced by @cjk_atlas_wrap at argument0/argument1 using the
 // current alignment, colour and alpha. argument2 = line advance in pixels.
+//
+// Every destination coordinate is rounded to a whole pixel before the glyph is
+// blitted. GameMaker's own font renderer (and the GMS/CJKTEXT atlas path, which
+// pre-rounds with round(x - w/2)) always rasterizes text on integer positions;
+// a fractional origin makes the D3D sampler filter each glyph quad against its
+// neighbours, which shows up as smeared/sheared strokes and a half-pixel
+// vertical drift. The atlas is authored so a whole-pixel blit is 1:1.
 globalvar @cjkLines, @cjkLineW, @cjkLineN, @cjkAtlasSprite, @cjkAtlasLineH, @cjkAtlasScale;
 globalvar @cjkAtlasHAlign, @cjkAtlasVAlign, @cjkAtlasFontOX, @cjkAtlasFontOY, @cjkAtlasCurFont;
-var _li, _lx, _ly, _len, _i, _step, _slot, _c, _col, _al;
+var _li, _lx, _ly, _len, _i, _step, _slot, _c, _col, _al, _gx, _gy;
 _col = draw_get_color();
 _al = draw_get_alpha();
 _ly = argument1;
@@ -237,19 +244,23 @@ if(@cjkAtlasVAlign == 1){
 }
 _li = 0;
 while(_li < @cjkLineN){
+  _ly = round(_ly);
   _lx = argument0;
   if(@cjkAtlasHAlign == 1){
     _lx -= @cjkLineW[_li] / 2;
   }else{
     if(@cjkAtlasHAlign == 2) _lx -= @cjkLineW[_li];
   }
+  _lx = round(_lx);
   _len = string_length(@cjkLines[_li]);
   _i = 1;
   while(_i <= _len){
     _slot = @cjk_atlas_glyph(@cjkLines[_li], _i);
     _step = @cjkGlyphStep;
     if(_slot > 0){
-      draw_sprite_part_ext(@cjkAtlasSprite, 0, @cjkAtlasX[_slot - 1], @cjkAtlasY[_slot - 1], @cjkAtlasW[_slot - 1], @cjkAtlasLineH, _lx + (@cjkAtlasLeft[_slot - 1] + @cjkAtlasFontOX) * @cjkAtlasScale, _ly + @cjkAtlasFontOY * @cjkAtlasScale, @cjkAtlasScale, @cjkAtlasScale, _col, _al);
+      _gx = round(_lx + (@cjkAtlasLeft[_slot - 1] + @cjkAtlasFontOX) * @cjkAtlasScale);
+      _gy = round(_ly + @cjkAtlasFontOY * @cjkAtlasScale);
+      draw_sprite_part_ext(@cjkAtlasSprite, 0, @cjkAtlasX[_slot - 1], @cjkAtlasY[_slot - 1], @cjkAtlasW[_slot - 1], @cjkAtlasLineH, _gx, _gy, @cjkAtlasScale, @cjkAtlasScale, _col, _al);
       _lx += @cjkAtlasAdv[_slot - 1] * @cjkAtlasScale;
     }else{
       _lx += @cjkGlyphAdv * @cjkAtlasScale;
