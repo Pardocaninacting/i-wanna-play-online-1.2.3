@@ -1033,9 +1033,11 @@ if(@mustQuit){
 	game_end();
 	exit;
 }
-if(@reconnecting){
-	exit;
-}
+// NOTE: there used to be an `if(@reconnecting) exit;` here that froze every UI
+// hotkey while the link was down - offline players could not even open the
+// settings menu to see WHY nothing worked. Removed: every send below is gated
+// on @connected or queued-and-flushed by the socket layer, and the local UI
+// (menu, notes, canvas, keybinds) must stay usable while offline.
 // SKINS: (re)announce the local selection once connected - the dirty flag is
 // set by skin select/clear, the boot-time restore and the reconnect path.
 if(@skinNetDirty){

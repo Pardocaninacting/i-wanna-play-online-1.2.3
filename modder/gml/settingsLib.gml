@@ -14,22 +14,23 @@
 //   @stgX[i]     label x, @stgCX[i]/@stgCW[i] control x + width
 //   @stgY[i]     row y (top)
 //
-// Layout (panel 560x424, two columns for Gameplay/Display):
+// Layout (panel 600x460, two columns for Gameplay/Display):
 //
-//   +----------------------------------------------------------+
-//   | [Settings][Saves][Rating][Keys][Sync][Skins]             |
-//   | CONNECTION                                               |
-//   |  * Online                        Server: 1.2.3.4:8002    |
-//   |  [ Reconnect now ]  [ Apply & Reconnect ]                |
-//   | ACCOUNT                                                  |
-//   |  Name:     [ QoLFirst                       ]  Global    |
-//   |  Password: [ ******                         ]            |
-//   |  Store in: Global  < >                                   |
-//   | GAMEPLAY                    DISPLAY                      |
-//   |  Team:  None < >            Visual:    All < >           |
-//   |  Lerp:  [ ON ]              Indicator: [ OFF ]           |
-//   |  ...                        Spec Cam:  Free < >          |
-//   +----------------------------------------------------------+
+//   +------------------------------------------------------------+
+//   | [Settings][Saves][Rating][Keys][Sync][Skins]               |
+//   | CONNECTION                                                 |
+//   |  * Online                          Server: 1.2.3.4:8002    |
+//   |  [ Reconnect now ]                                         |
+//   |  [ Apply & Reconnect ]                                     |
+//   | ACCOUNT                                                    |
+//   |  Name:     [ QoLFirst                              ]       |
+//   |  Password: [ ******                                ]       |
+//   |  Store in: [ Global ]                                      |
+//   | GAMEPLAY                    DISPLAY                        |
+//   |  Team:  [ None < > ]        Visual:    [ All < > ]         |
+//   |  Lerp:  [ ON ]              Indicator: [ OFF ]             |
+//   |  ...                        Spec Cam:  [ Free < > ]        |
+//   +------------------------------------------------------------+
 //   hint line
 //
 // GameMaker-8 constraints honoured here: no #else (the render pipeline knows
@@ -66,8 +67,11 @@ var _w, _h;
 @accWritePath = "";
 // layout constants (the gate checks the whole table against the panel)
 @stgRowH = 24;
-@stgHeadH = 16;
-// panel geometry, clamped to the view-port (560x424 fits an 800x600 window)
+@stgHeadH = 18;
+// Panel geometry is derived ONCE here and the draw side only reads it (a
+// hardcoded size in the draw path once forked the two and the row table
+// overflowed the panel). 600x460 covers tab 0's three sections with air;
+// clamped to the view-port minus a 16px frame.
 if(view_enabled){
   _w = view_wport[0];
   _h = view_hport[0];
@@ -77,66 +81,68 @@ if(view_enabled){
 }
 if(_w < 1) _w = 640;
 if(_h < 1) _h = 480;
-@spW = 560;
-@spH = 444;
-if(@spW > _w - 20) @spW = _w - 20;
-if(@spH > _h - 20) @spH = _h - 20;
+@spW = 600;
+@spH = 460;
+if(@spW > _w - 16) @spW = _w - 16;
+if(@spH > _h - 16) @spH = _h - 16;
 @hudWinW = _w;
 @hudWinH = _h;
 @spX = floor((_w - @spW) / 2);
 @spY = floor((_h - @spH) / 2);
 if(@spX < 0) @spX = 0;
 if(@spY < 0) @spY = 0;
-@tabH = 24;
-@contentY = @spY + @tabH + 6;
+@tabH = 26;
+@contentY = @spY + @tabH + 8;
+@footerY = @spY + @spH - 34;   // footer separator y; hint + Close live below it
 return 0;
 
 ///// script @stg_build_rows
 // Rebuilds the tab-0 table for the current panel geometry.
 // args: contentY -> 0
 globalvar @stgN, @stgKind, @stgAct, @stgLabel, @stgX, @stgCX, @stgCW, @stgY;
-globalvar @stgRowH, @stgHeadH, @spX;
-var _y, _l, _r, _lx, _rx;
+globalvar @stgRowH, @stgHeadH;
+var _y, _cl, _cr, _cf, _btnW;
 @stgN = 0;
 _y = argument0 + 2;
-_l = @spX + 18;
-_r = @spX + 292;
-_lx = @spX + 150;
-_rx = @spX + 398;
+_cl = @spX + 16;                 // left column label x (content left edge)
+_cr = @spX + 16 + 284;           // right column label x (Display)
+_cf = @spX + 16 + 110;           // account field x
+_btnW = 240;
 // --- connection
-@stg_row_add(0, 0, "CONNECTION", _l, _y, 0, 0); _y += @stgHeadH;
-@stg_row_add(1, 0, "", _l, _y, 0, 0); _y += @stgRowH;
-@stg_row_add(5, 11, "", _l, _y, 118, 1); _y += @stgRowH;
-@stg_row_add(5, 15, "", _l, _y, 118, 1); _y += @stgRowH;
+@stg_row_add(0, 0, "CONNECTION", _cl, _y, 0, 0, 0); _y += @stgHeadH;
+@stg_row_add(1, 0, "", _cl, _y, 0, 0, 0); _y += @stgRowH;
+@stg_row_add(5, 11, "", _cl, _y, _btnW, 1, _cl); _y += @stgRowH;
+@stg_row_add(5, 15, "", _cl, _y, _btnW, 1, _cl); _y += @stgRowH;
 // --- account
-_y += 4;
-@stg_row_add(0, 0, "ACCOUNT", _l, _y, 0, 0); _y += @stgHeadH;
-@stg_row_add(2, 12, "Name:", _l, _y, 330, 0); _y += @stgRowH + 2;
-@stg_row_add(2, 13, "Password:", _l, _y, 330, 0); _y += @stgRowH + 2;
-@stg_row_add(3, 14, "Store in:", _l, _y, 90, 0); _y += @stgRowH;
+_y += 6;
+@stg_row_add(0, 0, "ACCOUNT", _cl, _y, 0, 0, 0); _y += @stgHeadH;
+@stg_row_add(2, 12, "Name:", _cl, _y, @spW - 32 - 110, 0, _cf); _y += @stgRowH + 2;
+@stg_row_add(2, 13, "Password:", _cl, _y, @spW - 32 - 110, 0, _cf); _y += @stgRowH + 2;
+@stg_row_add(3, 14, "Store in:", _cl, _y, 130, 0, 0); _y += @stgRowH;
 // --- gameplay / display side by side
-_y += 4;
-@stg_row_add(7, 0, "GAMEPLAY|DISPLAY", _l, _y, _r, 0); _y += @stgHeadH;
-@stg_row_add(3, 1, "Team:", _l, _y, 90, 0);
-@stg_row_add(3, 5, "Visual:", _r, _y, 70, 0); _y += @stgRowH;
-@stg_row_add(4, 2, "Lerp:", _l, _y, 70, 0);
-@stg_row_add(4, 6, "Indicator:", _r, _y, 70, 0); _y += @stgRowH;
-@stg_row_add(4, 3, "Save:", _l, _y, 70, 0);
-@stg_row_add(3, 7, "Spec Cam:", _r, _y, 70, 0); _y += @stgRowH;
-@stg_row_add(4, 4, "Fast:", _l, _y, 70, 0); _y += @stgRowH;
-@stg_row_add(3, 8, "PVP:", _l, _y, 90, 0); _y += @stgRowH;
-@stg_row_add(4, 9, "Bullets:", _l, _y, 70, 0); _y += @stgRowH;
+_y += 6;
+@stg_row_add(7, 0, "GAMEPLAY|DISPLAY", _cl, _y, 0, 0, _cr); _y += @stgHeadH;
+@stg_row_add(3, 1, "Team:", _cl, _y, 130, 0, 0);
+@stg_row_add(3, 5, "Visual:", _cr, _y, 130, 0, 0); _y += @stgRowH;
+@stg_row_add(4, 2, "Lerp:", _cl, _y, 130, 0, 0);
+@stg_row_add(4, 6, "Indicator:", _cr, _y, 130, 0, 0); _y += @stgRowH;
+@stg_row_add(4, 3, "Save:", _cl, _y, 130, 0, 0);
+@stg_row_add(3, 7, "Spec Cam:", _cr, _y, 130, 0, 0); _y += @stgRowH;
+@stg_row_add(4, 4, "Fast:", _cl, _y, 130, 0, 0); _y += @stgRowH;
+@stg_row_add(3, 8, "PVP:", _cl, _y, 130, 0, 0); _y += @stgRowH;
+@stg_row_add(4, 9, "Bullets:", _cl, _y, 130, 0, 0); _y += @stgRowH;
 #if PLAYER_LIST
-@stg_row_add(5, 10, "Player Objects:", _l, _y, 118, 1); _y += @stgRowH;
+@stg_row_add(5, 10, "Player Objects:", _cl, _y, 150, 1, _cf); _y += @stgRowH;
 #endif
 @stgHeight = _y - argument0;
 return 0;
 
 ///// script @stg_row_add
 // Appends one row and returns its index.
-// args: kind, act, label, x, y, controlWidth, controlStyle -> index
+// args: kind, act, label, x, y, controlWidth, controlStyle, cxOverride
 //   controlStyle 0 = left-aligned button/box at x, 1 = wide button centred in the
 //   column, 2 = toggle pill, 3 = select value + arrows
+//   cxOverride 0 = control sits at x + 84 (the default column gap)
 globalvar @stgN, @stgKind, @stgAct, @stgLabel, @stgX, @stgCX, @stgCW, @stgY, @stgStyle;
 var _i;
 _i = @stgN;
@@ -145,7 +151,11 @@ _i = @stgN;
 @stgLabel[_i] = argument2;
 @stgX[_i] = argument3;
 @stgY[_i] = argument4;
-@stgCX[_i] = argument3 + 132;
+if(argument7 == 0){
+  @stgCX[_i] = argument3 + 84;
+}else{
+  @stgCX[_i] = argument7;
+}
 @stgCW[_i] = argument5;
 @stgStyle[_i] = argument6;
 @stgN = _i + 1;
@@ -155,14 +165,15 @@ return _i;
 // Mouse hit test in panel space. Returns the row index or -1; headers, the status
 // row and non-interactive rows are skipped.
 // args: mx, my -> row index / -1
-globalvar @stgN, @stgKind, @stgX, @stgY, @stgCX, @stgCW, @stgRowH, @spW;
+// Hit zone: from 6px left of the label to the control's right edge + 6px -
+// deliberately NOT wider, so clicks on empty panel space never fire a row.
+globalvar @stgN, @stgKind, @stgX, @stgY, @stgCX, @stgCW, @stgRowH;
 var _i;
 _i = 0;
 while(_i < @stgN){
   if(@stgKind[_i] != 0 && @stgKind[_i] != 1 && @stgKind[_i] != 7){
     if(argument1 >= @stgY[_i] - 1 && argument1 < @stgY[_i] + @stgRowH - 2){
-      // accept the whole row strip: label + control stay one click target
-      if(argument0 >= @stgX[_i] - 4 && argument0 < @stgX[_i] + @stgCW[_i] + 168) return _i;
+      if(argument0 >= @stgX[_i] - 6 && argument0 < @stgCX[_i] + @stgCW[_i] + 6) return _i;
     }
   }
   _i += 1;

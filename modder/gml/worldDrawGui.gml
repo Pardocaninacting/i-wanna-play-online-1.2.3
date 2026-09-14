@@ -430,12 +430,9 @@ if(@skinPrevLoaded >= 0){
 if(@settingsOpen){
 	@_alpha = draw_get_alpha();
 	@_color = draw_get_color();
-	@spW = 420;
-	@spH = 400;
-	@spX = floor((@hudWinW - @spW) / 2);
-	@spY = floor((@hudWinH - @spH) / 2);
-	if(@spX < 0) @spX = 0;
-	if(@spY < 0) @spY = 0;
+	// Geometry (@spX/@spY/@spW/@spH/@tabH) is owned by @stg_init (worldCreate).
+	// It must never be re-derived here: a hardcoded size once forked the two,
+	// and the row table painted outside the panel.
 	#if STUDIO
 		if(global.@ftOnline >= 0){
 			draw_set_font(global.@ftOnline);
@@ -446,15 +443,21 @@ if(@settingsOpen){
 	#endif
 	draw_set_valign(fa_top);
 	draw_set_halign(fa_left);
-	draw_set_alpha(0.88);
+	// The game's own draw state leaks into this event (e.g. fish's title glow
+	// uses bm_add, under which a black panel plate adds zero and vanishes);
+	// always draw the chrome under the normal blend mode.
+	draw_set_blend_mode(bm_normal);
+	// panel: flat dark plate + thin frame
+	draw_set_alpha(0.90);
 	draw_set_color(c_black);
 	draw_rectangle(@spX, @spY, @spX + @spW, @spY + @spH, false);
 	draw_set_alpha(1);
-	draw_set_color(c_white);
+	draw_set_color(make_color_rgb(70, 80, 95));
 	draw_rectangle(@spX, @spY, @spX + @spW, @spY + @spH, true);
+	// tab strip: the active tab blends into the panel with an accent underline,
+	// inactive tabs sit darker with muted text
 	@tabCount = 6;
 	@tabW = floor(@spW / @tabCount);
-	@tabH = 22;
 	@tabY = @spY;
 	@tabNames[0] = "Settings";
 	@tabNames[1] = "Saves(" + string(@saveHistCount) + ")";
@@ -467,27 +470,31 @@ if(@settingsOpen){
 		@tX2 = @tX1 + @tabW;
 		if(@tI == @tabCount - 1) @tX2 = @spX + @spW;
 		if(@settingsTab == @tI){
-			draw_set_color(make_color_rgb(50, 50, 50));
+			draw_set_color(c_black);
 		}else{
-			draw_set_color(make_color_rgb(25, 25, 25));
+			draw_set_color(make_color_rgb(28, 28, 34));
 		}
 		draw_rectangle(@tX1, @tabY, @tX2, @tabY + @tabH, false);
-		draw_set_color(c_white);
-		draw_rectangle(@tX1, @tabY, @tX2, @tabY + @tabH, true);
+		draw_set_color(make_color_rgb(55, 60, 70));
+		draw_rectangle(@tX1, @tabY + @tabH - 1, @tX2, @tabY + @tabH, false);
 		draw_set_halign(fa_center);
 		if(@settingsTab == @tI){
-			draw_set_color(c_yellow);
+			draw_set_color(c_white);
 		}else{
-			draw_set_color(c_gray);
+			draw_set_color(make_color_rgb(150, 150, 155));
 		}
-		draw_text(floor((@tX1 + @tX2) / 2), @tabY + 3, @tabNames[@tI]);
+		draw_text(floor((@tX1 + @tX2) / 2), @tabY + 6, @tabNames[@tI]);
+		if(@settingsTab == @tI){
+			draw_set_color(make_color_rgb(220, 200, 60));
+			draw_rectangle(@tX1 + 8, @tabY + @tabH - 2, @tX2 - 8, @tabY + @tabH - 1, false);
+		}
 		if(@kbFocus == 0 && @settingsTab == @tI){
 			draw_set_color(make_color_rgb(220, 200, 60));
 			draw_rectangle(@tX1 + 1, @tabY + 1, @tX2 - 1, @tabY + @tabH - 1, true);
 		}
 	}
-	@contentY = @tabY + @tabH + 6;
 	draw_set_halign(fa_left);
+	@contentY = @tabY + @tabH + 8;
 	// TAB 0: SETTINGS
 	if(@settingsTab == 0){
 		// QoL: one declarative table drives the layout (see gml/settingsLib.gml).
@@ -503,27 +510,38 @@ if(@settingsOpen){
 			@rowSty = @stgStyle[@rowI];
 			@rowSel = (@kbFocus == 1 && @kbRow[0] == @rowI);
 			if(@rowK != 0 && @rowK != 1 && @rowK != 7){
+				// hover tint / keyboard focus share the row's exact bounds
 				if(@rowSel){
-					draw_set_color(make_color_rgb(225, 205, 90));
-					draw_rectangle(@rowX - 8, @rowY - 1, @rowX + @rowCW + 178, @rowY + @stgRowH - 3, true);
+					draw_set_color(make_color_rgb(48, 46, 30));
+					draw_rectangle(@rowX - 6, @rowY - 1, @rowCX + @rowCW + 6, @rowY + @stgRowH - 3, false);
+					draw_set_color(make_color_rgb(220, 200, 60));
+					draw_rectangle(@rowX - 6, @rowY - 1, @rowCX + @rowCW + 6, @rowY + @stgRowH - 3, true);
 				}else if(@rowHover == @rowI){
-					draw_set_color(make_color_rgb(115, 115, 115));
-					draw_rectangle(@rowX - 8, @rowY - 1, @rowX + @rowCW + 178, @rowY + @stgRowH - 3, true);
+					draw_set_color(make_color_rgb(35, 35, 40));
+					draw_rectangle(@rowX - 6, @rowY - 1, @rowCX + @rowCW + 6, @rowY + @stgRowH - 3, false);
 				}
 			}
 			draw_set_halign(fa_left);
 			if(@rowK == 0){
+				// section header: label + a thin rule running to the content edge
 				draw_set_color(make_color_rgb(150, 190, 230));
 				draw_text(@rowX, @rowY, @stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(70, 80, 95));
-				draw_rectangle(@rowX, @rowY + 12, @spX + @spW - 18, @rowY + 13, false);
+				@rowRuleX = @rowX + string_width(@stgLabel[@rowI]) + 10;
+				if(@rowRuleX < @spX + @spW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @spW - 16, @rowY + 9, false);
 			}else if(@rowK == 7){
+				// two-column header: each label gets a short rule of its own
 				@rowSplit = string_pos("|", @stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(150, 190, 230));
 				draw_text(@rowX, @rowY, string_copy(@stgLabel[@rowI], 1, @rowSplit - 1));
+				draw_set_color(make_color_rgb(70, 80, 95));
+				@rowRuleX = @rowX + string_width(string_copy(@stgLabel[@rowI], 1, @rowSplit - 1)) + 10;
+				if(@rowRuleX < @rowCX - 16) draw_rectangle(@rowRuleX, @rowY + 8, @rowCX - 16, @rowY + 9, false);
+				draw_set_color(make_color_rgb(150, 190, 230));
 				draw_text(@rowCX, @rowY, string_delete(@stgLabel[@rowI], 1, @rowSplit));
 				draw_set_color(make_color_rgb(70, 80, 95));
-				draw_rectangle(@rowX, @rowY + 12, @spX + @spW - 18, @rowY + 13, false);
+				@rowRuleX = @rowCX + string_width(string_delete(@stgLabel[@rowI], 1, @rowSplit)) + 10;
+				if(@rowRuleX < @spX + @spW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @spW - 16, @rowY + 9, false);
 			}else if(@rowK == 1){
 				draw_set_color(@stg_status_color());
 				draw_circle(@rowX + 8, @rowY + 9, 5, false);
@@ -531,7 +549,7 @@ if(@settingsOpen){
 				draw_text(@rowX + 20, @rowY + 2, @stg_status_text());
 				draw_set_color(make_color_rgb(150, 150, 150));
 				draw_set_halign(fa_right);
-				draw_text(@spX + @spW - 18, @rowY + 2, "Server: " + @stg_server_text());
+				draw_text(@spX + @spW - 16, @rowY + 2, "Server: " + @stg_server_text());
 			}else{
 				draw_set_color(c_white);
 				draw_text(@rowX, @rowY + 4, @stgLabel[@rowI]);
@@ -539,29 +557,33 @@ if(@settingsOpen){
 				@rowBY = @rowY + 2;
 				@rowBH = @stgRowH - 6;
 				if(@rowK == 5){
-					// button: grey plate with a lighter top edge
-					draw_set_color(c_gray);
-					draw_rectangle(@rowCX, @rowBY, @rowCX + 150, @rowBY + @rowBH, false);
-					draw_set_color(make_color_rgb(120, 120, 120));
-					draw_rectangle(@rowCX, @rowBY, @rowCX + 150, @rowBY + 1, false);
+					// button: flat dark plate, brighter frame on hover/focus
+					draw_set_color(make_color_rgb(45, 45, 52));
+					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, false);
+					if(@rowSel || @rowHover == @rowI){
+						draw_set_color(make_color_rgb(150, 160, 175));
+					}else{
+						draw_set_color(make_color_rgb(90, 95, 105));
+					}
+					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, true);
 					draw_set_color(c_white);
 					draw_set_halign(fa_center);
-					draw_text(@rowCX + 75, @rowBY + 3, @rowV);
+					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3, @rowV);
 				}else if(@rowK == 3){
+					// select: one bordered box, < value > inside
 					draw_set_color(make_color_rgb(45, 45, 50));
 					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, false);
 					draw_set_color(make_color_rgb(90, 90, 96));
 					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, true);
-					draw_set_color(c_white);
-					draw_set_halign(fa_right);
-					draw_text(@rowCX + @rowCW - 4, @rowBY + 3, @rowV);
-					draw_set_halign(fa_center);
 					draw_set_color(c_gray);
-					draw_rectangle(@rowCX + @rowCW + 6, @rowBY, @rowCX + @rowCW + 26, @rowBY + @rowBH, false);
-					draw_rectangle(@rowCX + @rowCW + 28, @rowBY, @rowCX + @rowCW + 48, @rowBY + @rowBH, false);
+					draw_rectangle(@rowCX + 22, @rowBY + 1, @rowCX + 23, @rowBY + @rowBH - 1, false);
+					draw_rectangle(@rowCX + @rowCW - 23, @rowBY + 1, @rowCX + @rowCW - 22, @rowBY + @rowBH - 1, false);
+					draw_set_halign(fa_center);
+					draw_set_color(make_color_rgb(170, 170, 175));
+					draw_text(@rowCX + 11, @rowBY + 3, "<");
+					draw_text(@rowCX + @rowCW - 11, @rowBY + 3, ">");
 					draw_set_color(c_white);
-					draw_text(@rowCX + @rowCW + 16, @rowBY + 3, "<");
-					draw_text(@rowCX + @rowCW + 38, @rowBY + 3, ">");
+					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3, @rowV);
 				}else if(@rowK == 4){
 					if(@rowV == "ON"){
 						draw_set_color(make_color_rgb(50, 170, 80));
@@ -571,7 +593,7 @@ if(@settingsOpen){
 					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, false);
 					draw_set_color(c_white);
 					draw_set_halign(fa_center);
-					draw_text(@rowCX + @rowCW / 2, @rowBY + 3, @rowV);
+					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3, @rowV);
 				}else{
 					// text field (name / session key)
 					draw_set_color(make_color_rgb(35, 35, 40));
@@ -582,13 +604,16 @@ if(@settingsOpen){
 					draw_text(@rowCX + 6, @rowBY + 3, @rowV);
 					if(@rowSty == 3){
 						draw_set_color(make_color_rgb(150, 150, 150));
-						draw_text(@rowCX + @rowCW + 8, @rowBY + 3, @stg_source_text());
+						draw_set_halign(fa_right);
+						draw_text(@spX + @spW - 16, @rowBY + 3, @stg_source_text());
 					}
 				}
 			}
 			@rowI += 1;
 		}
 		draw_set_halign(fa_left);
+		// footer: separator + hint + Close all live in the footer band (@footerY),
+		// below the last row; the toast floats just above it and never overlaps
 		if(@stg_toast_active()){
 			if(@stgToastKind == 0){
 				draw_set_color(make_color_rgb(90, 220, 120));
@@ -597,15 +622,15 @@ if(@settingsOpen){
 			}else{
 				draw_set_color(make_color_rgb(230, 110, 110));
 			}
-			draw_text(@spX + 18, @spY + @spH - 34, @stgToastMsg);
+			draw_text(@spX + 16, @footerY - 18, @stgToastMsg);
 		}
 		draw_set_color(make_color_rgb(70, 80, 95));
-		draw_rectangle(@spX + 18, @spY + @spH - 22, @spX + @spW - 18, @spY + @spH - 21, false);
+		draw_rectangle(@spX + 16, @footerY, @spX + @spW - 16, @footerY + 1, false);
 		draw_set_color(make_color_rgb(160, 160, 160));
 		if(@kbFocus == 1 && @kbRow[0] >= 0 && @kbRow[0] < @stgN){
-			draw_text(@spX + 18, @spY + @spH - 18, @stg_hint(@kbRow[0]));
+			draw_text(@spX + 16, @footerY + 10, @stg_hint(@kbRow[0]));
 		}else{
-			draw_text(@spX + 18, @spY + @spH - 18, "Up/Down rows   Left/Right tabs or values   Enter edit   F1 close");
+			draw_text(@spX + 16, @footerY + 10, "Up/Down rows   Left/Right tabs or values   Enter edit   F1 close");
 		}
 	}
 	// TAB 1: SAVES
@@ -1244,15 +1269,19 @@ if(@settingsOpen){
             draw_set_halign(fa_left);
         }
     }
-	@btnCY = @spY + @spH - 28;
+	// Close lives in the footer band, right-aligned (matches the tab-0 footer;
+	// other tabs keep their content above @footerY)
 	@btnCW = 70;
 	@btnCH = 22;
-	@btnCX = @spX + @spW - @btnCW - 8;
-	draw_set_color(c_gray);
+	@btnCX = @spX + @spW - @btnCW - 16;
+	@btnCY = @footerY + 6;
+	draw_set_color(make_color_rgb(45, 45, 52));
 	draw_rectangle(@btnCX, @btnCY, @btnCX + @btnCW, @btnCY + @btnCH, false);
+	draw_set_color(make_color_rgb(90, 95, 105));
+	draw_rectangle(@btnCX, @btnCY, @btnCX + @btnCW, @btnCY + @btnCH, true);
 	draw_set_color(c_white);
 	draw_set_halign(fa_center);
-	draw_text(@btnCX + @btnCW/2, @btnCY + 2, "Close");
+	draw_text(@btnCX + @btnCW/2, @btnCY + 4, "Close");
 	#if STUDIO
 	@mx = device_mouse_x_to_gui(0);
 	@my = device_mouse_y_to_gui(0);
@@ -1301,9 +1330,9 @@ if(@settingsOpen){
 				@rowK = @stg_kind_of(@rowHit);
 				@rowCX = @stgCX[@rowHit];
 				@rowCW = @stgCW[@rowHit];
-				if(@rowK == 3 && @mx >= @rowCX + @rowCW + 6 && @mx <= @rowCX + @rowCW + 26){
+				if(@rowK == 3 && @mx >= @rowCX && @mx < @rowCX + 22){
 					@stg_act_dir(@rowHit, -1);
-				}else if(@rowK == 3 && @mx >= @rowCX + @rowCW + 28 && @mx <= @rowCX + @rowCW + 48){
+				}else if(@rowK == 3 && @mx >= @rowCX + @rowCW - 22 && @mx <= @rowCX + @rowCW){
 					@stg_act_dir(@rowHit, 1);
 				}else{
 					@stg_act(@rowHit);
