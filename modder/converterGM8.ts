@@ -570,10 +570,20 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	try { await fs.read(fh, head as unknown as Uint8Array, 0, head.length, 0); }
 	finally { await fs.close(fh); }
 	const isUpxPacked: boolean = head.includes(Buffer.from("UPX0")) || head.includes(Buffer.from("UPX1"));
-	if(fishClassGame && isUpxPacked){
+	// The FoxWriting (fw) host hazard is STRUCTURAL, not name-based: a UPX-packed +
+	// Antidec-protected GM8.0 exe cannot host the native CJK plugin - the plugin's
+	// GMAPI/GDI+ init fails against that runner image. Historically only the game
+	// whose name matched "i wanna be the fish" was gated, so other members of the
+	// same structural class (e.g. "I wanna go the Frontline ver1.01", verified
+	// UPX+Antidec) got fw injected and died at startup: the rebuild shipped since
+	// be9d306 turns that into a hard GM8 "unexpected error occured when running the
+	// game" (the pre-rebuild DLL only produced a recoverable "Error defining an
+	// external function"). Detect the class by structure so any such game falls
+	// back to the stub CJK path instead.
+	if(isUpxPacked){
 		const antidec: boolean = await isAntidecProtected(input);
 		if(antidec){
-			console.log("Fish-class UPX + Antidec detected; using safe CJK stub fallback.");
+			console.log(`UPX + Antidec GM8.0 host detected${fishClassGame ? " (fish-class)" : ""}; using safe CJK stub fallback (fw plugin cannot initialize on this runner image).`);
 			fishCjkRuntimeBlocked = true;
 		}
 	}
