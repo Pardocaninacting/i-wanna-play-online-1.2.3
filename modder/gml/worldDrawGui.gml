@@ -494,68 +494,137 @@ if(@settingsOpen){
 		}
 	}
 	draw_set_halign(fa_left);
+	// QoL: keep the panel geometry in step with the current view-port (full vs
+	// narrow layout); @stg_layout is a handful of comparisons.
+	@stg_layout();
 	@contentY = @tabY + @tabH + 8;
+
+	#if STUDIO
+	@mx = device_mouse_x_to_gui(0);
+	@my = device_mouse_y_to_gui(0);
+	#endif
+	#if not STUDIO
+	// Convert the authoritative room-space mouse into the same view-port space
+	// the prelude established (@hudView < 0 means room space). window_mouse_get
+	// would include letterbox offsets under scaling/fullscreen and disagree
+	// with the HUD rectangles. The runner rotates the view about its center and
+	// its mouse_x/y are rotation-aware, so the forward transform must be too
+	// (nezumi probe: at angle==0 this reduces exactly to translate+scale).
+	if(@hudView >= 0){
+		@mA = degtorad(view_angle[@hudView]);
+		@mDX = mouse_x - view_xview[@hudView] - view_wview[@hudView] / 2;
+		@mDY = mouse_y - view_yview[@hudView] - view_hview[@hudView] / 2;
+		@mCos = cos(@mA);
+		@mSin = sin(@mA);
+		@mx = view_wport[@hudView] / 2 + (@mDX * @mCos + @mDY * @mSin) * view_wport[@hudView] / view_wview[@hudView];
+		@my = view_hport[@hudView] / 2 + (@mDY * @mCos - @mDX * @mSin) * view_hport[@hudView] / view_hview[@hudView];
+	}else{
+		@mx = mouse_x;
+		@my = mouse_y;
+	}
+	#endif
+
 	// TAB 0: SETTINGS
 	if(@settingsTab == 0){
 		// QoL: one declarative table drives the layout (see gml/settingsLib.gml).
 		@stg_build_rows(@contentY);
+		// Scrollable viewport. It scrolls by ROW INDEX, not by pixels: the table is
+		// drawn on its own grid below @stgTop, so a row can never be half visible and
+		// the pointer/focus mapping can never drift by a row (that was the bug).
+		@stgTop = @contentY;
+		@stgBottom = @footerY - 6;
+		@stgViewH = @stgBottom - @stgTop;
+		if(@stgFirst < 0) @stgFirst = 0;
+		if(@stgFirst >= global.__ONLINE_stgN) @stgFirst = global.__ONLINE_stgN - 1;
+		if(@stgFirst < 0) @stgFirst = 0;
+		@stgFit = @stg_fit_rows(@stgFirst, @stgTop + 2, @stgBottom);
+		if(@stgFit < 1) @stgFit = 1;
+		if(@kbFocus == 1){
+			// Scroll by ONE row at a time. Aligning the focused row to the top edge
+			// (the previous behaviour) made a single Down jump a whole page.
+			if(@kbRow[0] < @stgFirst) @stgFirst = @kbRow[0];
+			if(@kbRow[0] >= @stgFirst + @stgFit) @stgFirst += 1;
+			// mixed row heights (18/24) make "fits" approximate, so walk forward
+			// until the focused row is really inside the band
+			@stgGuard = 0;
+			while(@stgGuard < 64){
+				@stgFit = @stg_fit_rows(@stgFirst, @stgTop + 2, @stgBottom);
+				if(@stgFit < 1) @stgFit = 1;
+				if(@kbRow[0] < @stgFirst + @stgFit) break;
+				@stgFirst += 1;
+				@stgGuard += 1;
+			}
+		}
+		@stgMaxFirst = global.__ONLINE_stgN - @stgFit;
+		if(@stgMaxFirst < 0) @stgMaxFirst = 0;
+		if(@stgFirst > @stgMaxFirst) @stgFirst = @stgMaxFirst;
+		// ONE grid: the table stores a y per row (headers 18px, rows 24px), so both
+		// drawing and hit testing shift those values by this single offset. The
+		// previous version accumulated its own uniform grid and drifted from it -
+		// that is what made clicks and the highlight land on the wrong row.
+		@stgYOff = global.__ONLINE_stgY[@stgFirst] - (@stgTop + 2);
+		@rowHover = @stg_hit_row_view(@mx, @my, @stgYOff);
 		@rowI = 0;
-		@rowHover = @stg_hit_row(@mx, @my);
-		while(@rowI < @stgN){
-			@rowY = @stgY[@rowI];
-			@rowK = @stgKind[@rowI];
-			@rowX = @stgX[@rowI];
-			@rowCX = @stgCX[@rowI];
-			@rowCW = @stgCW[@rowI];
-			@rowSty = @stgStyle[@rowI];
+		while(@rowI < global.__ONLINE_stgN){
+			@rowY = global.__ONLINE_stgY[@rowI] - @stgYOff;
+			@rowVis = true;
+			if(@rowI < @stgFirst || @rowI >= @stgFirst + @stgFit) @rowVis = false;
+			if(@rowY + global.__ONLINE_stgRowH > @stgBottom) @rowVis = false;
+			if(@rowY < @stgTop) @rowVis = false;
+			if(@rowVis){
+			@rowK = global.__ONLINE_stgKind[@rowI];
+			@rowX = global.__ONLINE_stgX[@rowI];
+			@rowCX = global.__ONLINE_stgCX[@rowI];
+			@rowCW = global.__ONLINE_stgCW[@rowI];
+			@rowSty = global.__ONLINE_stgStyle[@rowI];
 			@rowSel = (@kbFocus == 1 && @kbRow[0] == @rowI);
 			if(@rowK != 0 && @rowK != 1 && @rowK != 7){
 				// hover tint / keyboard focus share the row's exact bounds
 				if(@rowSel){
 					draw_set_color(make_color_rgb(48, 46, 30));
-					draw_rectangle(@rowX - 6, @rowY - 1, @rowCX + @rowCW + 6, @rowY + @stgRowH - 3, false);
+					draw_rectangle(@rowX - 6, @rowY - 1, @rowCX + @rowCW + 6, @rowY + global.__ONLINE_stgRowH - 3, false);
 					draw_set_color(make_color_rgb(220, 200, 60));
-					draw_rectangle(@rowX - 6, @rowY - 1, @rowCX + @rowCW + 6, @rowY + @stgRowH - 3, true);
+					draw_rectangle(@rowX - 6, @rowY - 1, @rowCX + @rowCW + 6, @rowY + global.__ONLINE_stgRowH - 3, true);
 				}else if(@rowHover == @rowI){
 					draw_set_color(make_color_rgb(35, 35, 40));
-					draw_rectangle(@rowX - 6, @rowY - 1, @rowCX + @rowCW + 6, @rowY + @stgRowH - 3, false);
+					draw_rectangle(@rowX - 6, @rowY - 1, @rowCX + @rowCW + 6, @rowY + global.__ONLINE_stgRowH - 3, false);
 				}
 			}
 			draw_set_halign(fa_left);
 			if(@rowK == 0){
 				// section header: label + a thin rule running to the content edge
 				draw_set_color(make_color_rgb(150, 190, 230));
-				draw_text(@rowX, @rowY, @stgLabel[@rowI]);
+				draw_text(@rowX, @rowY, global.__ONLINE_stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(70, 80, 95));
-				@rowRuleX = @rowX + string_width(@stgLabel[@rowI]) + 10;
-				if(@rowRuleX < @spX + @spW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @spW - 16, @rowY + 9, false);
+				@rowRuleX = @rowX + string_width(global.__ONLINE_stgLabel[@rowI]) + 10;
+				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
 			}else if(@rowK == 7){
 				// two-column header: each label gets a short rule of its own
-				@rowSplit = string_pos("|", @stgLabel[@rowI]);
+				@rowSplit = string_pos("|", global.__ONLINE_stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(150, 190, 230));
-				draw_text(@rowX, @rowY, string_copy(@stgLabel[@rowI], 1, @rowSplit - 1));
+				draw_text(@rowX, @rowY, string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1));
 				draw_set_color(make_color_rgb(70, 80, 95));
-				@rowRuleX = @rowX + string_width(string_copy(@stgLabel[@rowI], 1, @rowSplit - 1)) + 10;
+				@rowRuleX = @rowX + string_width(string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1)) + 10;
 				if(@rowRuleX < @rowCX - 16) draw_rectangle(@rowRuleX, @rowY + 8, @rowCX - 16, @rowY + 9, false);
 				draw_set_color(make_color_rgb(150, 190, 230));
-				draw_text(@rowCX, @rowY, string_delete(@stgLabel[@rowI], 1, @rowSplit));
+				draw_text(@rowCX, @rowY, string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit));
 				draw_set_color(make_color_rgb(70, 80, 95));
-				@rowRuleX = @rowCX + string_width(string_delete(@stgLabel[@rowI], 1, @rowSplit)) + 10;
-				if(@rowRuleX < @spX + @spW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @spW - 16, @rowY + 9, false);
+				@rowRuleX = @rowCX + string_width(string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit)) + 10;
+				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
 			}else if(@rowK == 1){
 				draw_set_color(@stg_status_color());
 				draw_circle(@rowX + 8, @rowY + 9, 5, false);
 				draw_set_color(c_white);
-				draw_text(@rowX + 20, @rowY + 2, @stg_status_text());
+				draw_text(@rowX + 20, @rowY + 2 + @stgTextDY, @stg_status_text());
 				draw_set_color(make_color_rgb(150, 150, 150));
 				draw_set_halign(fa_right);
-				draw_text(@spX + @spW - 16, @rowY + 2, "Server: " + @stg_server_text());
+				draw_text(@spX + @colW - 16, @rowY + 2 + @stgTextDY, "Server: " + @stg_server_text());
 			}else{
 				draw_set_color(c_white);
-				draw_text(@rowX, @rowY + 4, @stgLabel[@rowI]);
+				draw_text(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI]);
 				@rowV = @stg_value(@rowI);
 				@rowBY = @rowY + 2;
-				@rowBH = @stgRowH - 6;
+				@rowBH = global.__ONLINE_stgRowH - 6;
 				if(@rowK == 5){
 					// button: flat dark plate, brighter frame on hover/focus
 					draw_set_color(make_color_rgb(45, 45, 52));
@@ -568,7 +637,7 @@ if(@settingsOpen){
 					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, true);
 					draw_set_color(c_white);
 					draw_set_halign(fa_center);
-					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3, @rowV);
+					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
 				}else if(@rowK == 3){
 					// select: one bordered box, < value > inside
 					draw_set_color(make_color_rgb(45, 45, 50));
@@ -580,10 +649,10 @@ if(@settingsOpen){
 					draw_rectangle(@rowCX + @rowCW - 23, @rowBY + 1, @rowCX + @rowCW - 22, @rowBY + @rowBH - 1, false);
 					draw_set_halign(fa_center);
 					draw_set_color(make_color_rgb(170, 170, 175));
-					draw_text(@rowCX + 11, @rowBY + 3, "<");
-					draw_text(@rowCX + @rowCW - 11, @rowBY + 3, ">");
+					draw_text(@rowCX + 11, @rowBY + 3 + @stgTextDY, "<");
+					draw_text(@rowCX + @rowCW - 11, @rowBY + 3 + @stgTextDY, ">");
 					draw_set_color(c_white);
-					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3, @rowV);
+					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
 				}else if(@rowK == 4){
 					if(@rowV == "ON"){
 						draw_set_color(make_color_rgb(50, 170, 80));
@@ -593,7 +662,7 @@ if(@settingsOpen){
 					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, false);
 					draw_set_color(c_white);
 					draw_set_halign(fa_center);
-					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3, @rowV);
+					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
 				}else{
 					// text field (name / session key)
 					draw_set_color(make_color_rgb(35, 35, 40));
@@ -605,29 +674,47 @@ if(@settingsOpen){
 					if(@rowSty == 3){
 						draw_set_color(make_color_rgb(150, 150, 150));
 						draw_set_halign(fa_right);
-						draw_text(@spX + @spW - 16, @rowBY + 3, @stg_source_text());
+						draw_text(@spX + @colW - 16, @rowBY + 3, @stg_source_text());
 					}
 				}
 			}
+			}
 			@rowI += 1;
+		}
+		// side scrollbar (track + thumb) instead of the old "more" markers
+		if(global.__ONLINE_stgN > @stgFit){
+			@sbX = @spX + @colW - 7;
+			draw_set_color(make_color_rgb(38, 38, 44));
+			draw_rectangle(@sbX, @stgTop + 2, @sbX + 4, @stgBottom, false);
+			@sbH = (@stgBottom - @stgTop - 2) * @stgFit / global.__ONLINE_stgN;
+			if(@sbH < 16) @sbH = 16;
+			@sbY = @stgTop + 2 + (@stgBottom - @stgTop - 2 - @sbH) * @stgFirst / max(1, @stgMaxFirst);
+			draw_set_color(make_color_rgb(110, 110, 122));
+			draw_rectangle(@sbX, @sbY, @sbX + 4, @sbY + @sbH, false);
 		}
 		draw_set_halign(fa_left);
 		// footer: separator + hint + Close all live in the footer band (@footerY),
 		// below the last row; the toast floats just above it and never overlaps
+		// detail column (full layout only): what the list row cannot express
+		if(@detW > 0) @stg_draw_detail(@kbRow[0]);
+
 		if(@stg_toast_active()){
-			if(@stgToastKind == 0){
+			// bottom-RIGHT: the footer hint owns the bottom-left
+			draw_set_halign(fa_right);
+			if(global.__ONLINE_stgToastKind == 0){
 				draw_set_color(make_color_rgb(90, 220, 120));
-			}else if(@stgToastKind == 1){
+			}else if(global.__ONLINE_stgToastKind == 1){
 				draw_set_color(make_color_rgb(230, 210, 90));
 			}else{
 				draw_set_color(make_color_rgb(230, 110, 110));
 			}
-			draw_text(@spX + 16, @footerY - 18, @stgToastMsg);
+			draw_text(@spX + @colW - 16, @footerY - 18, global.__ONLINE_stgToastMsg);
+			draw_set_halign(fa_left);
 		}
 		draw_set_color(make_color_rgb(70, 80, 95));
 		draw_rectangle(@spX + 16, @footerY, @spX + @spW - 16, @footerY + 1, false);
 		draw_set_color(make_color_rgb(160, 160, 160));
-		if(@kbFocus == 1 && @kbRow[0] >= 0 && @kbRow[0] < @stgN){
+		if(@kbFocus == 1 && @kbRow[0] >= 0 && @kbRow[0] < global.__ONLINE_stgN){
 			draw_text(@spX + 16, @footerY + 10, @stg_hint(@kbRow[0]));
 		}else{
 			draw_text(@spX + 16, @footerY + 10, "Up/Down rows   Left/Right tabs or values   Enter edit   F1 close");
@@ -700,7 +787,7 @@ if(@settingsOpen){
 		draw_rectangle(@btnFltX, @btnFltY, @btnFltX + @btnFltW, @btnFltY + @btnFltH, false);
 		draw_set_color(c_white);
 		draw_text(@btnFltX + @btnFltW/2, @rowY, "*");
-		@btnClrX = @spX + @spW - 72;
+		@btnClrX = @spX + @colW - 72;
 		@btnClrY = @rowY - 2;
 		@btnClrW = 60;
 		@btnClrH = 18;
@@ -718,10 +805,10 @@ if(@settingsOpen){
 			@entIdx = @shVI - @shStart;
 			@entY = @contentY + 28 + @entIdx * 38;
 			draw_set_color(make_color_rgb(30, 30, 30));
-			draw_rectangle(@spX + 8, @entY - 3, @spX + @spW - 8, @entY + 28, false);
+			draw_rectangle(@spX + 8, @entY - 3, @spX + @colW - 8, @entY + 28, false);
 			if(@kbFocus == 1 && @kbRow[1] == @shVI){
 				draw_set_color(make_color_rgb(220, 200, 60));
-				draw_rectangle(@spX + 4, @entY - 1, @spX + @spW - 4, @entY + 30, true);
+				draw_rectangle(@spX + 4, @entY - 1, @spX + @colW - 4, @entY + 30, true);
 			}
 			@btnFavX = @spX + 10;
 			@btnFavY = @entY + 5;
@@ -808,7 +895,7 @@ if(@settingsOpen){
 			draw_text(@spX + 320, @entY, @shTimeDisp);
 			draw_set_color(make_color_rgb(160, 160, 160));
 			draw_text(@spX + 54, @entY + 13, "x:" + string(@saveHistX[@shI]) + " y:" + string(round(@saveHistY[@shI])));
-			@btnApX = @spX + @spW - 66;
+			@btnApX = @spX + @colW - 66;
 			@btnApY = @entY + 5;
 			@btnApW = 54;
 			@btnApH = 18;
@@ -823,9 +910,9 @@ if(@settingsOpen){
 			draw_set_color(c_gray);
 			draw_set_halign(fa_center);
 			if(@saveHistFilter && @saveHistCount > 0){
-				draw_text(@spX + @spW/2, @contentY + 120, "No favorites");
+				draw_text(@spX + @colW/2, @contentY + 120, "No favorites");
 			}else{
-				draw_text(@spX + @spW/2, @contentY + 120, "No saves yet");
+				draw_text(@spX + @colW/2, @contentY + 120, "No saves yet");
 			}
 			draw_set_halign(fa_left);
 		}
@@ -838,7 +925,7 @@ if(@settingsOpen){
 			if(@kbRow[2] == 1) @kbHi = @contentY + 54;
 			if(@kbRow[2] == 2) @kbHi = @contentY + 101;
 			draw_set_color(make_color_rgb(220, 200, 60));
-			draw_rectangle(@spX + 4, @kbHi, @spX + @spW - 4, @kbHi + 28, true);
+			draw_rectangle(@spX + 4, @kbHi, @spX + @colW - 4, @kbHi + 28, true);
 		}
 		draw_set_halign(fa_left);
 		draw_set_color(c_white);
@@ -910,13 +997,13 @@ if(@settingsOpen){
 		}else{
 			@rowY += 46;
 		}
-		@btnSubX = @spX + @spW/2 - 55;
+		@btnSubX = @spX + @colW/2 - 55;
 		@btnSubY = @rowY - 2;
 		@btnSubW = 110;
 		@btnSubH = 22;
 		if(@ratingSubmitting){
 			draw_set_color(make_color_rgb(60, 60, 60));
-		}else if(@ratingCooldown > 0){
+		}else if(@ratingCooldown > current_time){
 			draw_set_color(make_color_rgb(80, 80, 40));
 		}else if(@rStars == 0){
 			draw_set_color(make_color_rgb(60, 60, 60));
@@ -928,19 +1015,22 @@ if(@settingsOpen){
 		draw_set_halign(fa_center);
 		if(@ratingSubmitting){
 			draw_text(@btnSubX + @btnSubW/2, @rowY, "Sending...");
-		}else if(@ratingCooldown > 0){
-			draw_text(@btnSubX + @btnSubW/2, @rowY, "Wait " + string(ceil(@ratingCooldown / 30)) + "s");
+		}else if(@ratingCooldown > current_time){
+			// QoL fix: the cooldown is stored in FRAMES (worldEndStep sets
+			// room_speed * 10) but this used to divide by a hardcoded 30, so a
+			// 60 fps game displayed 20 s and counted down at double speed.
+			draw_text(@btnSubX + @btnSubW/2, @rowY, "Wait " + string(max(1, ceil((@ratingCooldown - current_time) / 1000))) + "s");
 		}else{
 			draw_text(@btnSubX + @btnSubW/2, @rowY, "Submit Rating");
 		}
-		if(@ratingResultTimer > 0){
+		if(@ratingResultTimer > current_time){
 			@rowY += 30;
 			if(@ratingResult == 1){
 				draw_set_color(c_lime);
-				draw_text(@spX + @spW/2, @rowY, "Rating submitted!");
+				draw_text(@spX + @colW/2, @rowY, "Rating submitted!");
 			}else if(@ratingResult == 2){
 				draw_set_color(c_yellow);
-				draw_text(@spX + @spW/2, @rowY, "Submit failed (cooldown)");
+				draw_text(@spX + @colW/2, @rowY, "Submit failed (cooldown)");
 			}
 		}
 		draw_set_halign(fa_left);
@@ -951,7 +1041,7 @@ if(@settingsOpen){
 		if(@kbFocus == 1 && @kbRow[3] < 11){
 			@kbHi = @rowY - 4 + @kbRow[3] * 28;
 			draw_set_color(make_color_rgb(220, 200, 60));
-			draw_rectangle(@spX + 4, @kbHi, @spX + @spW - 4, @kbHi + 27, true);
+			draw_rectangle(@spX + 4, @kbHi, @spX + @colW - 4, @kbHi + 27, true);
 		}
 		draw_set_halign(fa_left);
 		@kbLabels[0] = "Visibility";
@@ -1005,13 +1095,13 @@ if(@settingsOpen){
 			}
 			draw_set_halign(fa_left);
 		}
-		@btnRstX = @spX + @spW/2 - 55;
+		@btnRstX = @spX + @colW/2 - 55;
 		@btnRstY = @rowY + 11 * 28 + 10;
 		@btnRstW = 110;
 		@btnRstH = 22;
 		if(@kbFocus == 1 && @kbRow[3] == 11){
 			draw_set_color(make_color_rgb(220, 200, 60));
-			draw_rectangle(@spX + 4, @btnRstY - 3, @spX + @spW - 4, @btnRstY + @btnRstH + 3, true);
+			draw_rectangle(@spX + 4, @btnRstY - 3, @spX + @colW - 4, @btnRstY + @btnRstH + 3, true);
 		}
 		draw_set_color(make_color_rgb(100, 50, 50));
 		draw_rectangle(@btnRstX, @btnRstY, @btnRstX + @btnRstW, @btnRstY + @btnRstH, false);
@@ -1025,7 +1115,7 @@ if(@settingsOpen){
 		@rowY = @contentY + 4;
 		if(@kbFocus == 1){
 			draw_set_color(make_color_rgb(220, 200, 60));
-			draw_rectangle(@spX + 4, @rowY - 3, @spX + @spW - 4, @rowY + 25, true);
+			draw_rectangle(@spX + 4, @rowY - 3, @spX + @colW - 4, @rowY + 25, true);
 		}
 		draw_set_color(c_white);
 		draw_set_halign(fa_left);
@@ -1157,7 +1247,7 @@ if(@settingsOpen){
         if(@skinVisCount == 0){
             draw_set_color(c_gray);
             draw_set_halign(fa_center);
-            draw_text(@spX + @spW/2, @contentY + 120, "No skins found in iwposkins" + chr(92));
+            draw_text(@spX + @colW/2, @contentY + 120, "No skins found in iwposkins" + chr(92));
             draw_set_halign(fa_left);
         }
         // Row after the list: Auto-download toggle (keyboard row @skinVisCount).
@@ -1282,30 +1372,6 @@ if(@settingsOpen){
 	draw_set_color(c_white);
 	draw_set_halign(fa_center);
 	draw_text(@btnCX + @btnCW/2, @btnCY + 4, "Close");
-	#if STUDIO
-	@mx = device_mouse_x_to_gui(0);
-	@my = device_mouse_y_to_gui(0);
-	#endif
-	#if not STUDIO
-	// Convert the authoritative room-space mouse into the same view-port space
-	// the prelude established (@hudView < 0 means room space). window_mouse_get
-	// would include letterbox offsets under scaling/fullscreen and disagree
-	// with the HUD rectangles. The runner rotates the view about its center and
-	// its mouse_x/y are rotation-aware, so the forward transform must be too
-	// (nezumi probe: at angle==0 this reduces exactly to translate+scale).
-	if(@hudView >= 0){
-		@mA = degtorad(view_angle[@hudView]);
-		@mDX = mouse_x - view_xview[@hudView] - view_wview[@hudView] / 2;
-		@mDY = mouse_y - view_yview[@hudView] - view_hview[@hudView] / 2;
-		@mCos = cos(@mA);
-		@mSin = sin(@mA);
-		@mx = view_wport[@hudView] / 2 + (@mDX * @mCos + @mDY * @mSin) * view_wport[@hudView] / view_wview[@hudView];
-		@my = view_hport[@hudView] / 2 + (@mDY * @mCos - @mDX * @mSin) * view_hport[@hudView] / view_hview[@hudView];
-	}else{
-		@mx = mouse_x;
-		@my = mouse_y;
-	}
-	#endif
 	if(mouse_check_button_pressed(mb_left)){
 		@tabClicked = false;
 		if(@my >= @tabY && @my <= @tabY + @tabH){
@@ -1324,12 +1390,16 @@ if(@settingsOpen){
 		if(!@tabClicked && @settingsTab == 0){
 			@kbFocus = 1;
 			@stg_build_rows(@contentY);
-			@rowHit = @stg_hit_row(@mx, @my);
+			// (the wheel is handled in worldEndStep, once per frame - inside this
+			// click branch it only worked while the button was held)
+			// same coordinate space as the draw (@stgYOff) - using the table-space
+			// hit test here is what made clicks land on the wrong row once scrolled
+			@rowHit = @stg_hit_row_view(@mx, @my, @stgYOff);
 			if(@rowHit >= 0){
 				@kbRow[0] = @rowHit;
 				@rowK = @stg_kind_of(@rowHit);
-				@rowCX = @stgCX[@rowHit];
-				@rowCW = @stgCW[@rowHit];
+				@rowCX = global.__ONLINE_stgCX[@rowHit];
+				@rowCW = global.__ONLINE_stgCW[@rowHit];
 				if(@rowK == 3 && @mx >= @rowCX && @mx < @rowCX + 22){
 					@stg_act_dir(@rowHit, -1);
 				}else if(@rowK == 3 && @mx >= @rowCX + @rowCW - 22 && @mx <= @rowCX + @rowCW){
@@ -1386,7 +1456,7 @@ if(@settingsOpen){
 					}
 					@saveHistDirty = true;
 				}
-				@btnApX = @spX + @spW - 62;
+				@btnApX = @spX + @colW - 62;
 				@btnApY = @entY + 5;
 				@btnApW = 50;
 				@btnApH = 18;
@@ -1417,7 +1487,7 @@ if(@settingsOpen){
 					@rClearWarn = 0;
 				}
 			}
-			if(!@ratingSubmitting && @ratingCooldown <= 0 && @rStars >= 1){
+			if(!@ratingSubmitting && @ratingCooldown <= current_time && @rStars >= 1){
 				if(@mx >= @btnSubX && @mx <= @btnSubX + @btnSubW && @my >= @btnSubY && @my <= @btnSubY + @btnSubH){
 					@ratingSubmit = true;
 				}

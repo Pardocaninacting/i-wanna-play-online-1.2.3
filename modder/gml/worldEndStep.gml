@@ -443,8 +443,9 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			}else{
 				@ratingResult = 2;
 			}
-			@ratingResultTimer = room_speed * 3;
-			@ratingCooldown = room_speed * 10;
+			// deadlines in ms (frame counts drifted with the real frame rate)
+	@ratingResultTimer = current_time + 3000;
+			@ratingCooldown = current_time + 10000;
 			break;
 		case 10:
 			// LIST RECONCILE
@@ -2824,7 +2825,7 @@ if(@shWritePhase == 2){
 // RATING SUBMIT
 if(@ratingSubmit){
 	@ratingSubmit = false;
-	if(!@ratingSubmitting && @ratingCooldown <= 0 && @connected && @rStars >= 1 && @rStars <= 5){
+	if(!@ratingSubmitting && @ratingCooldown <= current_time && @connected && @rStars >= 1 && @rStars <= 5){
 		@ratingSubmitting = true;
 		__ONLINE_buffer_clear(@buffer);
 		#if not GMNET
@@ -2840,8 +2841,6 @@ if(@ratingSubmit){
 		__ONLINE_socket_write_message(@socket, @buffer);
 	}
 }
-if(@ratingResultTimer > 0) @ratingResultTimer -= 1;
-if(@ratingCooldown > 0) @ratingCooldown -= 1;
 if(@rClearWarn > 0) @rClearWarn -= 1;
 // FLUSH TCP
 #if not GMNET
@@ -2940,15 +2939,27 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 	}
+	// QoL: wheel scrolling for the settings list. This lives here (not in the draw
+	// click branch) so it works without holding a mouse button.
+	if(@settingsOpen && @settingsTab == 0){
+		if(mouse_wheel_up()) @stgFirst -= 1;
+		if(mouse_wheel_down()) @stgFirst += 1;
+	}
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 0){
 		// QoL: the same row table the panel draws from.
 		@stg_build_rows(@contentY);
-		if(@kbRow[0] < 0 || @kbRow[0] >= @stgN) @kbRow[0] = @stg_first_row();
+		if(@kbRow[0] < 0 || @kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
 		if(keyboard_check_pressed(vk_up)){
 			@rowPrev = @stg_next_row(@kbRow[0], -1);
 			if(@rowPrev == @kbRow[0]){
-				@kbFocus = 0;
-				@kbRow[0] = @stg_first_row();
+				// already on the first selectable row: if the view is still scrolled
+				// down, scroll it up instead of handing focus back to the tab bar
+				if(@stgFirst > 0){
+					@stgFirst -= 1;
+				}else{
+					@kbFocus = 0;
+					@kbRow[0] = @stg_first_row();
+				}
 			}else{
 				@kbRow[0] = @rowPrev;
 			}
@@ -2964,14 +2975,14 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)){
-			if(@stgClearRow >= 0){
+			if(global.__ONLINE_stgClearRow >= 0){
 				@acc_clear_commit();
 			}else{
 				@stg_act(@kbRow[0]);
 			}
 			@kbAct = 1;
 		}
-		if(@stgClearRow >= 0 && (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_backspace))){
+		if(global.__ONLINE_stgClearRow >= 0 && (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_backspace))){
 			@acc_clear_cancel();
 			@kbAct = 1;
 		}
@@ -3151,7 +3162,7 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 		if(@kbAct == 0 && @kbRow[2] == 2 && keyboard_check_pressed(vk_enter)){
-			if(@rStars > 0 && @ratingCooldown <= 0 && !@ratingSubmitting){
+			if(@rStars > 0 && @ratingCooldown <= current_time && !@ratingSubmitting){
 				@ratingSubmit = true;
 			}
 			@kbAct = 1;
