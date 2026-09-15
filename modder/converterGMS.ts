@@ -114,11 +114,25 @@ const WriteConverterConfig = async function(dataWin: string, config: ConverterGM
 const ConvertDataWin = async function(input: string, output: string, gameName: string, gameId: string, server: string, ports: Ports, useX64NativeHttpDll: boolean, customSlot: CustomSlotConfig | null, defines: Map<string, string>): Promise<void> {
 	if(!await fs.exists(CONVERTER_GMS2_EXE))
 		throw new Error(`Cannot find converterGMS2.exe in lib/converterGMS2/`);
+	// v2 (§11): runtime sync is fully driven by `__ONLINE_config.ini [sync]`; no GML codegen.
+	let gmlDir: string = path.join(__dirname, "gml");
+	// Staleness guard. lib/converterGMS2/ is a gitignored build artifact and is
+	// NEVER rebuilt automatically, so an old copy silently converts with outdated
+	// C# logic - most visibly, its hardcoded pack list then reports the new
+	// templates as "Failed to find function __ONLINE_stg_*". Only Program.cs
+	// matters here: the .gml templates themselves are read at conversion time.
+	try {
+		const programCs: string = path.join(__dirname, "..", "converter-gms", "Program.cs");
+		if(await fs.exists(programCs)){
+			const exeMtime: number = (await fs.stat(CONVERTER_GMS2_EXE)).mtimeMs;
+			const csMtime: number = (await fs.stat(programCs)).mtimeMs;
+			if(csMtime > exeMtime)
+				console.warn(`[gms] WARNING: lib/converterGMS2/converterGMS2.exe is older than converter-gms/Program.cs - republish it (dotnet publish -c Release -o publish in converter-gms, then copy the runtime files into modder/lib/converterGMS2/) or this conversion runs with outdated converter logic.`);
+		}
+	} catch(_e) { /* the guard must never break a conversion */ }
 	const successMarkerPath: string = path.join(path.dirname(input), "__ONLINE_utmt_success.txt");
 	if(await fs.exists(successMarkerPath))
 		await fs.unlink(successMarkerPath);
-	// v2 (§11): runtime sync is fully driven by `__ONLINE_config.ini [sync]`; no GML codegen.
-	let gmlDir: string = path.join(__dirname, "gml");
 	// iwpo.* defines (tool settings + per-game ini + --define) for the C# converter.
 	const definesJson: Record<string, string> = {};
 	defines.forEach((value: string, key: string) => { definesJson[key] = value; });
