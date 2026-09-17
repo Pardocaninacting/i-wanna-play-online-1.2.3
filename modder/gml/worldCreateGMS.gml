@@ -449,6 +449,10 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		ini_open(@cfgFile);
 		@cfgVal = ini_read_string("config", "server", "");
 		if(@cfgVal != "") @server = @cfgVal;
+		// menu layout: 0 = auto (full when the view port is wide enough), 1 = the
+		// shipped narrow layout, 2 = force the full layout with the detail pane.
+		@menuModePref = ini_read_real("config", "menu_mode", 0);
+		if(@menuModePref < 0 || @menuModePref > 2) @menuModePref = 0;
 		@keyChat = ini_read_real("config", "key_chat", @keyChat);
 		@keyVis = ini_read_real("config", "key_visibility", @keyVis);
 		@keySave = ini_read_real("config", "key_save", @keySave);
@@ -611,6 +615,14 @@ if file_exists(@savesPath) {
 		@saveHistDirtyTimer = room_speed;
 	}
 }
+// QoL: read the account store UNCONDITIONALLY, before the #if TEMPFILE
+// region: engines without tempOnline strip that whole region, and a
+// tempOnline restore (game_restart) takes the "if(!@restoredFromTemp)"
+// branch below - placing this call after the region's #endif still left it
+// inside that runtime block, so every restart wiped the menu back to
+// "(not set)" while the file on disk kept the values.
+@accLoaded = @account_load();
+
 #if TEMPFILE
 	@restoredFromTemp = false;
 	if(file_exists("tempOnline")){
@@ -631,6 +643,7 @@ if file_exists(@savesPath) {
 			@team = buffer_read_uint8(@buffer);
 			@lerpEnabled = buffer_read_uint8(@buffer);
 		#endif
+
 		#if GMNET
 			buffer_load(@buffer, "tempOnline");
 			@socket = buffer_read_u16(@buffer);
@@ -753,10 +766,6 @@ if file_exists(@savesPath) {
 	}
 	if(!@restoredFromTemp){
 #endif
-	// QoL: read the account store UNCONDITIONALLY (outside the TEMPFILE block, so
-	// engines without tempOnline reach it too) and on every create - game_restart
-	// wipes globals and re-enters this event through the tempOnline path.
-	@accLoaded = @account_load();
 	@socket = socket_create();
 	socket_connect(@socket, @server, @tcpPort);
 	// QoL: credentials come from the account store - env (P1) -> this folder (P2)
@@ -766,21 +775,21 @@ if file_exists(@savesPath) {
 	// completes, so NAME below can be queued right away.
 	if(!@accLoaded){
 		#if STUDIO
-			@accName = get_string("Enter your name:", "");
+			global.__ONLINE_accName = get_string("Enter your name:", "");
 		#endif
 		#if not STUDIO
-			@accName = wd_input_box("Name", "Enter your name:", "");
+			global.__ONLINE_accName = wd_input_box("Name", "Enter your name:", "");
 		#endif
-		@accName = @account_trim(@accName);
-		if(@accName == "") @accName = "Anonymous";
+		global.__ONLINE_accName = @account_trim(global.__ONLINE_accName);
+		if(global.__ONLINE_accName == "") global.__ONLINE_accName = "Anonymous";
 		#if STUDIO
-			@accPassword = get_string("Session key (empty = open session):", "");
+			global.__ONLINE_accPassword = get_string("Session key (empty = open session):", "");
 		#endif
 		#if not STUDIO
-			@accPassword = wd_input_box("Password", "Session key (empty = open session):", "");
+			global.__ONLINE_accPassword = wd_input_box("Password", "Session key (empty = open session):", "");
 		#endif
-		@accPassword = @account_trim(@accPassword);
-		@accStore = 0;
+		global.__ONLINE_accPassword = @account_trim(global.__ONLINE_accPassword);
+		global.__ONLINE_accStore = 0;
 		@account_save();
 	}
 	@account_apply();

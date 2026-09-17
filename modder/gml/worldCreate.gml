@@ -107,6 +107,8 @@ if(!@objListLoaded){
 @kbRow[5] = 0;
 @kbFocus = 1;
 @kbDelay = 0;
+@kbRepeatKey = 0;   // menu key repeat state (see @kb_repeat)
+@kbRepeatWait = 0;
 @gameName = "%arg4";
 @keyChat = 32;
 @keyVis = 86;
@@ -606,6 +608,10 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		@skinSavedHash = ini_read_string("config", "skin", "");
 		@skinSavedDir = ini_read_string("config", "skinDir", "");
 		@skinDlTmp = ini_read_string("config", "skinDlTmp", "");
+		// menu layout: 0 = auto (full when the view port is wide enough), 1 = the
+		// shipped narrow layout, 2 = force the full layout with the detail pane.
+		@menuModePref = ini_read_real("config", "menu_mode", 0);
+		if(@menuModePref < 0 || @menuModePref > 2) @menuModePref = 0;
 		@syncEnabled = ini_read_real("sync", "sync_enabled", @syncEnabled);
 		@syncEntryCount = ini_read_real("sync", "entryCount", @syncEntryCount);
 		if(@syncEntryCount < 0) @syncEntryCount = 0;
@@ -746,6 +752,14 @@ if file_exists(@savesPath) {
 		@saveHistDirtyTimer = room_speed;
 	}
 }
+// QoL: read the account store UNCONDITIONALLY, before the #if TEMPFILE
+// region: engines without tempOnline strip that whole region, and a
+// tempOnline restore (game_restart) takes the "if(!@restoredFromTemp)"
+// branch below - placing this call after the region's #endif still left it
+// inside that runtime block, so every restart wiped the menu back to
+// "(not set)" while the file on disk kept the values.
+@accLoaded = @account_load();
+
 #if TEMPFILE
 	@restoredFromTemp = false;
 	if(file_exists("tempOnline")){
@@ -766,6 +780,7 @@ if file_exists(@savesPath) {
 			@team = __ONLINE_buffer_read_uint8(@buffer);
 			@lerpEnabled = __ONLINE_buffer_read_uint8(@buffer);
 		#endif
+
 		#if GMNET
 			__ONLINE_buffer_load(@buffer, "tempOnline");
 			@socket = __ONLINE_buffer_read_u16(@buffer);
@@ -883,12 +898,6 @@ if file_exists(@savesPath) {
 	}
 	if(!@restoredFromTemp){
 #endif
-	// QoL: read the account store UNCONDITIONALLY (outside the TEMPFILE block:
-	// engines without tempOnline never execute the part above) and on every
-	// create, because game_restart wipes globals and re-enters this event through
-	// the tempOnline path - without this the acc* globals stay unset and the
-	// settings panel dies on its first frame ("Cannot compare arguments").
-	@accLoaded = @account_load();
 	@socket = __ONLINE_socket_create();
 		@socketConnectResult = __ONLINE_socket_connect(@socket, @server, @tcpPort);
 	// QoL: credentials come from the account store - env (P1) -> this folder (P2)
@@ -898,31 +907,31 @@ if file_exists(@savesPath) {
 	// team system and the T-key save toggle cover it).
 	if(!@accLoaded){
 		#if STUDIO
-			@accName = get_string("Enter your name:", "");
+			global.__ONLINE_accName = get_string("Enter your name:", "");
 		#endif
 		#if not STUDIO
 			#if CJKTEXT
-			@accName = __ONLINE_ansi_to_utf8(wd_input_box("Name", "Enter your name:", ""));
+			global.__ONLINE_accName = __ONLINE_ansi_to_utf8(wd_input_box("Name", "Enter your name:", ""));
 			#endif
 			#if not CJKTEXT
-			@accName = wd_input_box("Name", "Enter your name:", "");
+			global.__ONLINE_accName = wd_input_box("Name", "Enter your name:", "");
 			#endif
 		#endif
-		@accName = @account_trim(@accName);
-		if(@accName == "") @accName = "Anonymous";
+		global.__ONLINE_accName = @account_trim(global.__ONLINE_accName);
+		if(global.__ONLINE_accName == "") global.__ONLINE_accName = "Anonymous";
 		#if STUDIO
-			@accPassword = get_string("Session key (empty = open session):", "");
+			global.__ONLINE_accPassword = get_string("Session key (empty = open session):", "");
 		#endif
 		#if not STUDIO
 			#if CJKTEXT
-			@accPassword = __ONLINE_ansi_to_utf8(wd_input_box("Password", "Session key (empty = open session):", ""));
+			global.__ONLINE_accPassword = __ONLINE_ansi_to_utf8(wd_input_box("Password", "Session key (empty = open session):", ""));
 			#endif
 			#if not CJKTEXT
-			@accPassword = wd_input_box("Password", "Session key (empty = open session):", "");
+			global.__ONLINE_accPassword = wd_input_box("Password", "Session key (empty = open session):", "");
 			#endif
 		#endif
-		@accPassword = @account_trim(@accPassword);
-		@accStore = 0;
+		global.__ONLINE_accPassword = @account_trim(global.__ONLINE_accPassword);
+		global.__ONLINE_accStore = 0;
 		@account_save();
 	}
 	@account_apply();
