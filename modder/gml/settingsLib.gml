@@ -327,6 +327,7 @@ draw_set_halign(fa_left);
 draw_set_color(c_white);
 _txt = global.__ONLINE_stgLabel[argument0];
 if(_txt == "") _txt = @stg_value(argument0);
+if(_k == 1) _txt = "Connection";
 draw_text(_x, _y, _txt);
 _y += 22;
 // value card (green frame when a toggle is on)
@@ -337,6 +338,15 @@ if((_k == 4 || _k == 3 || _k == 2) && _val != ""){
   }else{
     draw_set_color(make_color_rgb(95, 95, 100));
   }
+  draw_rectangle(_x, _y, _x + min(_w, 24 + string_width(_val) + 24), _y + 22, true);
+  draw_set_color(c_white);
+  draw_text(_x + 10, _y + 4 + @stgTextDY, _val);
+  _y += 32;
+}
+// status row: state card in the status colour (there is no latency measure)
+if(_k == 1){
+  _val = @stg_status_text();
+  draw_set_color(@stg_status_color());
   draw_rectangle(_x, _y, _x + min(_w, 24 + string_width(_val) + 24), _y + 22, true);
   draw_set_color(c_white);
   draw_text(_x + 10, _y + 4 + @stgTextDY, _val);
@@ -408,6 +418,11 @@ if(_a == 11 || _a == 15){
   global.__ONLINE_detFK[0] = "Status"; global.__ONLINE_detFV[0] = @stg_status_text();
   global.__ONLINE_detFK[1] = "Server"; global.__ONLINE_detFV[1] = @stg_server_text();
   _fn = 2;
+}
+if(_k == 1){
+  global.__ONLINE_detFK[0] = "Server";
+  global.__ONLINE_detFV[0] = @stg_server_text();
+  _fn = 1;
 }
 if(_a == 14){
   global.__ONLINE_detFK[0] = "This folder";
@@ -738,8 +753,17 @@ return 1;
 		draw_set_halign(fa_left);
 		// footer: separator + hint + Close all live in the footer band (@footerY),
 		// below the last row; the toast floats just above it and never overlaps
+		// HOVER PREVIEWS, it does not select: the detail column and the footer
+		// follow the pointer, while the amber cursor stays where the keyboard or
+		// the last click put it. (Hover used to move the cursor itself - a parked
+		// mouse then fought the arrow keys every frame.)
+		@stgPrevRow = @kbRow[0];
+		if(@rowHover >= 0){
+			@stgPrevK = global.__ONLINE_stgKind[@rowHover];
+			if(@stgPrevK != 0 && @stgPrevK != 7) @stgPrevRow = @rowHover;
+		}
 		// detail column (full layout only): what the list row cannot express
-		if(@detW > 0) @stg_draw_detail(@kbRow[0]);
+		if(@detW > 0) @stg_draw_detail(@stgPrevRow);
 
 		if(@stg_toast_active()){
 			// bottom-RIGHT: the footer hint owns the bottom-left
@@ -765,8 +789,11 @@ return 1;
 		draw_set_color(make_color_rgb(70, 80, 95));
 		draw_rectangle(@spX + 16, @footerY, @spX + @spW - 16, @footerY + 1, false);
 		draw_set_color(make_color_rgb(160, 160, 160));
-		if(@kbFocus == 1 && @kbRow[0] >= 0 && @kbRow[0] < global.__ONLINE_stgN){
-			draw_text(@spX + 16, @footerY + 10, @stg_fit_text(@stg_hint(@kbRow[0]), @spW - 130));
+		@stgHintRow = -1;
+		if(@rowHover >= 0 && @stgPrevRow == @rowHover) @stgHintRow = @rowHover;
+		if(@stgHintRow < 0 && @kbFocus == 1) @stgHintRow = @kbRow[0];
+		if(@stgHintRow >= 0 && @stgHintRow < global.__ONLINE_stgN){
+			draw_text(@spX + 16, @footerY + 10, @stg_fit_text(@stg_hint(@stgHintRow), @spW - 130));
 		}else{
 			draw_text(@spX + 16, @footerY + 10, @stg_fit_text("Up/Down rows   Left/Right tabs or values   Enter edit   F1 close", @spW - 130));
 		}
@@ -1002,6 +1029,47 @@ if(_a == 7) return "Spectator camera mode.";
 if(_a == 8) return "Player versus player mode. Bullets stay visible while it is on.";
 if(_a == 9) return "Share your bullets with the room (locked on in PVP).";
 return "Up/Down rows, Left/Right change, Enter edit - F1 or O closes.";
+
+///// script @stg_click_row
+// Mouse click on a list row - one model for every table-driven tab:
+//   - a pending two-step confirm owns the click: same row commits, any other
+//     row cancels (mouse parity with Enter/Esc)
+//   - self-evident value controls (the < > arrows, the ON/OFF pill) act
+//     immediately, and also select the row
+//   - the body of an unselected row only SELECTS it: browse -> read the detail
+//     -> act. A second click on the selected row activates it (= Enter).
+// args: row -> 0
+var _k, _cx, _cw, _ctl;
+if(global.__ONLINE_stgClearRow >= 0){
+  if(global.__ONLINE_stgAct[argument0] == global.__ONLINE_stgClearRow){
+    @acc_clear_commit();
+  }else{
+    @acc_clear_cancel();
+  }
+  return 0;
+}
+_k = global.__ONLINE_stgKind[argument0];
+if(_k == 0 || _k == 1 || _k == 7) return 0;
+_cx = global.__ONLINE_stgCX[argument0];
+_cw = global.__ONLINE_stgCW[argument0];
+_ctl = false;
+if(_k == 3){
+  if(@mx >= _cx && @mx < _cx + 22){ @stg_act_dir(argument0, -1); _ctl = true; }
+  if(@mx >= _cx + _cw - 22 && @mx <= _cx + _cw){ @stg_act_dir(argument0, 1); _ctl = true; }
+}
+if(_k == 4 && @mx >= _cx + _cw - 46 && @mx <= _cx + _cw){ @stg_act(argument0); _ctl = true; }
+if(_ctl){
+  @kbRow[0] = argument0;
+  @kbFocus = 1;
+  return 0;
+}
+if(@kbFocus == 1 && @kbRow[0] == argument0){
+  @stg_act(argument0);
+}else{
+  @kbRow[0] = argument0;
+  @kbFocus = 1;
+}
+return 0;
 
 ///// script @stg_act
 // Performs the action bound to a row. Returns 1 when the action closed the menu.

@@ -1006,45 +1006,19 @@ if(@settingsTab == 0){
 			}
 		}
 		if(!@tabClicked && @settingsTab == 0){
-			@kbFocus = 1;
 			@stg_build_rows(@contentY);
 			// (the wheel is handled in worldEndStep, once per frame - inside this
 			// click branch it only worked while the button was held)
 			// same coordinate space as the draw (@stgYOff) - using the table-space
 			// hit test here is what made clicks land on the wrong row once scrolled
 			@rowHit = @stg_hit_row_view(@mx, @my, @stgYOff);
-			if(@rowHit >= 0){
-				@kbRow[0] = @rowHit;
-				@rowK = @stg_kind_of(@rowHit);
-				@rowCX = global.__ONLINE_stgCX[@rowHit];
-				@rowCW = global.__ONLINE_stgCW[@rowHit];
-				if(@rowK == 3 && @mx >= @rowCX && @mx < @rowCX + 22){
-					@stg_act_dir(@rowHit, -1);
-				}else if(@rowK == 3 && @mx >= @rowCX + @rowCW - 22 && @mx <= @rowCX + @rowCW){
-					@stg_act_dir(@rowHit, 1);
-				}else{
-					@stg_act(@rowHit);
-				}
-			}
+			if(@rowHit >= 0) @stg_click_row(@rowHit);
 		}
 		if(!@tabClicked && @settingsTab == 1){
-			@kbFocus = 1;
 			@stg_build_saves(@contentY);
 			// (the wheel is handled once per frame in worldEndStep)
 			@rowHit = @stg_hit_row_view(@mx, @my, @stgYOff);
-			if(@rowHit >= 0){
-				@kbRow[0] = @rowHit;
-				@rowK = @stg_kind_of(@rowHit);
-				@rowCX = global.__ONLINE_stgCX[@rowHit];
-				@rowCW = global.__ONLINE_stgCW[@rowHit];
-				if(@rowK == 3 && @mx >= @rowCX + @rowCW + 6 && @mx <= @rowCX + @rowCW + 26){
-					@stg_act_dir(@rowHit, -1);
-				}else if(@rowK == 3 && @mx >= @rowCX + @rowCW + 28 && @mx <= @rowCX + @rowCW + 48){
-					@stg_act_dir(@rowHit, 1);
-				}else{
-					@stg_act(@rowHit);
-				}
-			}
+			if(@rowHit >= 0) @stg_click_row(@rowHit);
 		}
 
 		if(!@tabClicked && @settingsTab == 2){
