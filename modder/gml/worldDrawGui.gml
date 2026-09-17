@@ -1030,8 +1030,7 @@ if(@settingsTab == 0){
 		if(!@tabClicked && @settingsTab == 1){
 			@kbFocus = 1;
 			@stg_build_saves(@contentY);
-			if(mouse_wheel_up()) @stgFirst -= 1;
-			if(mouse_wheel_down()) @stgFirst += 1;
+			// (the wheel is handled once per frame in worldEndStep)
 			@rowHit = @stg_hit_row_view(@mx, @my, @stgYOff);
 			if(@rowHit >= 0){
 				@kbRow[0] = @rowHit;

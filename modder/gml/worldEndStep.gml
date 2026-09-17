@@ -2945,6 +2945,25 @@ if(@settingsOpen && @keybindEditing < 0){
 	if(@settingsOpen && (@settingsTab == 0 || @settingsTab == 1)){
 		if(mouse_wheel_up()) @stgFirst -= 1;
 		if(mouse_wheel_down()) @stgFirst += 1;
+		// HOVER MOVES THE CURSOR, it does not act. A mouse user then gets the same
+		// move -> read the detail -> act order as a keyboard user; before this,
+		// hovering only drew a grey bar with no detail and a click acted blind.
+		if(@kbAct == 0 && @kbDelay <= 0){   // hover stays live even with a confirmation armed:
+		// it only previews, so the pointer can never be left stuck
+			if(@settingsTab == 0){
+				@stg_build_rows(@contentY);
+			}else{
+				@stg_build_saves(@contentY);
+			}
+			@stgHoverRow = @stg_hit_row_view(@mx, @my, @stgYOff);
+			if(@stgHoverRow >= 0){
+				@stgHoverK = global.__ONLINE_stgKind[@stgHoverRow];
+				if(@stgHoverK != 0 && @stgHoverK != 1){
+					@kbFocus = 1;
+					@kbRow[0] = @stgHoverRow;
+				}
+			}
+		}
 	}
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 0){
 		// QoL: the same row table the panel draws from.

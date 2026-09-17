@@ -285,6 +285,8 @@ return _h;
 // args: act -> text
 var _a;
 _a = argument0;
+// a pending destructive confirmation is cancelled by any other action
+if(global.__ONLINE_stgClearRow >= 0 && _a != global.__ONLINE_stgClearRow) @acc_clear_cancel();
 if(_a == 11) return "Drop the current connection and connect again.";
 if(_a == 15) return "Save the account and reconnect with the new identity. No restart needed.";
 if(_a == 12) return "Your in-game name. It is written to the account store and sent to the server when you connect.";
@@ -301,7 +303,7 @@ if(_a == 6) return "Direction indicator above remote players.";
 if(_a == 7) return "Spectator camera mode.";
 if(_a == 20) return "Enter applies this save. F toggles favourite, 1-8 assigns a hotkey, Del clears it.";
 if(_a == 21) return "Show only favourite saves.";
-if(_a == 22) return "Deletes every non-favourite save file.";
+if(_a == 22) return "Deletes non-favourite saves.";
 if(_a == 10) return "Choose which player object drives your character.";
 return "";
 
@@ -446,7 +448,9 @@ if(_a == 11 || _a == 15) _acts = "Enter = run";
 if(_a == 10) _acts = "Enter = pick";
 if(_a == 20) _acts = "Enter = apply   F = favourite   1-8 = hotkey";
 if(_a == 21) _acts = "Left/Right = toggle";
-if(_a == 22) _acts = "Enter = clear";
+if(_a == 22){
+  if(global.__ONLINE_stgClearRow == 22) _acts = "Click again to confirm"; else _acts = "Click to clear";
+}
 if(string_length(_acts) > 0){
   draw_set_color(make_color_rgb(150, 190, 230));
   draw_text(_x, @stgBottom - 18 + @stgTextDY, _acts);
@@ -596,7 +600,7 @@ return 1;
 			if(@rowK == 0){
 				// section header: label + a thin rule running to the content edge
 				draw_set_color(make_color_rgb(150, 190, 230));
-				draw_text(@rowX, @rowY, global.__ONLINE_stgLabel[@rowI]);
+				@stg_text(@rowX, @rowY, global.__ONLINE_stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(70, 80, 95));
 				@rowRuleX = @rowX + string_width(global.__ONLINE_stgLabel[@rowI]) + 10;
 				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
@@ -604,7 +608,7 @@ return 1;
 				// two-column header: each label gets a short rule of its own
 				@rowSplit = string_pos("|", global.__ONLINE_stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(150, 190, 230));
-				draw_text(@rowX, @rowY, string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1));
+				@stg_text(@rowX, @rowY, string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1));
 				draw_set_color(make_color_rgb(70, 80, 95));
 				@rowRuleX = @rowX + string_width(string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1)) + 10;
 				if(@rowRuleX < @rowCX - 16) draw_rectangle(@rowRuleX, @rowY + 8, @rowCX - 16, @rowY + 9, false);
@@ -631,7 +635,7 @@ return 1;
 				}else{
 					draw_set_color(c_white);
 				}
-				draw_text(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI]);
+				@stg_text(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI]);
 				@rowV = @stg_value(@rowI);
 				@rowBY = @rowY + 2;
 				@rowBH = global.__ONLINE_stgRowH - 6;
@@ -663,7 +667,7 @@ return 1;
 
 				  draw_set_color(make_color_rgb(190, 195, 200));
 
-				  draw_text(@spX + @colW - 16, @rowBY + 3 + @stgTextDY, @rowV);
+				  @stg_text(@spX + @colW - 16, @rowBY + 3 + @stgTextDY, @rowV, 2);
 
 				  draw_set_halign(fa_left);
 
@@ -813,6 +817,31 @@ _y += 6;
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
+///// script @stg_text
+// Draws text with the engine-appropriate path, so CJK survives: GM8.0 needs the
+// FoxWriting wrapper and CJK builds need the atlas renderer. Plain draw_text (used
+// everywhere before) shows garbage for anything non-ASCII.
+// args: x, y, text, halign(0 left, 1 centre, 2 right) -> 0
+#if GM80
+if(argument3 == 2){ fw_draw_set_halign(fa_right); }else if(argument3 == 1){ fw_draw_set_halign(fa_center); }else{ fw_draw_set_halign(fa_left); }
+fw_draw_set_valign(fa_top);
+__ONLINE_fw_use_font(argument2);
+fw_draw_text_ext(argument0, argument1, argument2, 9999);
+#endif
+#if CJKTEXT
+#if not GM80
+global.__ONLINE_cjkHalign = argument3;
+global.__ONLINE_cjkValign = 0;
+__ONLINE_cjk_draw_text(argument0, argument1, argument2, 9999);
+#endif
+#endif
+#if not GM80
+#if not CJKTEXT
+draw_text(argument0, argument1, argument2);
+#endif
+#endif
+return 0;
+
 ///// script @stg_row_add
 // Appends one row and returns its index.
 // args: kind, act, label, x, y, controlWidth, controlStyle, cxOverride
@@ -949,7 +978,7 @@ if(_a == 8){
   return @pvpModeNames[@pvpMode];
 }
 if(_a == 9){
-  if(@pvpMode != 0) return @stg_onoff(@bulletShow) + " lock";
+  if(@pvpMode != 0) return "locked";
   return @stg_onoff(@bulletShow);
 }
 if(_a == 20){
@@ -958,7 +987,7 @@ if(_a == 20){
   return "";
 }
 if(_a == 21) return @stg_onoff(@saveHistFilter);
-if(_a == 22) return "Clear all (keeps favourites)";
+if(_a == 22) return "Clear all";
 if(_a == 10) return "Pick";
 if(_a == 11) return "Reconnect now";
 if(_a == 15) return "Apply & Reconnect";
@@ -1053,9 +1082,15 @@ if(_a == 20){
 }
 if(_a == 21){ @saveHistFilter = 1 - @saveHistFilter; return 0; }
 if(_a == 22){
-  // destructive: same two-step confirm as the account clears
-  global.__ONLINE_stgClearRow = 22;
-  @stg_toast("Clear every non-favourite save? Enter=Yes Esc=No", 1);
+  // destructive, so it takes two clicks: the first arms the confirmation, a
+  // second click on the same button performs it (the pointer can always finish
+  // what it started - no key is required, and Esc is not part of the flow).
+  if(global.__ONLINE_stgClearRow == 22){
+    @acc_clear_commit();
+  }else{
+    global.__ONLINE_stgClearRow = 22;
+    @stg_toast("Click again to clear every non-favourite save", 1);
+  }
   return 0;
 }
 if(_a == 10){ @settingsOpen = false; @debug_pick_player = true; return 1; }
@@ -1105,11 +1140,11 @@ if(_a == 8){
 return @stg_act(argument0);
 
 ///// script @stg_toast
-// Transient panel message (2.5 s): kind 0 = green, 1 = yellow, 2 = red.
+// REMOVED: the transient pop-up duplicated what the detail pane and the footer
+// hint already say, and it overlapped the list. Returning immediately keeps every
+// call site valid while nothing is ever stored, so @stg_toast_active() stays false
+// and no box is drawn anywhere.
 // args: text, kind -> 0
-global.__ONLINE_stgToastMsg = argument0;
-global.__ONLINE_stgToastKind = argument1;
-global.__ONLINE_stgToastUntil = current_time + 2500;
 return 0;
 
 ///// script @stg_toast_active
