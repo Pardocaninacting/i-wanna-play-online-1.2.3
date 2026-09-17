@@ -59,20 +59,19 @@ return _d;
 ///// script @account_paths
 // Resolves the two file locations into globals. Safe to call repeatedly.
 // args: none -> 0
-globalvar @accGlobalDir, @accGlobalPath, @accLocalPath;
 var _appdata;
-@accGlobalDir = "";
+global.__ONLINE_accGlobalDir = "";
 _appdata = environment_get_variable("APPDATA");
 if(_appdata != ""){
   // P3: per-user, writable, survives game uninstalls.
-  @accGlobalDir = @account_dir(_appdata) + "iwpo" + chr(92);
-  @accGlobalPath = @accGlobalDir + "account.ini";
+  global.__ONLINE_accGlobalDir = @account_dir(_appdata) + "iwpo" + chr(92);
+  global.__ONLINE_accGlobalPath = global.__ONLINE_accGlobalDir + "account.ini";
 }else{
   // No APPDATA (rare): fall back to the working directory so the feature still
   // works, even though it is then per-install rather than per-user.
-  @accGlobalPath = @account_dir(working_directory) + "__ONLINE_account.ini";
+  global.__ONLINE_accGlobalPath = @account_dir(working_directory) + "__ONLINE_account.ini";
 }
-@accLocalPath = @account_dir(program_directory) + "__ONLINE_account.ini";
+global.__ONLINE_accLocalPath = @account_dir(program_directory) + "__ONLINE_account.ini";
 return 0;
 
 ///// script @account_ini_read
@@ -87,7 +86,6 @@ return 0;
 // turning into mojibake; the tagged key wins, the generic one is the fallback
 // written for compatibility.
 // args: path, isGlobal -> 1/0
-globalvar @accName, @accPassword, @accStore;
 var _f, _line, _lp, _key, _val, _inSec, _found, _storeVal;
 var _genName, _genPass, _tagName, _tagPass;
 _found = 0;
@@ -100,8 +98,8 @@ if(!file_exists(argument0)) return 0;
 _f = file_text_open_read(argument0);
 if(_f < 0) return 0;
 _inSec = 0;
-@accName = "";
-@accPassword = "";
+global.__ONLINE_accName = "";
+global.__ONLINE_accPassword = "";
 while(!file_text_eof(_f)){
   _line = file_text_read_string(_f);
   file_text_readln(_f);
@@ -127,21 +125,21 @@ while(!file_text_eof(_f)){
 }
 file_text_close(_f);
 if(_tagName != ""){
-  @accName = _tagName;
-  @accPassword = _tagPass;
+  global.__ONLINE_accName = _tagName;
+  global.__ONLINE_accPassword = _tagPass;
 }else{
-  @accName = _genName;
-  @accPassword = _genPass;
+  global.__ONLINE_accName = _genName;
+  global.__ONLINE_accPassword = _genPass;
 }
-if(@accName != "") _found = 1;
+if(global.__ONLINE_accName != "") _found = 1;
 if(argument1 == 1){
-  if(_storeVal >= 0) @accStore = _storeVal; else @accStore = 0;
+  if(_storeVal >= 0) global.__ONLINE_accStore = _storeVal; else global.__ONLINE_accStore = 0;
 }else{
-  @accStore = 1;
+  global.__ONLINE_accStore = 1;
 }
 if(!_found){
-  @accName = "";
-  @accPassword = "";
+  global.__ONLINE_accName = "";
+  global.__ONLINE_accPassword = "";
 }
 return _found;
 
@@ -149,26 +147,28 @@ return _found;
 // Writes the current values to the active store target.
 // args: none -> 1 on success, 0 on failure (caller shows the red hint and may
 // offer "Store in: This folder" as a fallback)
-globalvar @accName, @accPassword, @accStore, @accGlobalDir, @accGlobalPath, @accLocalPath, @accWritePath;
 var _path, _f, _store, _tag;
-if(@accStore == 1) _path = @accLocalPath; else _path = @accGlobalPath;
-if(@accStore != 1){
-  if(@accGlobalDir != ""){
-    if(!directory_exists(@accGlobalDir)) directory_create(@accGlobalDir);
+// self-sufficient: never depend on @account_load having run (a tempOnline
+// restore skips it, and an undefined path global used to abort the save).
+@account_paths();
+if(global.__ONLINE_accStore == 1) _path = global.__ONLINE_accLocalPath; else _path = global.__ONLINE_accGlobalPath;
+if(global.__ONLINE_accStore != 1){
+  if(global.__ONLINE_accGlobalDir != ""){
+    if(!directory_exists(global.__ONLINE_accGlobalDir)) directory_create(global.__ONLINE_accGlobalDir);
   }
 }
 _f = file_text_open_write(_path);
 if(_f < 0){
-  @accWritePath = _path;
+  global.__ONLINE_accWritePath = _path;
   return 0;
 }
 file_text_write_string(_f, "[account]");
 file_text_writeln(_f);
 // Generic pair first (readable by any engine / older builds), then the
 // engine-tagged pair that wins on read (see @account_ini_read).
-file_text_write_string(_f, "name=" + @accName);
+file_text_write_string(_f, "name=" + global.__ONLINE_accName);
 file_text_writeln(_f);
-file_text_write_string(_f, "password=" + @accPassword);
+file_text_write_string(_f, "password=" + global.__ONLINE_accPassword);
 file_text_writeln(_f);
 // NOTE: no #else here - the GM8 render pipeline (getGMLCode.parseGML) only
 // understands #if / #if not / #endif, so an #else would survive into the game
@@ -180,44 +180,42 @@ _tag = "_gbk";
 #if not GM80
 _tag = "_utf8";
 #endif
-file_text_write_string(_f, "name" + _tag + "=" + @accName);
+file_text_write_string(_f, "name" + _tag + "=" + global.__ONLINE_accName);
 file_text_writeln(_f);
-file_text_write_string(_f, "password" + _tag + "=" + @accPassword);
+file_text_write_string(_f, "password" + _tag + "=" + global.__ONLINE_accPassword);
 file_text_writeln(_f);
-if(@accStore == 1) _store = "local"; else _store = "global";
+if(global.__ONLINE_accStore == 1) _store = "local"; else _store = "global";
 file_text_write_string(_f, "store=" + _store);
 file_text_writeln(_f);
 file_text_close(_f);
 return 1;
 
 ///// script @account_load
-// P1 -> P2 -> P3 resolution. Fills the account globals and @accSource.
+// P1 -> P2 -> P3 resolution. Fills the account globals and global.__ONLINE_accSource.
 // args: none -> 1 when a name is available (no prompt needed), 0 for first run
-globalvar @accName, @accPassword, @accSource, @accStore, @accEnvManaged;
-globalvar @accLocalPath, @accGlobalPath;
 var _env;
 @account_paths();
-@accSource = 0;
-@accEnvManaged = 0;
-@accName = "";
-@accPassword = "";
-@accStore = 0;
+global.__ONLINE_accSource = 0;
+global.__ONLINE_accEnvManaged = 0;
+global.__ONLINE_accName = "";
+global.__ONLINE_accPassword = "";
+global.__ONLINE_accStore = 0;
 _env = environment_get_variable("IWPO_NAME");
 if(_env != ""){
   // P1: the whole tier is taken from the environment (name AND password), so a
   // half-configured probe cannot silently mix environment and file values.
-  @accName = _env;
-  @accPassword = environment_get_variable("IWPO_PASSWORD");
-  @accSource = 1;
-  @accEnvManaged = 1;
+  global.__ONLINE_accName = _env;
+  global.__ONLINE_accPassword = environment_get_variable("IWPO_PASSWORD");
+  global.__ONLINE_accSource = 1;
+  global.__ONLINE_accEnvManaged = 1;
   return 1;
 }
-if(@account_ini_read(@accLocalPath, 0)){
-  @accSource = 2;
+if(@account_ini_read(global.__ONLINE_accLocalPath, 0)){
+  global.__ONLINE_accSource = 2;
   return 1;
 }
-if(@account_ini_read(@accGlobalPath, 1)){
-  @accSource = 3;
+if(@account_ini_read(global.__ONLINE_accGlobalPath, 1)){
+  global.__ONLINE_accSource = 3;
   return 1;
 }
 return 0;
@@ -234,11 +232,10 @@ return 0;
 // empty game id). A script without the declaration writes the CALLER's
 // variables, which is exactly the intent.
 // args: none -> 0
-globalvar @accName, @accPassword;
-@name = @accName;
+@name = global.__ONLINE_accName;
 if(@name == "") @name = "Anonymous";
 @name = @account_clean(@name);
-@password = string_copy(@accPassword, 1, 20);
+@password = string_copy(global.__ONLINE_accPassword, 1, 20);
 @selfGameID = @accBaseGameID;
 @selfGameID += @password;
 @hasPassword = 0;
@@ -295,36 +292,40 @@ return _o;
 // Switches where account edits are written. Copies the values to the new target
 // first so switching can never lose data, then drops the stale P2 file when
 // moving back to global. args: 0 = global, 1 = this folder -> 1/0 (write result)
-globalvar @accStore, @accSource, @accLocalPath, @accGlobalPath, @accEnvManaged;
-var _target, _ok;
-if(@accEnvManaged) return 0;
+var _target, _ok, _prev;
+if(global.__ONLINE_accEnvManaged) return 0;
 _target = argument0;
-if(_target == @accStore) return 1;
-@accStore = _target;
+if(_target == global.__ONLINE_accStore) return 1;
+@account_paths();
+_prev = global.__ONLINE_accStore;
+global.__ONLINE_accStore = _target;
 _ok = @account_save();
+if(!_ok){
+  // the write failed - keep pointing at the store that still has the values
+  global.__ONLINE_accStore = _prev;
+  return 0;
+}
 if(_ok && _target == 0){
   // values now live in the global file; the local override must not shadow it
-  if(file_exists(@accLocalPath)) file_delete(@accLocalPath);
+  if(file_exists(global.__ONLINE_accLocalPath)) file_delete(global.__ONLINE_accLocalPath);
 }
 if(_ok){
-  if(_target == 1) @accSource = 2; else @accSource = 3;
+  if(_target == 1) global.__ONLINE_accSource = 2; else global.__ONLINE_accSource = 3;
 }
 return _ok;
 
 ///// script @account_source_label
 // Short badge for the menu: where the current values come from.
 // args: none -> "Environment" / "This folder" / "Global" / "(not set)"
-globalvar @accSource, @accEnvManaged;
-if(@accEnvManaged) return "Environment";
-if(@accSource == 2) return "This folder";
-if(@accSource == 3) return "Global";
-if(@accSource == 1) return "Environment";
+if(global.__ONLINE_accEnvManaged) return "Environment";
+if(global.__ONLINE_accSource == 2) return "This folder";
+if(global.__ONLINE_accSource == 3) return "Global";
+if(global.__ONLINE_accSource == 1) return "Environment";
 return "(not set)";
 
 ///// script @account_store_label
 // Menu text for the "Store in" row.
 // args: none -> "Global" / "This folder" / "Environment"
-globalvar @accStore, @accEnvManaged;
-if(@accEnvManaged) return "Environment";
-if(@accStore == 1) return "This folder";
+if(global.__ONLINE_accEnvManaged) return "Environment";
+if(global.__ONLINE_accStore == 1) return "This folder";
 return "Global";

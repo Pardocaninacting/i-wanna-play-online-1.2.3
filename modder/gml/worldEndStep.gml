@@ -2940,8 +2940,9 @@ if(@settingsOpen && @keybindEditing < 0){
 		}
 	}
 	// QoL: wheel scrolling for the settings list. This lives here (not in the draw
-	// click branch) so it works without holding a mouse button.
-	if(@settingsOpen && @settingsTab == 0){
+	// click branch) so it works without holding a mouse button. Covers every
+	// table-driven tab (Settings + Saves), not just tab 0.
+	if(@settingsOpen && (@settingsTab == 0 || @settingsTab == 1)){
 		if(mouse_wheel_up()) @stgFirst -= 1;
 		if(mouse_wheel_down()) @stgFirst += 1;
 	}
@@ -2949,7 +2950,11 @@ if(@settingsOpen && @keybindEditing < 0){
 		// QoL: the same row table the panel draws from.
 		@stg_build_rows(@contentY);
 		if(@kbRow[0] < 0 || @kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
-		if(keyboard_check_pressed(vk_up)){
+		// Navigation uses @kb_repeat: one step per press, then auto-repeat while held.
+		// The follow flag is raised here - that is, only when a move really happens -
+		// so the wheel is never pinned by a stale focus.
+		if(@kb_repeat(vk_up, 10, 3)){
+			@stgNavKey = 1;
 			@rowPrev = @stg_next_row(@kbRow[0], -1);
 			if(@rowPrev == @kbRow[0]){
 				// already on the first selectable row: if the view is still scrolled
@@ -2965,7 +2970,8 @@ if(@settingsOpen && @keybindEditing < 0){
 			}
 			@kbAct = 1;
 		}
-		if(keyboard_check_pressed(vk_down)){
+		if(@kb_repeat(vk_down, 10, 3)){
+			@stgNavKey = 1;
 			@kbRow[0] = @stg_next_row(@kbRow[0], 1);
 			@kbAct = 1;
 		}
@@ -2987,149 +2993,73 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 	}
-	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 1){
-		@kbVisCount = 0;
-		for(@kbI = 0; @kbI < @saveHistCount; @kbI += 1){
-			if(@saveHistFilter == 0 || @saveHistFav[@kbI]) @kbVisCount += 1;
-		}
-		if(keyboard_check(vk_shift) && keyboard_check_pressed(70)){
-			@saveHistFilter = 1 - @saveHistFilter;
-			@saveHistPage = 0;
-			@kbRow[1] = 0;
-			@kbAct = 1;
-		}
-		if(keyboard_check_pressed(vk_backspace)){
-			@saveHistFilter = 1 - @saveHistFilter;
-			@saveHistPage = 0;
-			@kbRow[1] = 0;
-			@kbAct = 1;
-		}
-		if(@kbAct == 0 && keyboard_check(vk_shift) && keyboard_check_pressed(vk_delete)){
-			if(@saveHistCount > @saveHistFavCount){
-				@saveHistClearFiles = true;
-			}
-			@kbAct = 1;
-		}
-		if(@kbAct == 0 && keyboard_check_pressed(vk_home)){
-			@saveHistPage = 0;
-			@kbRow[1] = 0;
-			@kbAct = 1;
-		}
-		if(@kbAct == 0 && keyboard_check_pressed(vk_end)){
-			if(@kbVisCount > 0){
-				@kbRow[1] = @kbVisCount - 1;
-				@saveHistPage = @kbRow[1] div 8;
-			}
-			@kbAct = 1;
-		}
-		if(@kbVisCount > 0){
-			if(@kbRow[1] >= @kbVisCount) @kbRow[1] = @kbVisCount - 1;
-			if(@kbRow[1] < 0) @kbRow[1] = 0;
-			if(keyboard_check_pressed(vk_up)){
-				if(@kbRow[1] <= 0){
-					@kbRow[1] = 0;
-					@kbFocus = 0;
+	// TAB 1 uses the SAME navigation as tab 0 (one row per press, auto-repeat,
+	// wheel, scrolling viewport); the save-specific keys stay below.
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && (@settingsTab == 0 || @settingsTab == 1)){
+		if(@settingsTab == 0) @stg_build_rows(@contentY); else @stg_build_saves(@contentY);
+		if(@kbRow[0] < 0 || @kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
+		if(@kb_repeat(vk_up, 10, 3)){
+			@stgNavKey = 1;
+			@rowPrev = @stg_next_row(@kbRow[0], -1);
+			if(@rowPrev == @kbRow[0]){
+				if(@stgFirst > 0){
+					@stgFirst -= 1;
 				}else{
-					@kbRow[1] -= 1;
-					@saveHistPage = @kbRow[1] div 8;
+					@kbFocus = 0;
+					@kbRow[0] = @stg_first_row();
 				}
+			}else{
+				@kbRow[0] = @rowPrev;
+			}
+			@kbAct = 1;
+		}
+		if(@kb_repeat(vk_down, 10, 3)){
+			@stgNavKey = 1;
+			@kbRow[0] = @stg_next_row(@kbRow[0], 1);
+			@kbAct = 1;
+		}
+		if(keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)){
+			if(global.__ONLINE_stgClearRow >= 0){
+				@acc_clear_commit();
+			}else{
+				@stg_act(@kbRow[0]);
+			}
+			@kbAct = 1;
+		}
+		if(global.__ONLINE_stgClearRow >= 0 && (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_backspace))){
+			@acc_clear_cancel();
+			@kbAct = 1;
+		}
+		// save-specific keys act on the selected save row
+		if(@settingsTab == 1 && @stgAct[@kbRow[0]] == 20){
+			@svI = @stgArg[@kbRow[0]];
+			if(keyboard_check_pressed(70)){          // F = favourite
+				@saveHistFav[@svI] = 1 - @saveHistFav[@svI];
+				@saveHistChanged = true;
 				@kbAct = 1;
 			}
-			if(keyboard_check_pressed(vk_down)){
-				@kbRow[1] += 1; if(@kbRow[1] >= @kbVisCount) @kbRow[1] = @kbVisCount - 1;
-				@saveHistPage = @kbRow[1] div 8;
+			@kbKeyN = -1;
+			if(keyboard_check_pressed(ord("1"))) @kbKeyN = 1;
+			if(keyboard_check_pressed(ord("2"))) @kbKeyN = 2;
+			if(keyboard_check_pressed(ord("3"))) @kbKeyN = 3;
+			if(keyboard_check_pressed(ord("4"))) @kbKeyN = 4;
+			if(keyboard_check_pressed(ord("5"))) @kbKeyN = 5;
+			if(keyboard_check_pressed(ord("6"))) @kbKeyN = 6;
+			if(keyboard_check_pressed(ord("7"))) @kbKeyN = 7;
+			if(keyboard_check_pressed(ord("8"))) @kbKeyN = 8;
+			if(@kbKeyN > 0){
+				@saveHistHotkey[@svI] = @kbKeyN;
+				@saveHistChanged = true;
 				@kbAct = 1;
-			}
-			if(keyboard_check_pressed(vk_pageup) || keyboard_check_pressed(vk_left)){
-				@kbRow[1] -= 8; if(@kbRow[1] < 0) @kbRow[1] = 0;
-				@saveHistPage = @kbRow[1] div 8;
-				@kbAct = 1;
-			}
-			if(keyboard_check_pressed(vk_pagedown) || keyboard_check_pressed(vk_right)){
-				@kbRow[1] += 8; if(@kbRow[1] >= @kbVisCount) @kbRow[1] = @kbVisCount - 1;
-				@saveHistPage = @kbRow[1] div 8;
-				@kbAct = 1;
-			}
-			@kbVisCur = -1;
-			@kbVI = 0;
-			for(@kbI = @saveHistCount - 1; @kbI >= 0 && @kbVisCur < 0; @kbI -= 1){
-				if(@saveHistFilter == 0 || @saveHistFav[@kbI]){
-					if(@kbVI == @kbRow[1]) @kbVisCur = @kbI;
-					@kbVI += 1;
-				}
-			}
-			if(keyboard_check_pressed(vk_enter)){
-				if(@kbVisCur >= 0){
-					@saveHistApply = @kbVisCur;
-					@settingsOpen = false;
-				}
-				@kbAct = 1;
-			}
-			if(!keyboard_check(vk_shift) && keyboard_check_pressed(70)){
-				if(@kbVisCur >= 0){
-					if(@saveHistFav[@kbVisCur]){
-						@saveHistFav[@kbVisCur] = 0;
-						@saveHistFavCount -= 1;
-					}else{
-						if(@saveHistFavCount < @saveHistFavMax){
-							@saveHistFav[@kbVisCur] = 1;
-							@saveHistFavCount += 1;
-						}
-					}
-					@shMutation += 1;
-					if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
-					@saveHistDirty = true;
-				}
-				@kbAct = 1;
-			}
-			for(@kbHot = 1; @kbHot <= 8 && @kbAct == 0; @kbHot += 1){
-				if(keyboard_check_pressed(48 + @kbHot)){
-					if(@kbVisCur >= 0){
-						if(@saveHistHotkey[@kbVisCur] == @kbHot){
-							@saveHistHotkey[@kbVisCur] = 0;
-						}else{
-							for(@kbI = 0; @kbI < @saveHistCount; @kbI += 1){
-								if(@saveHistHotkey[@kbI] == @kbHot) @saveHistHotkey[@kbI] = 0;
-							}
-							@saveHistHotkey[@kbVisCur] = @kbHot;
-						}
-						@shMutation += 1;
-						if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
-						@saveHistDirty = true;
-						@kbAct = 1;
-					}
-				}
 			}
 			if(keyboard_check_pressed(vk_delete)){
-				// Nested guard: GM8.0 does not short-circuit && - a combined
-				// condition would index @saveHistFav[-1] when @kbVisCur < 0.
-				if(@kbVisCur >= 0){
-					if(!@saveHistFav[@kbVisCur]){
-						for(@kbI = @kbVisCur; @kbI < @saveHistCount - 1; @kbI += 1){
-							@saveHistFav[@kbI] = @saveHistFav[@kbI + 1];
-							@saveHistHotkey[@kbI] = @saveHistHotkey[@kbI + 1];
-							@saveHistGrav[@kbI] = @saveHistGrav[@kbI + 1];
-							@saveHistX[@kbI] = @saveHistX[@kbI + 1];
-							@saveHistY[@kbI] = @saveHistY[@kbI + 1];
-							@saveHistRoom[@kbI] = @saveHistRoom[@kbI + 1];
-							@saveHistName[@kbI] = @saveHistName[@kbI + 1];
-							@saveHistRoomName[@kbI] = @saveHistRoomName[@kbI + 1];
-							@saveHistTime[@kbI] = @saveHistTime[@kbI + 1];
-						}
-						@saveHistCount -= 1;
-						@shMutation += 1;
-						if(!@saveHistDirty) @saveHistDirtyTimer = room_speed * 3;
-						@saveHistDirty = true;
-					}
-				}
+				@saveHistHotkey[@svI] = 0;
+				@saveHistChanged = true;
 				@kbAct = 1;
 			}
 		}
-		if(@kbVisCount <= 0 && keyboard_check_pressed(vk_up)){
-			@kbFocus = 0;
-			@kbAct = 1;
-		}
 	}
+
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 2){
 		if(keyboard_check_pressed(vk_up)){
 			if(@kbRow[2] <= 0){

@@ -84,7 +84,7 @@ GML 编译器在运行期编译**。
 | `_workspace/reference/opengmk/*` | OpenGMK 源码快照（**我们的 GM8 上游**：`gamedata/gm80.rs`/`gm81.rs`/`antidec.rs` 与我们 modder 同名同源） |
 | `_workspace/reference/derived/gm81_functions.json` | **1268 个 GM8 Classic 内置函数名**（取自 OpenGMK 的 `FUNCTIONS` 有序表；顺序即字节码 function id 顺序） |
 | `_workspace/tmp/cloud/extract_gm8_table.js` | 重新生成上面这份数据集的脚本 |
-| `modder/tools/check_gml_functions.mjs` | **函数可用性检查器**：扫描 31 个模板的全部调用点，比对 GM8.1 表并感知 `#if` 门控 |
+| `_workspace/tools/check_gml_functions.mjs` | **函数可用性检查器**：扫描 31 个模板的全部调用点，比对 GM8.1 表并感知 `#if` 门控 |
 
 当前基线：**2605 处调用点 / 0 处不可用 / 202 处被正确门控**（`GMSND`=GM8.2 音效、`STUDIO`=GMS、`GM8GUI`=GM8.2 GUI 等）。
 
@@ -146,7 +146,7 @@ OpenGMK 的表是 **GM8.1 级**（8.0 是它的子集），因此它**能**拦�
 - `point_in_rectangle` / `string_trim` / `buffer_*` / `array_create` / `ini_key_*` / `md5_string_utf8` **GM8.0 与 GM8.1 都没有**
   ⇒ 是 **GMS 时代**函数 ✓（与两次实机踩坑一致 ✓）
 
-**检查器升级**（`modder/tools/check_gml_functions.mjs`）现在是三层判定：
+**检查器升级**（`_workspace/tools/check_gml_functions.mjs`）现在是三层判定：
 1. `MISSING`：不在 GM8.1 表内且未被 `#if` 门控 ⇒ **GMS-only / 拼写错误**（硬失败）
 2. `GM81ONLY`：在 71 清单内且未门控 ⇒ **GM8.0 目标会崩**（提示用 `#if not GM80` 门控；`GM80` 仅 8.0 目标置位，故 `#if not GM80` 被识别为门控 ✓）
 3. `gated`：位于现代分支（`STUDIO`/`GMSND`/`GM8GUI`/`GM82*`/`GMS2`/`NIKAPLE`）⇒ 合法

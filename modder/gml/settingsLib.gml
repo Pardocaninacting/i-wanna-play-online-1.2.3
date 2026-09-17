@@ -14,24 +14,22 @@
 //   global.__ONLINE_stgX[i]     label x, global.__ONLINE_stgCX[i]/global.__ONLINE_stgCW[i] control x + width
 //   global.__ONLINE_stgY[i]     row y (top)
 //
-// Layout (panel 600x460, two columns for Gameplay/Display):
+// Layout (master-detail; menu_mock/DESIGN.md is the design source):
 //
 //   +------------------------------------------------------------+
 //   | [Settings][Saves][Rating][Keys][Sync][Skins]               |
-//   | CONNECTION                                                 |
-//   |  * Online                          Server: 1.2.3.4:8002    |
-//   |  [ Reconnect now ]                                         |
-//   |  [ Apply & Reconnect ]                                     |
-//   | ACCOUNT                                                    |
-//   |  Name:     [ QoLFirst                              ]       |
-//   |  Password: [ ******                                ]       |
-//   |  Store in: [ Global ]                                      |
-//   | GAMEPLAY                    DISPLAY                        |
-//   |  Team:  [ None < > ]        Visual:    [ All < > ]         |
-//   |  Lerp:  [ ON ]              Indicator: [ OFF ]             |
-//   |  ...                        Spec Cam:  [ Free < > ]        |
+//   | CONNECTION              |  <detail for the focused row>    |
+//   |  * Online   Server: ..  |                                  |
+//   |  Reconnect now          |                                  |
+//   | ACCOUNT                 |                                  |
+//   |  Name:        QoLFirst  |                                  |
+//   | GAMEPLAY                |                                  |
+//   |  Lerp:             ON   |                                  |
+//   |  ... (the list scrolls) |                                  |
 //   +------------------------------------------------------------+
-//   hint line
+//   hint line (follows the focused row)                  [Close]
+//
+//   full layout: 268px list + 372px detail; narrow: list only (@detW = 0).
 //
 // GameMaker-8 constraints honoured here: no #else (the render pipeline knows
 // #if/#if not/#endif only), no 8.1+-only functions (point_in_rectangle,
@@ -62,14 +60,15 @@ global.__ONLINE_accStore = 0;
 global.__ONLINE_accEnvManaged = 0;
 global.__ONLINE_accWritePath = "";
 // layout constants (the gate checks the whole table against the panel)
-global.__ONLINE_stgRowH = 24;
-global.__ONLINE_stgHeadH = 18;
+global.__ONLINE_stgRowH = 22;
+global.__ONLINE_stgHeadH = 15;
 // Panel geometry is derived by @stg_layout (worldCreate primes it via @stg_init,
 // worldDrawGui re-derives it per frame) - a hardcoded size in the draw path once
 // forked the two and the row table overflowed the panel.
 // panel geometry + layout mode (see @stg_layout - narrow is the shipped layout)
 @stgScroll = 0;
 @stgFirst = 0;
+@stgNavKey = 0;   // set by the keyboard handler; the wheel must not follow
 @stgTextDY = -2;   // text sits 2px lower than its box otherwise
 @menuModePref = 0;
 @menuMode = 0;
@@ -91,9 +90,9 @@ return 0;
 // frame; that also keeps the menu right when a game changes its view port
 // between rooms.
 //
-//   narrow (default) : content 600px - exactly the layout that ships today
-//   full             : content 420px + detail 220px, only when the port is wide
-//                      enough (or when the per-game ini forces it)
+//   narrow : content column only (@detW = 0)
+//   full   : content 268px + detail 372px, when the port is wide enough
+//            (or when the per-game ini forces it, [config] menu_mode = 2)
 //
 // The @sp* / @colW / @detW variables are the CALLER's (world instance) - never
 // declared globalvar here, for the same reason @account_apply must not.
@@ -118,8 +117,8 @@ _full = false;
 if(@menuModePref == 2) _full = true;
 if(@menuModePref == 0 && _w >= 660 && _h >= 420) _full = true;
 if(_full){
-  @colW = 420;
-  @detW = 220;
+  @colW = 268;
+  @detW = 372;
 }else{
   @colW = 600;
   @detW = 0;
@@ -131,7 +130,7 @@ if(@spW > _w - 16){
   // content below a usable width
   @spW = _w - 16;
   @colW = @spW - @detW;
-  if(@detW > 0 && @colW < 360){
+  if(@detW > 0 && @colW < 260){
     @detW = 0;
     @colW = @spW;
   }
@@ -148,16 +147,13 @@ return 0;
 ///// script @stg_build_rows
 // Rebuilds the tab-0 table for the current panel geometry.
 // args: contentY -> 0
-var _y, _cl, _cr, _cf, _btnW, _fw;
+var _y, _cl, _cf, _btnW, _fw, _ctlX;
 global.__ONLINE_stgN = 0;
 _y = argument0 + 2;
 _cl = @spX + 16;                 // left column label x (content left edge)
-// The two-column Gameplay|Display arrangement needs the full 600px column;
-// when the detail pane takes part of the panel (@colW < 560) the sections
-// stack instead - that is what the full layout uses._cr = @spX + 16 + 284;
-
 _cf = @spX + 16 + 110;           // account field x
-_btnW = 240;
+_btnW = @colW - 32;
+_ctlX = @spX + @colW - 16 - 130;   // every control hugs the content right edge
 _fw = @colW - 32 - 110;          // account field width follows the column
 if(_fw < 120) _fw = 120;
 // --- connection
@@ -168,28 +164,28 @@ if(_fw < 120) _fw = 120;
 // --- account
 _y += 6;
 @stg_row_add(0, 0, "ACCOUNT", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(2, 12, "Name:", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
-@stg_row_add(2, 13, "Password:", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
-@stg_row_add(3, 14, "Store in:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
+@stg_row_add(2, 12, "Name", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
+@stg_row_add(2, 13, "Password", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
+@stg_row_add(3, 14, "Store in", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 // --- gameplay / display side by side
 _y += 6;
 // Gameplay and Display are always ONE column (maintainer decision):
 // the detail pane carries the extra breadth, and a second column only
 // made both halves harder to scan.
 @stg_row_add(0, 0, "GAMEPLAY", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(3, 1, "Team:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 2, "Lerp:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 3, "Save:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 4, "Fast:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
-@stg_row_add(3, 8, "PVP:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 9, "Bullets:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 1, "Team", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 2, "Lerp", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 3, "Save", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 4, "Fast", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 8, "PVP", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 9, "Bullets", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 _y += 6;
 @stg_row_add(0, 0, "DISPLAY", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(3, 5, "Visual:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 6, "Indicator:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
-@stg_row_add(3, 7, "Spec Cam:", _cl, _y, 130, 0, 0); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 5, "Visual", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 6, "Indicator", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 7, "Spec Cam", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 #if PLAYER_LIST
-@stg_row_add(5, 10, "Player Objects:", _cl, _y, 150, 1, _cf); _y += global.__ONLINE_stgRowH;
+@stg_row_add(5, 10, "Player Objects", _cl, _y, 130, 1, _ctlX); _y += global.__ONLINE_stgRowH;
 #endif
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
@@ -234,7 +230,9 @@ while(_i < global.__ONLINE_stgN){
 
   }
   if(argument1 >= _y - 2 && argument1 < _y + _h - 2){
-    if(argument0 >= global.__ONLINE_stgX[_i] - 6 && argument0 < global.__ONLINE_stgX[_i] + global.__ONLINE_stgCW[_i] + 200) return _i;
+    // the row ends at its control's right edge - a fixed "+200" used to extend
+    // the hover/click area well past the visible widget
+    if(argument0 >= global.__ONLINE_stgX[_i] - 6 && argument0 < global.__ONLINE_stgCX[_i] + global.__ONLINE_stgCW[_i] + 8) return _i;
   }
   _i += 1;
 }
@@ -301,6 +299,9 @@ if(_a == 9) return "Share your bullets with the room. Locked on while PVP is ena
 if(_a == 5) return "How other players are drawn: full, names only, or hidden.";
 if(_a == 6) return "Direction indicator above remote players.";
 if(_a == 7) return "Spectator camera mode.";
+if(_a == 20) return "Enter applies this save. F toggles favourite, 1-8 assigns a hotkey, Del clears it.";
+if(_a == 21) return "Show only favourite saves.";
+if(_a == 22) return "Deletes every non-favourite save file.";
 if(_a == 10) return "Choose which player object drives your character.";
 return "";
 
@@ -322,11 +323,13 @@ draw_rectangle(@spX + @colW, @stgTop, @spX + @colW, @stgBottom, false);
 // title
 draw_set_halign(fa_left);
 draw_set_color(c_white);
-draw_text(_x, _y, global.__ONLINE_stgLabel[argument0]);
+_txt = global.__ONLINE_stgLabel[argument0];
+if(_txt == "") _txt = @stg_value(argument0);
+draw_text(_x, _y, _txt);
 _y += 22;
 // value card (green frame when a toggle is on)
 _val = @stg_value(argument0);
-if(_k == 4 || _k == 3 || _k == 5){
+if((_k == 4 || _k == 3 || _k == 2) && _val != ""){
   if(_k == 4 && _val == "ON"){
     draw_set_color(make_color_rgb(50, 170, 80));
   }else{
@@ -374,10 +377,8 @@ if(string_length(_txt) > 0){
 _fn = 0;
 if(_a == 12){
   global.__ONLINE_detFK[0] = "Store";
-  global.__ONLINE_detFV[0] = global.__ONLINE_accGlobalPath;
-  global.__ONLINE_detFK[1] = "Used by";
-  global.__ONLINE_detFV[1] = "roster, chat, saves";
-  _fn = 2;
+  global.__ONLINE_detFV[0] = "%APPDATA%" + chr(92) + "iwpo" + chr(92) + "account.ini";
+  _fn = 1;
 }
 if(_a == 13){
   global.__ONLINE_detFK[0] = "State";
@@ -386,8 +387,24 @@ if(_a == 13){
   }else{
     global.__ONLINE_detFV[0] = "empty";
   }
-  global.__ONLINE_detFK[1] = "Shown as";
-  global.__ONLINE_detFV[1] = "****** (never drawn)";
+  _fn = 1;
+}
+if(_a == 20){
+  @stgSvI = global.__ONLINE_stgArg[argument0];
+  global.__ONLINE_detFK[0] = "Room";  global.__ONLINE_detFV[0] = @saveHistRoomName[@stgSvI];
+  global.__ONLINE_detFK[1] = "Position"; global.__ONLINE_detFV[1] = string(round(@saveHistX[@stgSvI])) + ", " + string(round(@saveHistY[@stgSvI]));
+  global.__ONLINE_detFK[2] = "Gravity"; global.__ONLINE_detFV[2] = string(@saveHistGrav[@stgSvI]);
+  if(@saveHistGrav[@stgSvI] > 0) global.__ONLINE_detFV[2] = "+" + global.__ONLINE_detFV[2];
+  global.__ONLINE_detFK[3] = "Player";  global.__ONLINE_detFV[3] = @saveHistName[@stgSvI];
+  global.__ONLINE_detFK[4] = "Saved";   global.__ONLINE_detFV[4] = @save_age_text(@stgSvI);
+  global.__ONLINE_detFK[5] = "Hotkey";  global.__ONLINE_detFV[5] = string(@saveHistHotkey[@stgSvI]);
+  if(@saveHistHotkey[@stgSvI] <= 0) global.__ONLINE_detFV[5] = "none";
+  global.__ONLINE_detFK[6] = "Favourite"; global.__ONLINE_detFV[6] = @stg_onoff(@saveHistFav[@stgSvI]);
+  _fn = 7;
+}
+if(_a == 11 || _a == 15){
+  global.__ONLINE_detFK[0] = "Status"; global.__ONLINE_detFV[0] = @stg_status_text();
+  global.__ONLINE_detFK[1] = "Server"; global.__ONLINE_detFV[1] = @stg_server_text();
   _fn = 2;
 }
 if(_a == 14){
@@ -398,6 +415,15 @@ if(_a == 14){
   _fn = 2;
 }
 if(_fn > 0){
+  // key column measured from the longest key: a fixed 80px let "This folder"
+  // and "Env override" run into their values
+  _kw = 72;
+  _i = 0;
+  while(_i < _fn){
+    if(string_width(global.__ONLINE_detFK[_i]) + 10 > _kw) _kw = string_width(global.__ONLINE_detFK[_i]) + 10;
+    _i += 1;
+  }
+  if(_kw > _w - 60) _kw = _w - 60;
   _y += 8;
   draw_set_color(make_color_rgb(70, 80, 95));
   draw_rectangle(_x, _y, _x + _w, _y + 1, false);
@@ -407,7 +433,7 @@ if(_fn > 0){
     draw_set_color(make_color_rgb(120, 126, 134));
     draw_text(_x, _y + @stgTextDY, global.__ONLINE_detFK[_i]);
     draw_set_color(c_white);
-    draw_text(_x + 80, _y + @stgTextDY, global.__ONLINE_detFV[_i]);
+    draw_text(_x + _kw, _y + @stgTextDY, @stg_fit_text(global.__ONLINE_detFV[_i], _w - _kw - 4));
     _y += 16;
     _i += 1;
   }
@@ -418,6 +444,9 @@ if(_a == 12 || _a == 13) _acts = "Enter = edit";
 if(_a == 14) _acts = "Left/Right = switch store";
 if(_a == 11 || _a == 15) _acts = "Enter = run";
 if(_a == 10) _acts = "Enter = pick";
+if(_a == 20) _acts = "Enter = apply   F = favourite   1-8 = hotkey";
+if(_a == 21) _acts = "Left/Right = toggle";
+if(_a == 22) _acts = "Enter = clear";
 if(string_length(_acts) > 0){
   draw_set_color(make_color_rgb(150, 190, 230));
   draw_text(_x, @stgBottom - 18 + @stgTextDY, _acts);
@@ -428,11 +457,367 @@ return 0;
 if(argument0 == 1) return "";
 return "s";
 
+///// script @stg_fit_text
+// Cuts text to argument1 px, appending "..." when it had to. GM8 has no
+// ellipsis, and the detail column is narrow.
+// args: text, width -> text
+var _s, _n;
+_s = argument0;
+if(string_width(_s) <= argument1) return _s;
+_n = string_length(_s);
+while(_n > 1){
+  if(string_width(string_copy(_s, 1, _n) + "...") <= argument1) break;
+  _n -= 1;
+}
+return string_copy(_s, 1, _n) + "...";
+
+///// script @kb_repeat
+// Key repeat for menu navigation: 1 on the initial press, then again after
+// argument1 frames of holding, then every argument2 frames. Only one key repeats
+// at a time, so pressing another key takes over immediately.
+// args: key, delayFrames, repeatFrames -> 1/0
+var _k;
+_k = argument0;
+if(keyboard_check_pressed(_k)){
+  @kbRepeatKey = _k;
+  @kbRepeatWait = argument1;
+  return 1;
+}
+if(!keyboard_check(_k)) return 0;
+if(@kbRepeatKey != _k) return 0;
+if(@kbRepeatWait > 0){
+  @kbRepeatWait -= 1;
+  return 0;
+}
+@kbRepeatWait = argument2;
+return 1;
+
+///// script @stg_draw_table
+// The shared menu panel renderer: scrollable row table, scrollbar, detail
+// column, transient message and the footer hint. Used by every tab that is
+// table-driven, so Settings and Saves cannot drift apart.
+// The caller builds the row table first (@stg_build_rows / @stg_build_saves).
+// args: none -> 0
+		// QoL: one declarative table drives the layout (see gml/settingsLib.gml).
+		// NOTE: the caller builds the row table (@stg_build_rows for Settings,
+		// @stg_build_saves for Saves). Building it here silently replaced the
+		// Saves table with the settings rows - which is exactly what happened.
+		// The focused row must be a real option: a frame that starts with a header
+		// or the status row would show that in the detail pane and highlight it.
+		if(@kbRow[0] < 0) @kbRow[0] = @stg_first_row();
+		if(@kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
+		if(global.__ONLINE_stgKind[@kbRow[0]] == 0 || global.__ONLINE_stgKind[@kbRow[0]] == 1){
+			@kbRow[0] = @stg_first_row();
+		}
+		// Scrollable viewport. It scrolls by ROW INDEX, not by pixels: the table is
+		// drawn on its own grid below @stgTop, so a row can never be half visible and
+		// the pointer/focus mapping can never drift by a row (that was the bug).
+		@stgTop = @contentY;
+		@stgBottom = @footerY - 6;
+		@stgViewH = @stgBottom - @stgTop;
+		if(@stgFirst < 0) @stgFirst = 0;
+		if(@stgFirst >= global.__ONLINE_stgN) @stgFirst = global.__ONLINE_stgN - 1;
+		if(@stgFirst < 0) @stgFirst = 0;
+		// Largest allowed first row: walk BACKWARDS from the last row accumulating
+		// real heights until a screenful fits - that is the point past which the
+		// band would show empty space. (The old "N - fit" moved with the current
+		// first row, so late in the list it stopped limiting anything.)
+		@stgMaxFirst = global.__ONLINE_stgN - 1;
+		@stgAccum = 0;
+		@stgBI = global.__ONLINE_stgN - 1;
+		while(@stgBI >= 0){
+			if(@stgBI + 1 < global.__ONLINE_stgN){
+				@stgAccum += global.__ONLINE_stgY[@stgBI + 1] - global.__ONLINE_stgY[@stgBI];
+			}else{
+				@stgAccum += global.__ONLINE_stgRowH;
+			}
+			if(@stgAccum > @stgViewH) break;
+			@stgMaxFirst = @stgBI;
+			@stgBI -= 1;
+		}
+		if(@stgMaxFirst < 0) @stgMaxFirst = 0;
+		// CLAMP FIRST, then fit: the previous order fitted against an out-of-range
+		// first row and drew a single row for one frame (the flicker at the bottom).
+		if(@stgFirst > @stgMaxFirst) @stgFirst = @stgMaxFirst;
+		if(@stgFirst < 0) @stgFirst = 0;
+		if(@kbFocus == 1 && @stgNavKey == 1){
+			// keyboard move: pull the focused row back into the band, one row at a time
+			if(@kbRow[0] < @stgFirst) @stgFirst = @kbRow[0];
+			@stgGuard = 0;
+			while(@stgGuard < 64){
+				@stgFit = @stg_fit_rows(@stgFirst, @stgTop + 2, @stgBottom);
+				if(@stgFit < 1) @stgFit = 1;
+				if(@kbRow[0] < @stgFirst + @stgFit) break;
+				@stgFirst += 1;
+				@stgGuard += 1;
+			}
+			if(@stgFirst > @stgMaxFirst) @stgFirst = @stgMaxFirst;
+		}
+		@stgNavKey = 0;
+		@stgFit = @stg_fit_rows(@stgFirst, @stgTop + 2, @stgBottom);
+		if(@stgFit < 1) @stgFit = 1;
+		// ONE grid: the table stores a y per row (headers 18px, rows 24px), so both
+		// drawing and hit testing shift those values by this single offset. The
+		// previous version accumulated its own uniform grid and drifted from it -
+		// that is what made clicks and the highlight land on the wrong row.
+		@stgYOff = global.__ONLINE_stgY[@stgFirst] - (@stgTop + 2);
+		@rowHover = @stg_hit_row_view(@mx, @my, @stgYOff);
+		@rowI = 0;
+		while(@rowI < global.__ONLINE_stgN){
+			@rowY = global.__ONLINE_stgY[@rowI] - @stgYOff;
+			@rowVis = true;
+			if(@rowI < @stgFirst || @rowI >= @stgFirst + @stgFit) @rowVis = false;
+			// real height (headers are shorter): the uniform stgRowH check used to
+			// clip a header that actually fit the band
+			@rowH = global.__ONLINE_stgRowH;
+			if(@rowI + 1 < global.__ONLINE_stgN) @rowH = global.__ONLINE_stgY[@rowI + 1] - global.__ONLINE_stgY[@rowI];
+			if(@rowY + @rowH > @stgBottom) @rowVis = false;
+			if(@rowY < @stgTop) @rowVis = false;
+			if(@rowVis){
+			@rowK = global.__ONLINE_stgKind[@rowI];
+			@rowX = global.__ONLINE_stgX[@rowI];
+			@rowCX = global.__ONLINE_stgCX[@rowI];
+			@rowCW = global.__ONLINE_stgCW[@rowI];
+			@rowSty = global.__ONLINE_stgStyle[@rowI];
+			@rowSel = (@kbFocus == 1 && @kbRow[0] == @rowI);
+			if(@rowK != 0 && @rowK != 1 && @rowK != 7){
+				// hover tint / keyboard focus share the row's exact bounds
+				if(@rowSel){
+					// full-width amber band with dark text (mock .row.sel); per-kind
+					// controls keep their own colours, labels/values switch to dark
+					draw_set_color(make_color_rgb(225, 205, 90));
+					draw_rectangle(@spX + 10, @rowY - 1, @spX + @colW - 10, @rowY + global.__ONLINE_stgRowH - 3, false);
+				}else if(@rowHover == @rowI){
+					draw_set_color(make_color_rgb(35, 35, 40));
+					draw_rectangle(@spX + 10, @rowY - 1, @spX + @colW - 10, @rowY + global.__ONLINE_stgRowH - 3, false);
+				}
+			}
+			draw_set_halign(fa_left);
+			if(@rowK == 0){
+				// section header: label + a thin rule running to the content edge
+				draw_set_color(make_color_rgb(150, 190, 230));
+				draw_text(@rowX, @rowY, global.__ONLINE_stgLabel[@rowI]);
+				draw_set_color(make_color_rgb(70, 80, 95));
+				@rowRuleX = @rowX + string_width(global.__ONLINE_stgLabel[@rowI]) + 10;
+				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
+			}else if(@rowK == 7){
+				// two-column header: each label gets a short rule of its own
+				@rowSplit = string_pos("|", global.__ONLINE_stgLabel[@rowI]);
+				draw_set_color(make_color_rgb(150, 190, 230));
+				draw_text(@rowX, @rowY, string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1));
+				draw_set_color(make_color_rgb(70, 80, 95));
+				@rowRuleX = @rowX + string_width(string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1)) + 10;
+				if(@rowRuleX < @rowCX - 16) draw_rectangle(@rowRuleX, @rowY + 8, @rowCX - 16, @rowY + 9, false);
+				draw_set_color(make_color_rgb(150, 190, 230));
+				draw_text(@rowCX, @rowY, string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit));
+				draw_set_color(make_color_rgb(70, 80, 95));
+				@rowRuleX = @rowCX + string_width(string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit)) + 10;
+				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
+			}else if(@rowK == 1){
+				draw_set_color(@stg_status_color());
+				draw_circle(@rowX + 8, @rowY + 9, 5, false);
+				draw_set_color(c_white);
+				draw_text(@rowX + 20, @rowY + 2 + @stgTextDY, @stg_status_text());
+				// the server address only fits when the content column is wide enough
+				if(string_width(@stg_status_text()) + string_width("Server: " + @stg_server_text()) + 48 < @colW){
+					draw_set_color(make_color_rgb(150, 150, 150));
+					draw_set_halign(fa_right);
+					draw_text(@spX + @colW - 16, @rowY + 2 + @stgTextDY, "Server: " + @stg_server_text());
+					draw_set_halign(fa_left);
+				}
+			}else{
+				if(@rowSel){
+					draw_set_color(make_color_rgb(16, 16, 20));
+				}else{
+					draw_set_color(c_white);
+				}
+				draw_text(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI]);
+				@rowV = @stg_value(@rowI);
+				@rowBY = @rowY + 2;
+				@rowBH = global.__ONLINE_stgRowH - 6;
+				if(@rowK == 5){
+					if(@rowSel){
+						// selected: the amber band is the plate (mock parity)
+						draw_set_color(make_color_rgb(16, 16, 20));
+						draw_set_halign(fa_center);
+						draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
+					}else{
+						// button: flat dark plate, brighter frame on hover
+						draw_set_color(make_color_rgb(45, 45, 52));
+						draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, false);
+						if(@rowHover == @rowI){
+							draw_set_color(make_color_rgb(150, 160, 175));
+						}else{
+							draw_set_color(make_color_rgb(90, 95, 105));
+						}
+						draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, true);
+						draw_set_color(c_white);
+						draw_set_halign(fa_center);
+						draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
+					}
+				}else if(@rowK == 6){
+
+				  // entry row (saves): label left, value right-aligned, no box
+
+				  draw_set_halign(fa_right);
+
+				  draw_set_color(make_color_rgb(190, 195, 200));
+
+				  draw_text(@spX + @colW - 16, @rowBY + 3 + @stgTextDY, @rowV);
+
+				  draw_set_halign(fa_left);
+
+				}else if(@rowK == 3){
+					// select: one bordered box, < value > inside
+					draw_set_color(make_color_rgb(45, 45, 50));
+					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, false);
+					draw_set_color(make_color_rgb(90, 90, 96));
+					draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, true);
+					draw_set_color(c_gray);
+					draw_rectangle(@rowCX + 22, @rowBY + 1, @rowCX + 23, @rowBY + @rowBH - 1, false);
+					draw_rectangle(@rowCX + @rowCW - 23, @rowBY + 1, @rowCX + @rowCW - 22, @rowBY + @rowBH - 1, false);
+					draw_set_halign(fa_center);
+					draw_set_color(make_color_rgb(170, 170, 175));
+					draw_text(@rowCX + 11, @rowBY + 3 + @stgTextDY, "<");
+					draw_text(@rowCX + @rowCW - 11, @rowBY + 3 + @stgTextDY, ">");
+					draw_set_color(c_white);
+					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
+				}else if(@rowK == 4){
+						// toggle: compact right-aligned pill (a full-width bar read as a wall of
+						// colour once several toggles stacked up)
+						@rowPW = 46;
+						@rowPX = @rowCX + @rowCW - @rowPW;
+						if(@rowV == "ON"){
+							draw_set_color(make_color_rgb(50, 170, 80));
+						}else{
+							draw_set_color(make_color_rgb(45, 45, 50));
+						}
+						draw_rectangle(@rowPX, @rowBY, @rowPX + @rowPW, @rowBY + @rowBH, false);
+						if(@rowV == "ON"){
+							draw_set_color(make_color_rgb(50, 170, 80));
+						}else{
+							draw_set_color(make_color_rgb(90, 90, 96));
+						}
+						draw_rectangle(@rowPX, @rowBY, @rowPX + @rowPW, @rowBY + @rowBH, true);
+						draw_set_color(c_white);
+						draw_set_halign(fa_center);
+						draw_text(@rowPX + floor(@rowPW / 2), @rowBY + 3 + @stgTextDY, @rowV);
+}else{
+					// text row (name / session key): plain right-aligned value - the
+					// edit dialog is modal, so there is no inline box to draw
+					draw_set_halign(fa_right);
+					if(@rowSel){
+						draw_set_color(make_color_rgb(16, 16, 20));
+					}else{
+						draw_set_color(make_color_rgb(190, 195, 200));
+					}
+					draw_text(@rowCX + @rowCW, @rowBY + 3 + @stgTextDY, @rowV);
+					draw_set_halign(fa_left);
+				}
+			}
+			}
+			@rowI += 1;
+		}
+		// side scrollbar (track + thumb) instead of the old "more" markers.
+		// Kept left of the column separator and bright enough to read on the
+		// 0.9-alpha panel - the first version blended into the separator line.
+		if(global.__ONLINE_stgN > @stgFit){
+			@sbX = @spX + @colW - 10;
+			draw_set_color(make_color_rgb(50, 50, 58));
+			draw_rectangle(@sbX, @stgTop + 2, @sbX + 5, @stgBottom, false);
+			@sbH = (@stgBottom - @stgTop - 2) * @stgFit / global.__ONLINE_stgN;
+			if(@sbH < 16) @sbH = 16;
+			@sbY = @stgTop + 2 + (@stgBottom - @stgTop - 2 - @sbH) * @stgFirst / max(1, @stgMaxFirst);
+			draw_set_color(make_color_rgb(150, 150, 165));
+			draw_rectangle(@sbX, @sbY, @sbX + 5, @sbY + @sbH, false);
+		}
+		draw_set_halign(fa_left);
+		// footer: separator + hint + Close all live in the footer band (@footerY),
+		// below the last row; the toast floats just above it and never overlaps
+		// detail column (full layout only): what the list row cannot express
+		if(@detW > 0) @stg_draw_detail(@kbRow[0]);
+
+		if(@stg_toast_active()){
+			// bottom-RIGHT: the footer hint owns the bottom-left
+			draw_set_halign(fa_right);
+			if(global.__ONLINE_stgToastKind == 0){
+				draw_set_color(make_color_rgb(90, 220, 120));
+			}else if(global.__ONLINE_stgToastKind == 1){
+				draw_set_color(make_color_rgb(230, 210, 90));
+			}else{
+				draw_set_color(make_color_rgb(230, 110, 110));
+			}
+			// bottom-right of the DETAIL column when there is one: the content column's
+
+			// right edge is where the last rows live, and the message collided with them
+
+			@toastX = @spX + @colW - 16;
+
+			if(@detW > 0) @toastX = @spX + @colW + @detW - 16;
+
+			draw_text(@toastX, @stgBottom - 16, global.__ONLINE_stgToastMsg);
+			draw_set_halign(fa_left);
+		}
+		draw_set_color(make_color_rgb(70, 80, 95));
+		draw_rectangle(@spX + 16, @footerY, @spX + @spW - 16, @footerY + 1, false);
+		draw_set_color(make_color_rgb(160, 160, 160));
+		if(@kbFocus == 1 && @kbRow[0] >= 0 && @kbRow[0] < global.__ONLINE_stgN){
+			draw_text(@spX + 16, @footerY + 10, @stg_fit_text(@stg_hint(@kbRow[0]), @spW - 130));
+		}else{
+			draw_text(@spX + 16, @footerY + 10, @stg_fit_text("Up/Down rows   Left/Right tabs or values   Enter edit   F1 close", @spW - 130));
+		}
+return 0;
+///// script @save_age_text
+// Relative age of a save, exactly as the old panel computed it.
+// args: index -> text
+var _mins;
+if(@saveHistTime[argument0] <= 0) return "?";
+_mins = (date_current_datetime() - @saveHistTime[argument0]) * 1440;
+if(_mins < 1) return "now";
+if(_mins < 60) return string(round(_mins)) + "m";
+if(_mins < 1440) return string(round(_mins / 60)) + "h";
+if(_mins < 10080) return string(round(_mins / 1440)) + "d";
+return string(date_get_month(@saveHistTime[argument0])) + "/" + string(date_get_day(@saveHistTime[argument0]));
+
+///// script @stg_build_saves
+// Row table for the Saves tab, using the same table the Settings tab uses (the
+// list scrolls, so the old paging buttons are gone). Save rows carry their index
+// in @stgArg so the dispatcher and the detail pane can read the real fields.
+// args: contentY -> 0
+var _y, _i, _n, _lbl;
+global.__ONLINE_stgN = 0;
+_y = argument0 + 2;
+@stg_row_add(0, 0, "SAVE HISTORY", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+// newest first, honouring the all/favourites filter
+_n = 0;
+_i = @saveHistCount - 1;
+while(_i >= 0){
+  if(@saveHistFilter == 0 || @saveHistFav[_i]){
+    _lbl = "Save " + string(_i + 1) + " - " + @save_age_text(_i);
+    if(@saveHistFav[_i]) _lbl = "* " + _lbl;
+    _n += 1;
+    @stg_row_add(6, 20, _lbl, @spX + 16, _y, 0, 0, 0);
+    global.__ONLINE_stgArg[global.__ONLINE_stgN - 1] = _i;
+    _y += global.__ONLINE_stgRowH;
+  }
+  _i -= 1;
+}
+if(_n == 0){
+  if(@saveHistFilter) _lbl = "(no favourites)"; else _lbl = "(no saves yet)";
+  @stg_row_add(2, 0, _lbl, @spX + 16, _y, 200, 0, 0); _y += global.__ONLINE_stgRowH;
+}
+_y += 6;
+@stg_row_add(0, 0, "MANAGE", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(4, 21, "Favourites", @spX + 16, _y, 130, 0, @spX + @colW - 146); _y += global.__ONLINE_stgRowH;
+@stg_row_add(5, 22, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+global.__ONLINE_stgHeight = _y - argument0;
+return 0;
+
 ///// script @stg_row_add
 // Appends one row and returns its index.
 // args: kind, act, label, x, y, controlWidth, controlStyle, cxOverride
-//   controlStyle 0 = left-aligned button/box at x, 1 = wide button centred in the
-//   column, 2 = toggle pill, 3 = select value + arrows
+//   controlStyle is retained for table compatibility but the renderer keys off
+//   the row kind alone (the old style 2/3 variants no longer exist)
 //   cxOverride 0 = control sits at x + 84 (the default column gap)
 var _i;
 _i = global.__ONLINE_stgN;
@@ -567,6 +952,13 @@ if(_a == 9){
   if(@pvpMode != 0) return @stg_onoff(@bulletShow) + " lock";
   return @stg_onoff(@bulletShow);
 }
+if(_a == 20){
+  @stgSvI = global.__ONLINE_stgArg[argument0];
+  if(@saveHistHotkey[@stgSvI] > 0) return "key " + string(@saveHistHotkey[@stgSvI]);
+  return "";
+}
+if(_a == 21) return @stg_onoff(@saveHistFilter);
+if(_a == 22) return "Clear all (keeps favourites)";
 if(_a == 10) return "Pick";
 if(_a == 11) return "Reconnect now";
 if(_a == 15) return "Apply & Reconnect";
@@ -652,6 +1044,18 @@ if(_a == 9){
   }else{
     @stg_toast("Bullets are locked on in PVP", 1);
   }
+  return 0;
+}
+if(_a == 20){
+  @saveHistApply = global.__ONLINE_stgArg[argument0];
+  @settingsOpen = false;
+  return 1;
+}
+if(_a == 21){ @saveHistFilter = 1 - @saveHistFilter; return 0; }
+if(_a == 22){
+  // destructive: same two-step confirm as the account clears
+  global.__ONLINE_stgClearRow = 22;
+  @stg_toast("Clear every non-favourite save? Enter=Yes Esc=No", 1);
   return 0;
 }
 if(_a == 10){ @settingsOpen = false; @debug_pick_player = true; return 1; }
@@ -796,6 +1200,12 @@ return 0;
 
 ///// script @acc_clear_commit
 // Applies a confirmed clear. args: none -> 0
+if(global.__ONLINE_stgClearRow == 22){
+  @saveHistClearFiles = true;
+  @stg_toast("Cleared every non-favourite save", 1);
+  global.__ONLINE_stgClearRow = -1;
+  return 0;
+}
 if(global.__ONLINE_stgClearRow == 12){
   global.__ONLINE_accName = "";
   if(@account_save()) @stg_toast("Name cleared", 1); else @stg_toast("Cannot write " + global.__ONLINE_accWritePath, 2);
