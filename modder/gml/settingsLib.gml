@@ -600,7 +600,7 @@ return 1;
 			if(@rowK == 0){
 				// section header: label + a thin rule running to the content edge
 				draw_set_color(make_color_rgb(150, 190, 230));
-				@stg_text(@rowX, @rowY, global.__ONLINE_stgLabel[@rowI]);
+				draw_text(@rowX, @rowY, global.__ONLINE_stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(70, 80, 95));
 				@rowRuleX = @rowX + string_width(global.__ONLINE_stgLabel[@rowI]) + 10;
 				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
@@ -608,7 +608,7 @@ return 1;
 				// two-column header: each label gets a short rule of its own
 				@rowSplit = string_pos("|", global.__ONLINE_stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(150, 190, 230));
-				@stg_text(@rowX, @rowY, string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1));
+				draw_text(@rowX, @rowY, string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1));
 				draw_set_color(make_color_rgb(70, 80, 95));
 				@rowRuleX = @rowX + string_width(string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1)) + 10;
 				if(@rowRuleX < @rowCX - 16) draw_rectangle(@rowRuleX, @rowY + 8, @rowCX - 16, @rowY + 9, false);
@@ -635,7 +635,7 @@ return 1;
 				}else{
 					draw_set_color(c_white);
 				}
-				@stg_text(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI]);
+				draw_text(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI]);
 				@rowV = @stg_value(@rowI);
 				@rowBY = @rowY + 2;
 				@rowBH = global.__ONLINE_stgRowH - 6;
@@ -667,7 +667,7 @@ return 1;
 
 				  draw_set_color(make_color_rgb(190, 195, 200));
 
-				  @stg_text(@spX + @colW - 16, @rowBY + 3 + @stgTextDY, @rowV, 2);
+				  draw_text(@spX + @colW - 16, @rowBY + 3 + @stgTextDY, @rowV);
 
 				  draw_set_halign(fa_left);
 
@@ -815,31 +815,6 @@ _y += 6;
 @stg_row_add(4, 21, "Favourites", @spX + 16, _y, 130, 0, @spX + @colW - 146); _y += global.__ONLINE_stgRowH;
 @stg_row_add(5, 22, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
-return 0;
-
-///// script @stg_text
-// Draws text with the engine-appropriate path, so CJK survives: GM8.0 needs the
-// FoxWriting wrapper and CJK builds need the atlas renderer. Plain draw_text (used
-// everywhere before) shows garbage for anything non-ASCII.
-// args: x, y, text, halign(0 left, 1 centre, 2 right) -> 0
-#if GM80
-if(argument3 == 2){ fw_draw_set_halign(fa_right); }else if(argument3 == 1){ fw_draw_set_halign(fa_center); }else{ fw_draw_set_halign(fa_left); }
-fw_draw_set_valign(fa_top);
-__ONLINE_fw_use_font(argument2);
-fw_draw_text_ext(argument0, argument1, argument2, 9999);
-#endif
-#if CJKTEXT
-#if not GM80
-global.__ONLINE_cjkHalign = argument3;
-global.__ONLINE_cjkValign = 0;
-__ONLINE_cjk_draw_text(argument0, argument1, argument2, 9999);
-#endif
-#endif
-#if not GM80
-#if not CJKTEXT
-draw_text(argument0, argument1, argument2);
-#endif
-#endif
 return 0;
 
 ///// script @stg_row_add
