@@ -66,6 +66,8 @@ set_utf8_mode(1);
 @kbRow[5] = 0;
 @kbFocus = 1;
 @kbDelay = 0;
+@kbRepeatKey = 0;   // menu key repeat state (see @kb_repeat) - without
+@kbRepeatWait = 0;  // this the panel aborts on GMS in End Step
 @gameName = "%arg4";
 @keyChat = 32;
 @keyVis = 86;

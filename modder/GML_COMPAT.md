@@ -29,6 +29,10 @@
 > 报 `trying to index a variable which is not an array`（或 `Variable ... not set before reading it`），
 > 而 GM8 会宽容地当作 0/""。凡是"只在有条目时才写入"的数组（存档列表、皮肤列表、聊天历史等），
 > 都必须在 Create 里预先创建下标 0（两个模板都要，保持一致），或在使用处先做范围校验。
+> **全局数组必须带 `global.` 前缀读取**：面板的行表格存在 `global.__ONLINE_stgN/stgKind/stgAct/...` 里，
+> 若某处写成不带前缀的 `@stgAct[...]`，GMS 会把它当作**从未创建的实例变量**并中止运行，
+> 而 GM8 宽容放过——这类 bug 只会在 GMS 上暴露（`check_qol_account.js` 的 scope 断言会拦住）。
+> 
 > 面板侧已按此处理：`@stgArg` 在 `@stg_init` 预建、存档数组在两个 worldCreate 模板中预建、
 > 应用存档与详情/取值三处都做了 `>= @saveHistCount` 的范围校验（见 `check_qol_account.js` 的 GMS array safety 断言）。
 ## 2. 引擎差异速查

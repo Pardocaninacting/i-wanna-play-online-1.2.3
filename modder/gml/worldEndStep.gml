@@ -3040,8 +3040,8 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 		// save-specific keys act on the selected save row
-		if(@settingsTab == 1 && @stgAct[@kbRow[0]] == 20){
-			@svI = @stgArg[@kbRow[0]];
+		if(@settingsTab == 1 && global.__ONLINE_stgAct[@kbRow[0]] == 20){
+			@svI = global.__ONLINE_stgArg[@kbRow[0]];
 			if(keyboard_check_pressed(70)){          // F = favourite
 				@saveHistFav[@svI] = 1 - @saveHistFav[@svI];
 				@saveHistChanged = true;
