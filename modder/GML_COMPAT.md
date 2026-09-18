@@ -153,3 +153,69 @@ OpenGMK 的表是 **GM8.1 级**（8.0 是它的子集），因此它**能**拦�
 
 **全量审计结论**：31 个模板、**2605 处调用点 → 0 处 MISSING、0 处 GM81ONLY、202 处正确门控** ✓
 即当前模板集**严格满足 GM8.0 下限**，同时兼容 8.1/8.2/GMS ✓。
+## 7. 中文（CJK）绘制机制（2026-09-18 源码级梳理）
+
+结论先行：**三种引擎的中文绘制是三条完全不同的路径**，由预处理器变量 `GM80` / `CJKTEXT` 选择。
+界面代码必须**三分支门控**，任何一条路径都不能无条件调用——直接调 `__ONLINE_cjk_draw_text` 会在
+未开 CJK 的 GMS 构建里编译期报 `Failed to find function`，在 GM8 里运行期报同样的错。
+
+### 7.1 后端选择（唯一决定处）
+
+`modder/converterGM8.ts:916-925`：
+
+```ts
+const cjkBackend = version === GameMaker80 ? 'fw' : (loadedGM ? 'gm' : 'none');
+const useUtf8    = version !== GameMaker80;
+```
+
+| 引擎 | 后端 | 绘制调用 | 字符串编码 | 资源来源 |
+|---|---|---|---|---|
+| **GM8.0** | `fw` | `fw_draw_text_ext` 等 `fw_*` | **ANSI / GBK** | **两条路，同一套 `fw_*` API**：原生 FoxWriting 扩展（`ChineseChatSupport8`）；**当 FoxWriting 不可用时**（插件本身不稳定，UPX+Antidec 宿主是其中一种成因——其 GMAPI 层版本锁死、无法初始化）改由 `modder/gml/cjkAtlas.gml` 提供纯 GML 位图图集实现，即与 GMS 类似的"读 `__ONLINE_font.png` 字体集"方案（资源为 `__ONLINE_font.png` + `__ONLINE_font.gbk`） |
+| **GM8.1+** | `gm` | `__ONLINE_cjk_draw_text` | **UTF-8**（`set_utf8_mode(1)`）| `converterGM8.ts` 合成的脚本，内部调用 GaseousMarble（`gm_set_font` / `gm_set_color` / `gm_set_halign`）；需要 `gaseous_marble8` 在位，否则退化为 `none` |
+| **GMS（Studio 1.4 / GMS2.x）** | 无（`CJKTEXT` 不设置）| `draw_text` / `draw_text_ext` | **UTF-8** | 转换器把 CJK 字体**嵌入 data.win**（`converter-gms/Program.cs` 的 `EmbedCjkFont()`，12px，取自系统 CJK 字体，含 ASCII），并用 `onlineFontIndex` 作为 mod UI 的字体 |
+
+补充事实：
+- `CJKTEXT` **只由 GM8 转换器添加**（`converterGM8.ts:1168`）；GMS 侧从不设置，因此 GMS 构建里所有 `#if CJKTEXT` 块都被剥掉。
+- `gm` 后端不可用时转换器打印 `CJK backend: none`，中文经 `draw_text` 输出为乱码（已知退化）。
+- GM8.0 的纯 GML 图集（`cjkAtlas.gml` 头部）自带资源格式说明：`__ONLINE_font.png` + `__ONLINE_font.gbk`
+  （`CGA1` 头 12B + 每条记录 12B；key 为 ASCII 字节值，或 GBK 压缩键 `1000 + (b0-0x81)*191 + (b1-0x40)`，
+  以规避 GM8 的数组下标上限）。
+
+### 7.2 代码中的标准三分支写法
+
+现有调用点一律如此（`notesLib.gml:1149-1186` 玩家名、`chatboxDraw.gml:107-122` 聊天气泡）：
+
+```gml
+#if GM80
+    fw_draw_text_ext(x, y, text, 9999);        // GM8.0：FoxWriting（原生或纯 GML 图集）
+#endif
+#if CJKTEXT
+    __ONLINE_cjk_draw_text(x, y, text, 9999);  // GM8.1+：GaseousMarble 包装
+#endif
+#if not GM80
+#if not CJKTEXT
+    draw_text(x, y, text);                     // GMS：字体已内嵌 CJK，直接画
+#endif
+#endif
+```
+
+`fw_*` 与 `__ONLINE_cjk_draw_text` **在 GMS 侧不是"存在但退化"，而是编译期根本不存在的符号**。
+
+### 7.3 宽高测量
+
+| 引擎 | 测量方式 |
+|---|---|
+| GM8.0 | `fw_string_width` / `fw_string_width_ext`（图集实现按字形 advance 累加）|
+| GM8.1+ | GaseousMarble 的字体度量（合成脚本内部使用）|
+| GMS | `string_width` / `string_width_ext`（内嵌字体）|
+
+ASCII 文本用 `string_width` 在各引擎都成立；含中文的文本要用各自的度量，布局代码不要跨引擎共用。
+
+### 7.4 界面代码约定
+
+1. 可能出现用户文本的位置（账号名、存档玩家名）统一用 `settingsLib.gml` 的 `@stg_text_cjk(x, y, text, halign)`：
+   纯 ASCII 走 `draw_text`（**保证面板字体不变**），非 ASCII 按 7.2 三分支。
+2. 不要为了中文把整片界面切到图集 / `fw_*`：那会换掉整个面板的字体（此前已回退过一次）。
+3. 新增 `fw_*` / `__ONLINE_cjk_*` 调用必须放进 7.2 的门控；`check_qol_account.js` 会检查 `#else` 未被使用等硬性规则。
+4. 文件里的中文编码与绘制无关：账号存储统一用系统 ANSI 代码页（见第 2 节与 accountLib 注释），
+   才能让 GM8.0 与 GMS 互相读取。
