@@ -716,6 +716,14 @@ static class Program
         DefineNative(file, ref functionId, "hbuffer_read_float32", "buffer_read_float32", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_read_float64", "buffer_read_float64", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_read_string", "buffer_read_string", UndertaleExtensionVarType.String, UndertaleExtensionVarType.Double);
+            // whole-buffer text and length: the native account store reads the shared
+            // file through the buffer API
+            DefineNative(file, ref functionId, "hbuffer_to_string", "buffer_to_string", UndertaleExtensionVarType.String, UndertaleExtensionVarType.Double);
+            DefineNative(file, ref functionId, "hbuffer_get_length", "buffer_get_length", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
+            // whole-file text IO: the GMS file functions cannot leave the game save
+            // area, so the shared account store goes through native code
+            DefineNative(file, ref functionId, "hfile_read_text", "file_read_text", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
+            DefineNative(file, ref functionId, "hfile_write_text", "file_write_text", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.String, UndertaleExtensionVarType.String, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_uint8", "buffer_write_uint8", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_uint16", "buffer_write_uint16", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_int16", "buffer_write_int16", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
@@ -763,6 +771,12 @@ static class Program
         DefineNative(file, ref functionId, "strip_non_bmp", "strip_non_bmp", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
         if (md5DirAvailable)
             DefineNative(file, ref functionId, "hmd5_dir", "md5_dir", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
+
+        // whole-file text IO. The x86 extension takes its function list from the
+        // definition file, which does not know these two, so they are added here the
+        // same way set_utf8_mode / strip_non_bmp / md5_dir are.
+        DefineNative(file, ref functionId, "file_read_text", "file_read_text", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
+        DefineNative(file, ref functionId, "file_write_text", "file_write_text", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.String, UndertaleExtensionVarType.String, UndertaleExtensionVarType.Double);
     }
 
     static void DefineNative(UndertaleExtensionFile file, ref uint functionId, string name, string extName, UndertaleExtensionVarType returnType, params UndertaleExtensionVarType[] arguments)

@@ -58,9 +58,38 @@ return _d;
 
 ///// script @account_paths
 // Resolves the two file locations into globals. Safe to call repeatedly.
+//
+// The global (P3) root is engine dependent. GMS2 sandboxes file access: a store
+// under %APPDATA% is outside the sandbox, so file_exists() returns false there and
+// the account silently looked "missing" on every launch (the game asked for a name
+// again even though %APPDATA%\iwpo\account.ini existed). On those engines the
+// global store lives in the game's own save area (game_save_id), which is inside
+// the sandbox. GM8.0/8.1/GMS1 have no sandbox, so they keep %APPDATA%.
 // args: none -> 0
-var _appdata;
+var _appdata, _save;
 global.__ONLINE_accGlobalDir = "";
+#if STUDIO
+// The native API makes the shared location reachable, so GMS uses the same file
+// as GM8. Two candidates, decided by what can actually be written:
+//   primary  %APPDATA%\iwpo\account.ini   (shared with GM8 builds; the folder
+//            may not exist on a GMS-only machine)
+//   alt      %APPDATA%\iwpo_account.ini    (no folder needed, still shared by
+//            every GMS game on the machine)
+//   last     the save area file, so a locked-down machine still works per game
+_appdata = environment_get_variable("APPDATA");
+if(_appdata != ""){
+  global.__ONLINE_accGlobalDir = @account_dir(_appdata) + "iwpo" + chr(92);
+  global.__ONLINE_accGlobalPath = global.__ONLINE_accGlobalDir + "account.ini";
+  global.__ONLINE_accAltPath = @account_dir(_appdata) + "iwpo_account.ini";
+}else{
+  global.__ONLINE_accGlobalDir = "";
+  global.__ONLINE_accGlobalPath = @account_dir(working_directory) + "__ONLINE_account.ini";
+  global.__ONLINE_accAltPath = "";
+}
+_save = game_save_id;
+if(_save != "") global.__ONLINE_accSavePath = @account_dir(_save) + "iwpo_account.ini"; else global.__ONLINE_accSavePath = "";
+#endif
+#if not STUDIO
 _appdata = environment_get_variable("APPDATA");
 if(_appdata != ""){
   // P3: per-user, writable, survives game uninstalls.
@@ -71,38 +100,68 @@ if(_appdata != ""){
   // works, even though it is then per-install rather than per-user.
   global.__ONLINE_accGlobalPath = @account_dir(working_directory) + "__ONLINE_account.ini";
 }
+#endif
 global.__ONLINE_accLocalPath = @account_dir(program_directory) + "__ONLINE_account.ini";
 return 0;
 
-///// script @account_ini_read
-// Parses argument0 and fills the account globals. argument1 = 1 when this is the
-// global file (its "store" key is honoured; a local file always means local).
-// Returns 1 when a usable (non-empty) name was found, else 0.
+///// script @account_native_read
+// Reads a whole file through the native buffer API. The engine file functions are
+// confined to the game save area on GMS, but http_dll is native code (plain fopen)
+// so this reaches the shared %APPDATA% location. Returns "" when unreadable.
+// args: path -> text
+#if STUDIO
+// dedicated file API: deterministic UTF-8 on write, tolerant on read. The buffer
+// API would work but buffer_write_string appends a NUL, which ended up in the file.
+return file_read_text(argument0);
+#endif
+#if not STUDIO
+return "";
+#endif
+
+///// script @account_native_write
+// Writes text to a path through the native buffer API. 1 on success.
+// args: path, text -> 1/0
+#if STUDIO
+// ANSI (the system codepage) rather than UTF-8: that is what a GM8.0 build
+// writes and reads natively, so one file stays readable by both engines and the
+// tolerant native decode (strict UTF-8, then ANSI) always takes the right branch.
+return file_write_text(argument0, argument1, 1);
+#endif
+#if not STUDIO
+return 0;
+#endif
+
+///// script @account_ini_parse
+// Parses the account file TEXT (argument0) into the account globals.
+// argument1 = 1 when this is the global store (its "store" key is honoured; a
+// local file always means local). Returns 1 when a usable name was found.
 //
-// Name/password are stored twice: a generic "name"/"password" pair and an
-// engine-tagged pair (name_gbk/password_gbk on GM8.0, name_utf8/password_utf8
-// elsewhere). One global file can therefore serve both a GM8.0 install (ANSI
-// strings) and a GM8.1+/GMS install (UTF-8 strings) without the CJK names
-// turning into mojibake; the tagged key wins, the generic one is the fallback
-// written for compatibility.
-// args: path, isGlobal -> 1/0
-var _f, _line, _lp, _key, _val, _inSec, _found, _storeVal;
-var _genName, _genPass, _tagName, _tagPass;
+// Name/password are stored twice: a generic pair and an engine-tagged pair
+// (name_gbk on GM8.0, name_utf8 elsewhere), so one shared file can serve an ANSI
+// engine and a UTF-8 engine without CJK names turning into mojibake. The tagged
+// key wins, the generic one is the compatibility fallback.
+// args: text, isGlobal -> 1/0
+var _line, _lp, _key, _val, _inSec, _found, _storeVal;
+var _genName, _genPass, _tagName, _tagPass, _rest, _cut;
 _found = 0;
 _storeVal = -1;
 _genName = "";
 _genPass = "";
 _tagName = "";
 _tagPass = "";
-if(!file_exists(argument0)) return 0;
-_f = file_text_open_read(argument0);
-if(_f < 0) return 0;
 _inSec = 0;
 global.__ONLINE_accName = "";
 global.__ONLINE_accPassword = "";
-while(!file_text_eof(_f)){
-  _line = file_text_read_string(_f);
-  file_text_readln(_f);
+_rest = argument0;
+while(string_length(_rest) > 0){
+  _cut = string_pos(chr(10), _rest);
+  if(_cut > 0){
+    _line = string_copy(_rest, 1, _cut - 1);
+    _rest = string_delete(_rest, 1, _cut);
+  }else{
+    _line = _rest;
+    _rest = "";
+  }
   _line = @account_trim(_line);
   if(string_length(_line) > 0){
     if(string_copy(_line, 1, 1) == ";"){ /* comment */ }
@@ -123,7 +182,7 @@ while(!file_text_eof(_f)){
     }
   }
 }
-file_text_close(_f);
+global.__ONLINE_accTagWasUtf8 = 0;
 if(_tagName != ""){
   global.__ONLINE_accName = _tagName;
   global.__ONLINE_accPassword = _tagPass;
@@ -131,6 +190,10 @@ if(_tagName != ""){
   global.__ONLINE_accName = _genName;
   global.__ONLINE_accPassword = _genPass;
 }
+// Legacy files (written before the single-encoding change) store real UTF-8
+// under name_utf8 and have no name_gbk, which a GM8.0 build cannot read.
+// Flagging it lets @account_load rewrite the file in ANSI once.
+if(string_pos("name_utf8=", argument0) > 0) global.__ONLINE_accTagWasUtf8 = 1;
 if(global.__ONLINE_accName != "") _found = 1;
 if(argument1 == 1){
   if(_storeVal >= 0) global.__ONLINE_accStore = _storeVal; else global.__ONLINE_accStore = 0;
@@ -143,15 +206,83 @@ if(!_found){
 }
 return _found;
 
+///// script @account_ini_read
+// Reads argument0 and fills the account globals (see @account_ini_parse).
+// On STUDIO the text comes through the native API, because the engine file
+// functions cannot leave the save area; elsewhere the plain file functions are
+// used and the text is handed to the same parser.
+// args: path, isGlobal -> 1/0
+#if STUDIO
+return @account_ini_parse(@account_native_read(argument0), argument1);
+#endif
+#if not STUDIO
+var _f, _txt, _l;
+if(!file_exists(argument0)) return 0;
+_f = file_text_open_read(argument0);
+if(_f < 0) return 0;
+_txt = "";
+while(!file_text_eof(_f)){
+  _l = file_text_read_string(_f);
+  file_text_readln(_f);
+  _txt += _l + chr(10);
+}
+file_text_close(_f);
+return @account_ini_parse(_txt, argument1);
+#endif
+
 ///// script @account_save
-// Writes the current values to the active store target.
+// Writes the current values to the active store target. The text is composed
+// once and handed to the engine-appropriate writer: the native API on STUDIO
+// (the engine file functions cannot leave the save area there), the ordinary
+// file functions elsewhere.
 // args: none -> 1 on success, 0 on failure (caller shows the red hint and may
 // offer "Store in: This folder" as a fallback)
-var _path, _f, _store, _tag;
+var _path, _f, _store, _tag, _out;
 // self-sufficient: never depend on @account_load having run (a tempOnline
 // restore skips it, and an undefined path global used to abort the save).
 @account_paths();
 if(global.__ONLINE_accStore == 1) _path = global.__ONLINE_accLocalPath; else _path = global.__ONLINE_accGlobalPath;
+// Compose the file text once; the writer differs per engine.
+// Name/password are written twice: the generic pair (readable by any engine)
+// and the engine-tagged pair that wins on read (see @account_ini_parse).
+// NOTE: no #else here - the GM8 render pipeline (getGMLCode.parseGML) only
+// understands #if / #if not / #endif, so an #else would survive into the game
+// code and fail to compile.
+// Both engines write this file in the system ANSI codepage (GM8.0 natively, GMS
+// through the native API), so there is one tag for both. Historically it was
+// chosen per engine (name_gbk on GM8.0, name_utf8 elsewhere), which described the
+// byte encoding - that is now uniform, and old files with name_utf8 still read
+// because the parser accepts either tag.
+_tag = "_gbk";
+if(global.__ONLINE_accStore == 1) _store = "local"; else _store = "global";
+_out = "[account]" + chr(10);
+_out += "name=" + global.__ONLINE_accName + chr(10);
+_out += "password=" + global.__ONLINE_accPassword + chr(10);
+_out += "name" + _tag + "=" + global.__ONLINE_accName + chr(10);
+_out += "password" + _tag + "=" + global.__ONLINE_accPassword + chr(10);
+_out += "store=" + _store + chr(10);
+#if STUDIO
+// Native write: the engine file functions cannot leave the save area, so a
+// plain file_text_open_write here would silently fail on the shared path.
+if(@account_native_write(_path, _out)) return 1;
+if(global.__ONLINE_accStore != 1){
+  if(global.__ONLINE_accAltPath != "" && global.__ONLINE_accAltPath != _path){
+    if(@account_native_write(global.__ONLINE_accAltPath, _out)){
+      global.__ONLINE_accGlobalPath = global.__ONLINE_accAltPath;
+      return 1;
+    }
+  }
+  if(global.__ONLINE_accSavePath != "" && global.__ONLINE_accSavePath != _path){
+    if(@account_native_write(global.__ONLINE_accSavePath, _out)){
+      global.__ONLINE_accGlobalPath = global.__ONLINE_accSavePath;
+      return 1;
+    }
+  }
+}
+global.__ONLINE_accWritePath = _path;
+return 0;
+#endif
+#if not STUDIO
 if(global.__ONLINE_accStore != 1){
   if(global.__ONLINE_accGlobalDir != ""){
     if(!directory_exists(global.__ONLINE_accGlobalDir)) directory_create(global.__ONLINE_accGlobalDir);
@@ -162,33 +293,10 @@ if(_f < 0){
   global.__ONLINE_accWritePath = _path;
   return 0;
 }
-file_text_write_string(_f, "[account]");
-file_text_writeln(_f);
-// Generic pair first (readable by any engine / older builds), then the
-// engine-tagged pair that wins on read (see @account_ini_read).
-file_text_write_string(_f, "name=" + global.__ONLINE_accName);
-file_text_writeln(_f);
-file_text_write_string(_f, "password=" + global.__ONLINE_accPassword);
-file_text_writeln(_f);
-// NOTE: no #else here - the GM8 render pipeline (getGMLCode.parseGML) only
-// understands #if / #if not / #endif, so an #else would survive into the game
-// code and fail to compile.
-_tag = "";
-#if GM80
-_tag = "_gbk";
-#endif
-#if not GM80
-_tag = "_utf8";
-#endif
-file_text_write_string(_f, "name" + _tag + "=" + global.__ONLINE_accName);
-file_text_writeln(_f);
-file_text_write_string(_f, "password" + _tag + "=" + global.__ONLINE_accPassword);
-file_text_writeln(_f);
-if(global.__ONLINE_accStore == 1) _store = "local"; else _store = "global";
-file_text_write_string(_f, "store=" + _store);
-file_text_writeln(_f);
+file_text_write_string(_f, _out);
 file_text_close(_f);
 return 1;
+#endif
 
 ///// script @account_load
 // P1 -> P2 -> P3 resolution. Fills the account globals and global.__ONLINE_accSource.
@@ -216,8 +324,42 @@ if(@account_ini_read(global.__ONLINE_accLocalPath, 0)){
 }
 if(@account_ini_read(global.__ONLINE_accGlobalPath, 1)){
   global.__ONLINE_accSource = 3;
+  @account_migrate_encoding();
   return 1;
 }
+#if STUDIO
+// the alternate shared file (GMS-only machine: the iwpo folder may not exist)
+if(global.__ONLINE_accAltPath != ""){
+  if(@account_ini_read(global.__ONLINE_accAltPath, 1)){
+    global.__ONLINE_accGlobalPath = global.__ONLINE_accAltPath;
+    global.__ONLINE_accSource = 3;
+    return 1;
+  }
+}
+// last resort: the per-game save area file written by an earlier run
+if(global.__ONLINE_accSavePath != ""){
+  if(@account_ini_read(global.__ONLINE_accSavePath, 1)){
+    global.__ONLINE_accGlobalPath = global.__ONLINE_accSavePath;
+    global.__ONLINE_accSource = 4;
+    return 1;
+  }
+}
+#endif
+return 0;
+
+///// script @account_migrate_encoding
+// One-time migration: a legacy file stores real UTF-8 (name_utf8) and no ANSI
+// tag, so a GM8.0 build reads mojibake. Rewriting it through the native writer
+// converts it to the system ANSI codepage, which both engines read correctly.
+// Only STUDIO builds can write outside the save area, and only they can produce
+// such a file in the first place, so this runs there and nowhere else.
+// args: none -> 0
+#if STUDIO
+if(global.__ONLINE_accTagWasUtf8){
+  global.__ONLINE_accTagWasUtf8 = 0;
+  @account_save();
+}
+#endif
 return 0;
 
 ///// script @account_apply

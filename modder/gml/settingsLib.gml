@@ -98,8 +98,19 @@ return 0;
 // declared globalvar here, for the same reason @account_apply must not.
 // args: none -> 0
 var _w, _h, _full;
-_w = @hudWinW;
-_h = @hudWinH;
+// Never READ @hudWinW/@hudWinH here. They are set by the Draw GUI event, and
+// @stg_init runs from Create - on GMS2.3 reading an instance variable that was
+// never assigned is a fatal error ("not set before reading it"), which is exactly
+// how this crashed on the GMS side. Seed from the engine's own metrics instead,
+// then fall back, then publish the result for the draw pass.
+#if STUDIO
+_w = display_get_gui_width();
+_h = display_get_gui_height();
+#endif
+#if not STUDIO
+_w = 0;
+_h = 0;
+#endif
 if(_w < 1 || _h < 1){
   if(view_enabled){
     _w = view_wport[0];
@@ -108,8 +119,6 @@ if(_w < 1 || _h < 1){
     _w = room_width;
     _h = room_height;
   }
-  @hudWinW = _w;
-  @hudWinH = _h;
 }
 if(_w < 1) _w = 640;
 if(_h < 1) _h = 480;
@@ -240,9 +249,10 @@ return -1;
 
 ///// script @stg_wrap
 // Draws text wrapped to argument3 px, at most argument4 lines, and returns the
-// height used. GM8 has no text wrapping, and the detail pane needs it.
+// height used. GM8 has no text wrapping and the detail pane needs it for the
+// description and for long single-token values such as a store path.
 // args: x, y, text, width, maxLines -> height
-var _rest, _line, _word, _sp, _h, _cnt;
+var _rest, _line, _word, _sp, _h, _cnt, _fit;
 _rest = argument2;
 _h = 0;
 _cnt = 0;
@@ -255,11 +265,20 @@ while(_rest != "" && _cnt < argument4){
     }else{
       _word = _rest;
     }
-    if(_line == ""){
-      if(string_width(_word) > argument3 && string_length(_word) > 1){
-        // a single word longer than the column: hard-break it
-        _word = string_copy(_word, 1, max(1, string_length(_word) - 1));
+    if(_line == "" && string_width(_word) > argument3 && string_length(_word) > 1){
+      // No space to break at and the token does not fit: take the longest prefix
+      // that does, and leave the remainder for the next line. (The old version cut
+      // a single character, which never brought a long path inside the column.)
+      _fit = string_length(_word);
+      while(_fit > 1){
+        if(string_width(string_copy(_word, 1, _fit)) <= argument3) break;
+        _fit -= 1;
       }
+      _line = string_copy(_word, 1, _fit);
+      _rest = string_copy(_rest, _fit + 1, string_length(_rest) - _fit);
+      break;
+    }
+    if(_line == ""){
       _line = _word;
     }else if(string_width(_line + " " + _word) <= argument3){
       _line = _line + " " + _word;
@@ -313,7 +332,7 @@ return "";
 // @-prefixed instance variables and one of them could be read unset, which GM8
 // treats as a fatal "Cannot compare arguments".
 // args: row -> 0
-var _a, _k, _x, _w, _y, _val, _i, _n, _head, _cnt, _txt, _fn, _acts;
+var _a, _k, _x, _w, _y, _val, _i, _n, _head, _cnt, _txt, _fn, _acts, _vh;
 _a = global.__ONLINE_stgAct[argument0];
 _k = global.__ONLINE_stgKind[argument0];
 _x = @spX + @colW + 12;
@@ -340,7 +359,7 @@ if((_k == 4 || _k == 3 || _k == 2) && _val != ""){
   }
   draw_rectangle(_x, _y, _x + min(_w, 24 + string_width(_val) + 24), _y + 22, true);
   draw_set_color(c_white);
-  draw_text(_x + 10, _y + 4 + @stgTextDY, _val);
+  @stg_text_cjk(_x + 10, _y + 4 + @stgTextDY, _val, 0);
   _y += 32;
 }
 // status row: state card in the status colour (there is no latency measure)
@@ -389,7 +408,7 @@ if(string_length(_txt) > 0){
 _fn = 0;
 if(_a == 12){
   global.__ONLINE_detFK[0] = "Store";
-  global.__ONLINE_detFV[0] = "%APPDATA%" + chr(92) + "iwpo" + chr(92) + "account.ini";
+  global.__ONLINE_detFV[0] = global.__ONLINE_accGlobalPath;
   _fn = 1;
 }
 if(_a == 13){
@@ -450,7 +469,12 @@ if(_fn > 0){
     draw_set_color(make_color_rgb(120, 126, 134));
     draw_text(_x, _y + @stgTextDY, global.__ONLINE_detFK[_i]);
     draw_set_color(c_white);
-    draw_text(_x + _kw, _y + @stgTextDY, @stg_fit_text(global.__ONLINE_detFV[_i], _w - _kw - 4));
+    // wrap instead of truncating: a store path is long and the tail (the file
+    // name) is the informative part, so cutting it off hid what the row was for.
+    _vh = @stg_wrap(_x + _kw, _y + @stgTextDY, global.__ONLINE_detFV[_i], _w - _kw - 4, 2);
+    // @stg_wrap measures with string_width; if a font under-reports, the line could
+    // still run past the column, so the clamp below is a hard guarantee.
+    if(_vh > 16) _y += (_vh - 16);
     _y += 16;
     _i += 1;
   }
@@ -682,7 +706,7 @@ return 1;
 
 				  draw_set_color(make_color_rgb(190, 195, 200));
 
-				  draw_text(@spX + @colW - 16, @rowBY + 3 + @stgTextDY, @rowV);
+				  @stg_text_cjk(@spX + @colW - 16, @rowBY + 3 + @stgTextDY, @rowV, 2);
 
 				  draw_set_halign(fa_left);
 
@@ -730,7 +754,7 @@ return 1;
 					}else{
 						draw_set_color(make_color_rgb(190, 195, 200));
 					}
-					draw_text(@rowCX + @rowCW, @rowBY + 3 + @stgTextDY, @rowV);
+					@stg_text_cjk(@rowCX + @rowCW, @rowBY + 3 + @stgTextDY, @rowV, 2);
 					draw_set_halign(fa_left);
 				}
 			}
@@ -842,6 +866,51 @@ _y += 6;
 @stg_row_add(4, 21, "Favourites", @spX + 16, _y, 130, 0, @spX + @colW - 146); _y += global.__ONLINE_stgRowH;
 @stg_row_add(5, 22, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
+return 0;
+
+///// script @stg_text_cjk
+// Draws a panel string that may contain user text (account name, save player
+// names), picking the path that exists in the current build:
+//   ASCII             -> draw_text (the panel font stays as it is)
+//   GM8.0             -> FoxWriting, the engine-agnostic CJK route this build has
+//   GMS with CJK pack -> __ONLINE_cjk_draw_text, the call chat/notes/player list use
+//   GMS without it    -> draw_text (the game font draws Chinese in that build)
+// args: x, y, text, halign (0 left, 1 centre, 2 right) -> 0
+var _i, _n, _c, _ascii;
+_ascii = 1;
+_n = string_length(argument2);
+_i = 1;
+while(_i <= _n){
+  _c = ord(string_char_at(argument2, _i));
+  if(_c < 32 || _c > 126){ _ascii = 0; break; }
+  _i += 1;
+}
+if(_ascii){
+  if(argument3 == 2){ draw_set_halign(fa_right); }else if(argument3 == 1){ draw_set_halign(fa_center); }else{ draw_set_halign(fa_left); }
+  draw_text(argument0, argument1, argument2);
+  draw_set_halign(fa_left);
+  return 0;
+}
+#if GM80
+// font first: it resets the alignment state
+__ONLINE_fw_use_font(argument2);
+fw_draw_set_valign(fa_top);
+if(argument3 == 2){ fw_draw_set_halign(fa_right); }else if(argument3 == 1){ fw_draw_set_halign(fa_center); }else{ fw_draw_set_halign(fa_left); }
+fw_draw_text_ext(argument0, argument1, argument2, 9999);
+#endif
+#if not GM80
+#if CJKTEXT
+global.__ONLINE_cjkHalign = argument3;
+global.__ONLINE_cjkValign = 0;
+__ONLINE_cjk_draw_text(argument0, argument1, argument2, 9999);
+global.__ONLINE_cjkHalign = 0;
+#endif
+#if not CJKTEXT
+if(argument3 == 2){ draw_set_halign(fa_right); }else if(argument3 == 1){ draw_set_halign(fa_center); }else{ draw_set_halign(fa_left); }
+draw_text(argument0, argument1, argument2);
+draw_set_halign(fa_left);
+#endif
+#endif
 return 0;
 
 ///// script @stg_row_add
