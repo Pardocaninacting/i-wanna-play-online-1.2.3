@@ -87,7 +87,15 @@ const CopyHttpDll = async function(to: string, useX64NativeHttpDll: boolean): Pr
 
 const EnsureX64HttpDllBuilt = async function(): Promise<void> {
 	const outputDll: string = path.join(__dirname, "lib", HTTP_DLL_X64_FILENAME);
-	if(await fs.exists(outputDll))
+	// Exports.cs is shared with the x86 project; rebuild on source change, not just
+	// when the DLL is missing, or an edit silently ships against a stale binary.
+	const sourceFile: string = path.join(HTTP_DLL_X64_PROJECT_DIR, "Exports.cs");
+	let needsBuild: boolean = !await fs.exists(outputDll);
+	if(!needsBuild && await fs.exists(sourceFile)){
+		const [dllStat, srcStat] = await Promise.all([fs.stat(outputDll), fs.stat(sourceFile)]);
+		needsBuild = srcStat.mtimeMs > dllStat.mtimeMs;
+	}
+	if(!needsBuild)
 		return;
 	const projectFile: string = path.join(HTTP_DLL_X64_PROJECT_DIR, "HttpDll23X64.csproj");
 	if(!await fs.exists(projectFile))
@@ -116,20 +124,34 @@ const ConvertDataWin = async function(input: string, output: string, gameName: s
 		throw new Error(`Cannot find converterGMS2.exe in lib/converterGMS2/`);
 	// v2 (§11): runtime sync is fully driven by `__ONLINE_config.ini [sync]`; no GML codegen.
 	let gmlDir: string = path.join(__dirname, "gml");
-	// Staleness guard. lib/converterGMS2/ is a gitignored build artifact and is
-	// NEVER rebuilt automatically, so an old copy silently converts with outdated
-	// C# logic - most visibly, its hardcoded pack list then reports the new
-	// templates as "Failed to find function __ONLINE_stg_*". Only Program.cs
-	// matters here: the .gml templates themselves are read at conversion time.
+	// Staleness guard. lib/converterGMS2/ is a gitignored build artifact, so after
+	// pulling a change to Program.cs the old binary would keep converting with
+	// outdated C# logic - most visibly reporting the new GML as
+	// "Failed to find function <name>", because its extension registration is stale.
+	// Rebuild it here, the same way the x86 DLL guard does, so a fresh checkout and
+	// a pulled change both converge without a manual step.
 	try {
 		const programCs: string = path.join(__dirname, "..", "converter-gms", "Program.cs");
+		const projectFile: string = path.join(__dirname, "..", "converter-gms", "ConverterGMS.csproj");
 		if(await fs.exists(programCs)){
 			const exeMtime: number = (await fs.stat(CONVERTER_GMS2_EXE)).mtimeMs;
-			const csMtime: number = (await fs.stat(programCs)).mtimeMs;
-			if(csMtime > exeMtime)
-				console.warn(`[gms] WARNING: lib/converterGMS2/converterGMS2.exe is older than converter-gms/Program.cs - republish it (dotnet publish -c Release -o publish in converter-gms, then copy the runtime files into modder/lib/converterGMS2/) or this conversion runs with outdated converter logic.`);
+			let srcMtime: number = (await fs.stat(programCs)).mtimeMs;
+			if(await fs.exists(projectFile)){
+				const projectMtime: number = (await fs.stat(projectFile)).mtimeMs;
+				if(projectMtime > srcMtime) srcMtime = projectMtime;
+			}
+			if(srcMtime > exeMtime){
+				console.log("[gms] lib/converterGMS2/ is older than converter-gms/ - rebuilding (dotnet publish -c Release)...");
+				await Utils.exec(`dotnet publish -c Release -o "${CONVERTER_GMS2_DIR}"`, path.join(__dirname, "..", "converter-gms"));
+				console.log("[gms] converter rebuilt");
+			}
 		}
-	} catch(_e) { /* the guard must never break a conversion */ }
+	} catch(e) {
+		// Never break a conversion, but make the cause obvious: an out-of-date binary
+		// fails later as "Failed to find function" errors that look like GML bugs.
+		console.warn("[gms] WARNING: could not rebuild lib/converterGMS2/. Run manually:"
+			+ " cd converter-gms && dotnet publish -c Release -o ..\\modder\\lib\\converterGMS2" + " (" + e + ")");
+	}
 	const successMarkerPath: string = path.join(path.dirname(input), "__ONLINE_utmt_success.txt");
 	if(await fs.exists(successMarkerPath))
 		await fs.unlink(successMarkerPath);

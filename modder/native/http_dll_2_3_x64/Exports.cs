@@ -43,6 +43,13 @@ internal static class NativeStrings
     [DllImport("kernel32.dll")]
     private static extern uint GetACP();
 
+    // Encodes a string with the system ANSI codepage (GBK on a Chinese system),
+    // for the keys a GM8.0 build reads. Independent of UseAnsi / set_utf8_mode.
+    internal static byte[] EncodeAnsi(string value)
+    {
+        return AnsiEncoding.GetBytes(value ?? string.Empty);
+    }
+
     internal static string Read(IntPtr ptr)
     {
         if (ptr == IntPtr.Zero)
@@ -66,6 +73,25 @@ internal static class NativeStrings
         catch
         {
             return AnsiEncoding.GetString(bytes);
+        }
+    }
+
+    /// <summary>
+    /// Decode raw buffer bytes. Always lenient: a buffer filled from a file may have
+    /// been written by the other engine (GM8 = system ANSI, GMS = UTF-8), so the
+    /// current UseAnsi mode is not a reliable hint here.
+    /// </summary>
+    internal static string Decode(byte[] bytes, int offset, int count)
+    {
+        if (count <= 0)
+            return string.Empty;
+        try
+        {
+            return Utf8Strict.GetString(bytes, offset, count);
+        }
+        catch
+        {
+            return AnsiEncoding.GetString(bytes, offset, count);
         }
     }
 
@@ -440,6 +466,7 @@ internal sealed class NativeBuffer
     internal bool Error { get; private set; }
     internal int Remaining => Length - Position;
     internal ArraySegment<byte> RemainingSegment => new(data, Position, Remaining);
+    internal ArraySegment<byte> Contents => new(data, 0, Length);
 
     internal void Clear()
     {
@@ -1261,6 +1288,29 @@ public static class Exports
         return buffer.WriteToFile(NativeStrings.Read(filename)) ? 1 : 0;
     }
 
+    [UnmanagedCallersOnly(EntryPoint = "buffer_get_length", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double BufferGetLength(double id) => GetBuffer(id)?.Length ?? 0;
+
+    [UnmanagedCallersOnly(EntryPoint = "buffer_to_string", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static IntPtr BufferToString(double id)
+    {
+        var buffer = GetBuffer(id);
+        if (buffer == null)
+            return NativeStrings.Write(string.Empty);
+        var contents = buffer.Contents;
+        // upstream returns the raw char*, so the string ends at the first NUL
+        var count = contents.Count;
+        for (var i = 0; i < contents.Count; i++)
+        {
+            if (contents.Array![contents.Offset + i] == 0)
+            {
+                count = i;
+                break;
+            }
+        }
+        return NativeStrings.Write(NativeStrings.Decode(contents.Array!, contents.Offset, count));
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "buffer_read_uint8", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static double BufferReadUInt8(double id) => GetBuffer(id)?.ReadUInt8() ?? 0;
 
@@ -1440,6 +1490,47 @@ public static class Exports
     // Non-ASCII file names are refused ("" -> the GML caller falls back to the
     // pure-GML walk, whose ANSI/UTF-8 byte semantics differ per engine string
     // mode). Any IO error returns "" as well.
+    // Whole-file text IO, for callers that must reach paths the engine's own file
+    // functions cannot (GMS confines them to the save area). The write is always
+    // UTF-8 and creates the parent directory when missing; the read is tolerant
+    // (strict UTF-8 first, then the system ANSI codepage), matching NativeStrings.
+    [UnmanagedCallersOnly(EntryPoint = "file_read_text", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static IntPtr FileReadText(IntPtr path)
+    {
+        try
+        {
+            var file = NativeStrings.Read(path);
+            if (string.IsNullOrEmpty(file) || !File.Exists(file))
+                return NativeStrings.Write(string.Empty);
+            var bytes = File.ReadAllBytes(file);
+            return NativeStrings.Write(NativeStrings.Decode(bytes, 0, bytes.Length));
+        }
+        catch
+        {
+            return NativeStrings.Write(string.Empty);
+        }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "file_write_text", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double FileWriteText(IntPtr path, IntPtr text, double ansi)
+    {
+        try
+        {
+            var file = NativeStrings.Read(path);
+            if (string.IsNullOrEmpty(file)) return 0;
+            var dir = Path.GetDirectoryName(file);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir)) Directory.CreateDirectory(dir);
+            var value = NativeStrings.Read(text);
+            var bytes = ansi != 0 ? NativeStrings.EncodeAnsi(value) : Encoding.UTF8.GetBytes(value);
+            File.WriteAllBytes(file, bytes);
+            return 1;
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
     [UnmanagedCallersOnly(EntryPoint = "md5_dir", CallConvs = new[] { typeof(CallConvCdecl) })]
     public static IntPtr Md5Dir(IntPtr path)
     {
