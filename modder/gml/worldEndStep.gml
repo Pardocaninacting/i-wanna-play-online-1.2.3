@@ -2522,6 +2522,11 @@ if(@saveHistApply >= 0){
 	}
 	@shIdx = @saveHistApply;
 	@saveHistApply = -1;
+	// The index alone is not a guarantee: a stale value, or a save entry that no
+	// longer exists, must not walk into the save arrays - a build without saves never
+	// created them on some engines, and GMS aborts on indexing a non-array.
+	if(@shIdx < 0 || @shIdx >= @saveHistCount) @shIdx = -1;
+	// The index alone is not enough: a stale value (or a save row that no longer
 	@saveHistPendingGrav = @saveHistGrav[@shIdx];
 	@saveHistPendingX = @saveHistX[@shIdx];
 	@saveHistPendingY = @saveHistY[@shIdx];

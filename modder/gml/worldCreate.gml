@@ -147,6 +147,18 @@ global.__ONLINE_guiAlive = false;
     @pvpAvail = 0;
 #endif
 @saveHistCount = 0;
+// Prime the save arrays exactly as the GMS template does (worldCreateGMS.gml:167).
+// GM8 tolerates indexing an unset variable, GMS aborts, so creating index 0 here
+// keeps both engines identical and makes every read safe before the first save.
+@saveHistFav[0] = 0;
+@saveHistHotkey[0] = 0;
+@saveHistGrav[0] = 0;
+@saveHistX[0] = 0;
+@saveHistY[0] = 0.0;
+@saveHistRoom[0] = 0;
+@saveHistName[0] = "";
+@saveHistRoomName[0] = "";
+@saveHistTime[0] = 0;
 @saveHistMax = 500;
 @saveHistLastTime = 0;
 @saveHistFavMax = 100;

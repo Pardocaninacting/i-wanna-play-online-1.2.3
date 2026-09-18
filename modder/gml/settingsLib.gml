@@ -69,6 +69,12 @@ global.__ONLINE_stgHeadH = 15;
 @stgScroll = 0;
 @stgFirst = 0;
 @stgNavKey = 0;   // set by the keyboard handler; the wheel must not follow
+// The row table's per-row argument array. Only rows that carry one (save entries)
+// write it, but the detail pane, @stg_value and the dispatcher all read it, so index
+// 0 is created here: on GMS reading a variable that was never created aborts with
+// "trying to index a variable which is not an array", and a build with no saves
+// never added such a row.
+global.__ONLINE_stgArg[0] = 0;
 @stgTextDY = -2;   // text sits 2px lower than its box otherwise
 @menuModePref = 0;
 @menuMode = 0;
@@ -422,6 +428,10 @@ if(_a == 13){
 }
 if(_a == 20){
   @stgSvI = global.__ONLINE_stgArg[argument0];
+  // The entry may be gone, or never existed: @stg_init primes index 0 of the
+  // save arrays, so clamping here guarantees the reads below cannot hit an
+  // undefined array (GMS aborts on that, GM8 does not).
+  if(@stgSvI < 0 || @stgSvI >= @saveHistCount) @stgSvI = 0;
   global.__ONLINE_detFK[0] = "Room";  global.__ONLINE_detFV[0] = @saveHistRoomName[@stgSvI];
   global.__ONLINE_detFK[1] = "Position"; global.__ONLINE_detFV[1] = string(round(@saveHistX[@stgSvI])) + ", " + string(round(@saveHistY[@stgSvI]));
   global.__ONLINE_detFK[2] = "Gravity"; global.__ONLINE_detFV[2] = string(@saveHistGrav[@stgSvI]);
@@ -1054,6 +1064,8 @@ if(_a == 9){
 }
 if(_a == 20){
   @stgSvI = global.__ONLINE_stgArg[argument0];
+  // a build with no entries may not have created the array at all
+  if(@stgSvI < 0 || @stgSvI >= @saveHistCount) return "";
   if(@saveHistHotkey[@stgSvI] > 0) return "key " + string(@saveHistHotkey[@stgSvI]);
   return "";
 }

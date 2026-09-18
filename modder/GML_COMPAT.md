@@ -24,6 +24,13 @@
 | 读未初始化变量 | **GM8 静默返回 0，GMS 直接崩**（`Variable objWorld.__ONLINE_my not set`） | 每帧在使用前赋值（鼠标映射放绘制前奏） |
 | 调用方自有变量进 `globalvar` | 几何/身份变量被写进全局，绘制端读实例变量 ⇒ 面板整块消失（`@spW=0`） | 只在脚本内部声明"自己的"全局 |
 
+
+> **变量/数组必须在读取前存在（GMS 硬性要求）**：GMS 读取"从未被创建过的变量"会中止运行，
+> 报 `trying to index a variable which is not an array`（或 `Variable ... not set before reading it`），
+> 而 GM8 会宽容地当作 0/""。凡是"只在有条目时才写入"的数组（存档列表、皮肤列表、聊天历史等），
+> 都必须在 Create 里预先创建下标 0（两个模板都要，保持一致），或在使用处先做范围校验。
+> 面板侧已按此处理：`@stgArg` 在 `@stg_init` 预建、存档数组在两个 worldCreate 模板中预建、
+> 应用存档与详情/取值三处都做了 `>= @saveHistCount` 的范围校验（见 `check_qol_account.js` 的 GMS array safety 断言）。
 ## 2. 引擎差异速查
 
 | 主题 | GM8.0 | GM8.1/8.2 | GMS1.4 | GMS2.3/2024 |
