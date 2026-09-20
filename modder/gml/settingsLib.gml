@@ -676,10 +676,10 @@ return 1;
 					// full-width amber band with dark text (mock .row.sel); per-kind
 					// controls keep their own colours, labels/values switch to dark
 					draw_set_color(make_color_rgb(225, 205, 90));
-					draw_rectangle(@spX + 10, @rowY - 1, @spX + @colW - 10, @rowY + global.__ONLINE_stgRowH - 3, false);
+					draw_rectangle(@spX + 10, @rowY + 1, @spX + @colW - 10, @rowY + global.__ONLINE_stgRowH - 3, false);
 				}else if(@rowHover == @rowI){
 					draw_set_color(make_color_rgb(35, 35, 40));
-					draw_rectangle(@spX + 10, @rowY - 1, @spX + @colW - 10, @rowY + global.__ONLINE_stgRowH - 3, false);
+					draw_rectangle(@spX + 10, @rowY + 1, @spX + @colW - 10, @rowY + global.__ONLINE_stgRowH - 3, false);
 				}
 			}
 			draw_set_halign(fa_left);

@@ -1001,6 +1001,8 @@ if(@settingsTab == 0){
 					@settingsTab = @tI;
 					@kbFocus = 0;
 					@keybindEditing = -1;
+					@kbRow[0] = -1;   // same reset as the keyboard tab switch
+					@stgFirst = 0;
 					@tabClicked = true;
 				}
 			}

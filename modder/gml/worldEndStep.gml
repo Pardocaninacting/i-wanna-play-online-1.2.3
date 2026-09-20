@@ -2940,6 +2940,12 @@ if(@settingsOpen && @keybindEditing < 0){
 			if(@settingsTab > 5) @settingsTab = 0;
 			@kbAct = 1;
 		}
+		if(@kbAct == 1){
+			// tab switch: the cursor and scroll position belong to the old tab's
+			// table - reset both or the stale row index lands mid-list on the new tab
+			@kbRow[0] = -1;
+			@stgFirst = 0;
+		}
 		if(keyboard_check_pressed(vk_down) || keyboard_check_pressed(vk_enter)){
 			@kbFocus = 1;
 			@kbAct = 1;
