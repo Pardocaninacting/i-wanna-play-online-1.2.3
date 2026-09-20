@@ -527,63 +527,11 @@ if(@settingsOpen){
 	// Tabled tabs (0-2 so far) share the one renderer: the builder fills the
 	// row table for the active tab, the renderer draws list + scrollbar +
 	// detail column + footer. Tabs 3-5 keep their hand layout for now.
-	if(@settingsTab <= 3){
+	if(@settingsTab <= 4){
 		@stg_build_tab(@settingsTab);
 		@stg_draw_table();
 	}
 
-	// TAB 4: SYNC
-	if(@settingsTab == 4){
-		@rowY = @contentY + 4;
-		if(@kbFocus == 1){
-			draw_set_color(make_color_rgb(220, 200, 60));
-			draw_rectangle(@spX + 4, @rowY - 3, @spX + @colW - 4, @rowY + 25, true);
-		}
-		draw_set_color(c_white);
-		draw_set_halign(fa_left);
-		draw_text(@spX + 16, @rowY, "Sync Enabled:");
-		@btnSyncX = @spX + 140;
-		@btnSyncY = @rowY;
-		@btnSyncW = 50;
-		@btnSyncH = 18;
-		if(@syncEnabled){
-			draw_set_color(make_color_rgb(40, 160, 40));
-		}else{
-			draw_set_color(c_gray);
-		}
-		draw_rectangle(@btnSyncX, @btnSyncY, @btnSyncX + @btnSyncW, @btnSyncY + @btnSyncH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		if(@syncEnabled){
-			draw_text(@btnSyncX + @btnSyncW/2, @rowY + 2, "ON");
-		}else{
-			draw_text(@btnSyncX + @btnSyncW/2, @rowY + 2, "OFF");
-		}
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		@rowY = @contentY + 32;
-		draw_text(@spX + 16, @rowY, "Entries (" + string(@syncEntryCount) + "):");
-		@rowY += 18;
-		draw_set_color(make_color_rgb(180, 180, 180));
-		draw_text(@spX + 16,  @rowY, "#");
-		draw_text(@spX + 40,  @rowY, "Name");
-		draw_text(@spX + 220, @rowY, "Count");
-		draw_set_color(c_white);
-		@rowY += 16;
-		for(@scI = 0; @scI < @syncEntryCount; @scI += 1){
-			if(@scI >= 10) break;
-			draw_text(@spX + 16,  @rowY, string(@scI));
-			draw_text(@spX + 40,  @rowY, @syncName[@scI]);
-			draw_text(@spX + 220, @rowY, string(@syncCount[@scI]));
-			@rowY += 16;
-		}
-		if(@syncEntryCount == 0){
-			draw_set_color(make_color_rgb(150, 150, 150));
-			draw_text(@spX + 16, @rowY, "(no entries configured)");
-			draw_set_color(c_white);
-		}
-		draw_set_halign(fa_left);
-	}
     // TAB 5: SKINS
     if(@settingsTab == 5){
         draw_set_halign(fa_left);
@@ -813,7 +761,7 @@ if(@settingsOpen){
 		}
 		// scrollbar: grab the thumb to drag (stg_draw_table tracks it while the
 		// button is held), click the track to page up/down
-		if(!@tabClicked && @settingsTab <= 3 && @sbShow){
+		if(!@tabClicked && @settingsTab <= 4 && @sbShow){
 			if(@mx >= @sbX - 3 && @mx <= @sbX + 8 && @my >= @stgTop + 2 && @my <= @stgBottom){
 				@tabClicked = true;
 				if(@my >= @sbY && @my <= @sbY + @sbH){
@@ -838,7 +786,7 @@ if(@settingsOpen){
 				}
 			}
 		}
-		if(!@tabClicked && @settingsTab <= 3){
+		if(!@tabClicked && @settingsTab <= 4){
 			@stg_build_tab(@settingsTab);
 			// (the wheel is handled in worldEndStep, once per frame - inside this
 			// click branch it only worked while the button was held)
@@ -848,13 +796,6 @@ if(@settingsOpen){
 			if(@rowHit >= 0) @stg_click_row(@rowHit);
 		}
 
-		if(!@tabClicked && @settingsTab == 4){
-			@kbFocus = 1;
-			if(@mx >= @btnSyncX && @mx <= @btnSyncX + @btnSyncW && @my >= @btnSyncY && @my <= @btnSyncY + @btnSyncH){
-				@syncEnabled = !@syncEnabled;
-				@syncEnabledChanged = true;
-			}
-		}
         if(!@tabClicked && @settingsTab == 5){
             @kbFocus = 1;
             if(@mx >= @btnSkPFX && @mx <= @btnSkPFX + @btnSkPFW && @my >= @btnSkPFY && @my <= @btnSkPFY + @btnSkPFH){

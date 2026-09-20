@@ -2954,7 +2954,7 @@ if(@settingsOpen && @keybindEditing < 0){
 	// QoL: wheel scrolling for the settings list. This lives here (not in the draw
 	// click branch) so it works without holding a mouse button. Covers every
 	// table-driven tab (Settings + Saves), not just tab 0.
-	if(@settingsOpen && @settingsTab <= 3){
+	if(@settingsOpen && @settingsTab <= 4){
 		if(mouse_wheel_up()) @stgFirst -= 1;
 		if(mouse_wheel_down()) @stgFirst += 1;
 		// hold-to-accelerate counters for the nav blocks below (reset on release)
@@ -3024,7 +3024,7 @@ if(@settingsOpen && @keybindEditing < 0){
 	}
 	// TAB 1 uses the SAME navigation as tab 0 (one row per press, auto-repeat,
 	// wheel, scrolling viewport); the save-specific keys stay below.
-	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab <= 3){
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab <= 4){
 		@stg_build_tab(@settingsTab);
 		if(@kbRow[0] < 0 || @kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
 		if(@kb_repeat(vk_up, 6, 2)){
@@ -3110,17 +3110,6 @@ if(@settingsOpen && @keybindEditing < 0){
 		}
 	}
 
-	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 4){
-		if(keyboard_check_pressed(vk_up)){
-			@kbFocus = 0;
-			@kbAct = 1;
-		}
-		if(keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
-			@syncEnabled = !@syncEnabled;
-			@syncEnabledChanged = true;
-			@kbAct = 1;
-		}
-	}
     if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 5){
         // Rows 0..skinCount-1 are skins, row skinCount is Auto-download,
         // row skinCount+1 is Clear.

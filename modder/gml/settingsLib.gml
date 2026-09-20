@@ -336,6 +336,8 @@ if(_a == 22) return "Deletes non-favourite saves.";
 if(_a == 10) return "Choose which player object drives your character.";
 if(_a >= 40 && _a <= 50) return "Rebind this action. Enter starts the capture, then press the key you want; Esc cancels.";
 if(_a == 52) return "Restore every binding above to its default.";
+if(_a == 53) return "Sends the listed global variables to everyone in the room, on save and whenever their bits change.";
+if(_a == 54) return "Sent on save and whenever its bits change. Entries whose global is missing in this game are skipped (see Present).";
 if(_a == 30) return "Ratings are stored per game on the server; everyone on this server shares the same listing.";
 if(_a == 31) return "Your rating for this game. Left/Right steps through, digits 1-5 set directly, 0 means no rating.";
 if(_a == 32) return "Whether you have cleared this game. Sent together with the stars.";
@@ -495,6 +497,19 @@ if(_k == 1){
   global.__ONLINE_detFK[0] = "Server";
   global.__ONLINE_detFV[0] = @stg_server_text();
   _fn = 1;
+}
+if(_a == 54){
+  @stgI = global.__ONLINE_stgArg[argument0];
+  global.__ONLINE_detFK[0] = "Global";  global.__ONLINE_detFV[0] = "global." + @syncName[@stgI];
+  global.__ONLINE_detFK[1] = "Bits";    global.__ONLINE_detFV[1] = string(@syncCount[@stgI]);
+  global.__ONLINE_detFK[2] = "Slots";   global.__ONLINE_detFV[2] = string(@syncSlotCount[@stgI]) + " x 32-bit";
+  global.__ONLINE_detFK[3] = "Present";
+  if(variable_global_exists(@syncName[@stgI])){
+    global.__ONLINE_detFV[3] = "yes";
+  }else{
+    global.__ONLINE_detFV[3] = "no - skipped";
+  }
+  _fn = 4;
 }
 if(_a == 33){
   global.__ONLINE_detFK[0] = "State";   global.__ONLINE_detFV[0] = @stg_rating_status();
@@ -1114,10 +1129,28 @@ global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
 ///// script @stg_build_sync
-// STUB - converted in a later stage; keeps the dispatcher total.
+// Row table for the Sync tab: the enable toggle + one entry per configured
+// global. Fields verified at worldCreate (syncEnabled / syncEntryCount /
+// syncName / syncCount; syncSlotCount computed at ini load). The list scrolls,
+// so all 16 entries show - the old hand layout hard-capped at 10.
 // args: contentY -> 0
+var _y, _i, _ctlX;
 global.__ONLINE_stgN = 0;
-@stg_row_add(0, 0, "SYNC", @spX + 16, argument0 + 2, 0, 0, 0);
+_y = argument0 + 2;
+_ctlX = @spX + @colW - 16 - 130;
+@stg_row_add(0, 0, "SYNC", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(4, 53, "Sync enabled", @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+_y += 6;
+@stg_row_add(0, 0, "ENTRIES (" + string(@syncEntryCount) + " of 16)", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+if(@syncEntryCount == 0){
+  @stg_row_add(2, 0, "(no entries configured)", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+}
+for(_i = 0; _i < @syncEntryCount; _i += 1){
+  @stg_row_add(6, 54, @stg_fit_text(@syncName[_i], @colW - 32 - 90), @spX + 16, _y, @colW - 32, 0, @spX + 16);
+  global.__ONLINE_stgArg[global.__ONLINE_stgN - 1] = _i;
+  _y += global.__ONLINE_stgRowH;
+}
+global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
 ///// script @stg_build_skins
@@ -1312,6 +1345,11 @@ if(_a >= 40 && _a <= 50){
   if(@keybindEditing == @stgI) return "<press a key>";
   return @stg_key_cap(@kbKeys[@stgI]);
 }
+if(_a == 53) return @stg_onoff(@syncEnabled);
+if(_a == 54){
+  @stgI = global.__ONLINE_stgArg[argument0];
+  return string(@syncCount[@stgI]) + " bits";
+}
 if(_a == 52) return "Reset keys";
 if(_a == 31) return string(@rStars) + " / 5";
 if(_a == 32) return @stg_onoff(@rCleared);
@@ -1362,6 +1400,8 @@ if(_a == 22) return "Deletes every non-favourite save file.";
 if(_a == 10) return "Choose which player object drives your character.";
 if(_a >= 40 && _a <= 50) return "Enter or click starts capture, then press the key. Esc cancels.";
 if(_a == 52) return "Restore every binding above to its default.";
+if(_a == 53) return "Share the configured globals with the room.";
+if(_a == 54) return "A synced global variable.";
 if(_a == 30) return "This game, as the server identifies it.";
 if(_a == 31) return "Your rating: Left/Right steps, digits 1-5 set directly, 0 clears.";
 if(_a == 32) return "Mark the game as cleared. Sent together with the stars.";
@@ -1495,6 +1535,12 @@ if(_a >= 40 && _a <= 50){
   @keybindArmTimer = 6;
   return 0;
 }
+if(_a == 53){
+  @syncEnabled = 1 - @syncEnabled;
+  @syncEnabledChanged = true;
+  return 0;
+}
+if(_a == 54) return 0;   // view-only entry
 if(_a == 52){
   // the default set (the old Reset Keys button's exact values)
   @keyVis = 86; @keySave = 84; @keySpectate = 89; @keyChatLog = 85; @keyArrows = 73; @keySettings = 79;
