@@ -1005,6 +1005,21 @@ if(@settingsTab == 0){
 				}
 			}
 		}
+		// scrollbar: grab the thumb to drag (stg_draw_table tracks it while the
+		// button is held), click the track to page up/down
+		if(!@tabClicked && (@settingsTab == 0 || @settingsTab == 1) && @sbShow){
+			if(@mx >= @sbX - 3 && @mx <= @sbX + 8 && @my >= @stgTop + 2 && @my <= @stgBottom){
+				@tabClicked = true;
+				if(@my >= @sbY && @my <= @sbY + @sbH){
+					@stgSbDrag = true;
+					@stgSbGrab = @my - @sbY;
+				}else{
+					if(@my < @sbY) @stgFirst -= @stgFit; else @stgFirst += @stgFit;
+					if(@stgFirst < 0) @stgFirst = 0;
+					if(@stgFirst > @stgMaxFirst) @stgFirst = @stgMaxFirst;
+				}
+			}
+		}
 		if(!@tabClicked && @settingsTab == 0){
 			@stg_build_rows(@contentY);
 			// (the wheel is handled in worldEndStep, once per frame - inside this

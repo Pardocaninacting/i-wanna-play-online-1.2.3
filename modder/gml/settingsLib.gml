@@ -68,6 +68,10 @@ global.__ONLINE_stgHeadH = 15;
 // panel geometry + layout mode (see @stg_layout - narrow is the shipped layout)
 @stgScroll = 0;
 @stgFirst = 0;
+@stgSbDrag = false;   // scrollbar thumb grab in progress
+@stgSbGrab = 0;       // px offset of the grab point inside the thumb
+@kbHoldUp = 0;        // held-frame counters drive the nav acceleration
+@kbHoldDn = 0;
 @stgNavKey = 0;   // set by the keyboard handler; the wheel must not follow
 // The row table's per-row argument array. Only rows that carry one (save entries)
 // write it, but the detail pane, @stg_value and the dispatcher all read it, so index
@@ -353,6 +357,7 @@ draw_set_color(c_white);
 _txt = global.__ONLINE_stgLabel[argument0];
 if(_txt == "") _txt = @stg_value(argument0);
 if(_k == 1) _txt = "Connection";
+if(_a == 20) _txt = "Save " + string(global.__ONLINE_stgArg[argument0] + 1);
 draw_text(_x, _y, _txt);
 _y += 22;
 // value card (green frame when a toggle is on)
@@ -432,7 +437,7 @@ if(_a == 20){
   // save arrays, so clamping here guarantees the reads below cannot hit an
   // undefined array (GMS aborts on that, GM8 does not).
   if(@stgSvI < 0 || @stgSvI >= @saveHistCount) @stgSvI = 0;
-  global.__ONLINE_detFK[0] = "Room";  global.__ONLINE_detFV[0] = @saveHistRoomName[@stgSvI];
+  global.__ONLINE_detFK[0] = "Room";  global.__ONLINE_detFV[0] = @stg_room_name(@stgSvI);
   global.__ONLINE_detFK[1] = "Position"; global.__ONLINE_detFV[1] = string(round(@saveHistX[@stgSvI])) + ", " + string(round(@saveHistY[@stgSvI]));
   global.__ONLINE_detFK[2] = "Gravity"; global.__ONLINE_detFV[2] = string(@saveHistGrav[@stgSvI]);
   if(@saveHistGrav[@stgSvI] > 0) global.__ONLINE_detFV[2] = "+" + global.__ONLINE_detFV[2];
@@ -528,16 +533,32 @@ return string_copy(_s, 1, _n) + "...";
 // Key repeat for menu navigation: 1 on the initial press, then again after
 // argument1 frames of holding, then every argument2 frames. Only one key repeats
 // at a time, so pressing another key takes over immediately.
+// Two pitfalls handled here:
+//   - the press frame can be consumed by another handler before this script runs
+//     (the tab-strip focus block does exactly that): arm on the held state too,
+//     or a held key after a tab switch never repeats at all
+//   - GM8 re-fires keyboard_check_pressed on OS auto-repeat: a re-press while the
+//     key is already armed must not reset the wait, or the internal rhythm never
+//     outruns the OS repeat rate (~16/s)
 // args: key, delayFrames, repeatFrames -> 1/0
 var _k;
 _k = argument0;
-if(keyboard_check_pressed(_k)){
+if(keyboard_check_pressed(_k) && @kbRepeatKey != _k){
+  // fresh press (or takeover from another key)
   @kbRepeatKey = _k;
   @kbRepeatWait = argument1;
   return 1;
 }
-if(!keyboard_check(_k)) return 0;
-if(@kbRepeatKey != _k) return 0;
+if(!keyboard_check(_k)){
+  if(@kbRepeatKey == _k) @kbRepeatKey = -1;   // released: a re-press must re-arm
+  return 0;
+}
+if(@kbRepeatKey != _k){
+  // held but never armed: the press frame was consumed elsewhere - arm now
+  @kbRepeatKey = _k;
+  @kbRepeatWait = argument1;
+  return 0;
+}
 if(@kbRepeatWait > 0){
   @kbRepeatWait -= 1;
   return 0;
@@ -609,6 +630,22 @@ return 1;
 		@stgNavKey = 0;
 		@stgFit = @stg_fit_rows(@stgFirst, @stgTop + 2, @stgBottom);
 		if(@stgFit < 1) @stgFit = 1;
+		// scrollbar geometry lives up here so a drag can move @stgFirst before the
+		// row mapping (@stgYOff) is fixed for this frame
+		@sbShow = (global.__ONLINE_stgN > @stgFit);
+		@sbX = @spX + @colW - 10;
+		@sbH = (@stgBottom - @stgTop - 2) * @stgFit / max(1, global.__ONLINE_stgN);
+		if(@sbH < 16) @sbH = 16;
+		if(@stgSbDrag){
+			if(mouse_check_button(mb_left)){
+				// thumb follows the pointer, keeping the grab offset
+				@stgFirst = round((@my - @stgTop - 2 - @stgSbGrab) / max(1, @stgBottom - @stgTop - 2 - @sbH) * @stgMaxFirst);
+				if(@stgFirst < 0) @stgFirst = 0;
+				if(@stgFirst > @stgMaxFirst) @stgFirst = @stgMaxFirst;
+			}else{
+				@stgSbDrag = false;
+			}
+		}
 		// ONE grid: the table stores a y per row (headers 18px, rows 24px), so both
 		// drawing and hit testing shift those values by this single offset. The
 		// previous version accumulated its own uniform grid and drifted from it -
@@ -684,7 +721,12 @@ return 1;
 				}else{
 					draw_set_color(c_white);
 				}
-				draw_text(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI]);
+				if(@rowK == 6){
+					// entry label may carry a CJK room name
+					@stg_text_cjk(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI], 0);
+				}else{
+					draw_text(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI]);
+				}
 				@rowV = @stg_value(@rowI);
 				@rowBY = @rowY + 2;
 				@rowBH = global.__ONLINE_stgRowH - 6;
@@ -712,9 +754,13 @@ return 1;
 
 				  // entry row (saves): label left, value right-aligned, no box
 
-				  draw_set_halign(fa_right);
+				draw_set_halign(fa_right);
 
-				  draw_set_color(make_color_rgb(190, 195, 200));
+				  if(@rowSel){
+				    draw_set_color(make_color_rgb(16, 16, 20));
+				  }else{
+				    draw_set_color(make_color_rgb(190, 195, 200));
+				  }
 
 				  @stg_text_cjk(@spX + @colW - 16, @rowBY + 3 + @stgTextDY, @rowV, 2);
 
@@ -772,16 +818,17 @@ return 1;
 			@rowI += 1;
 		}
 		// side scrollbar (track + thumb) instead of the old "more" markers.
-		// Kept left of the column separator and bright enough to read on the
-		// 0.9-alpha panel - the first version blended into the separator line.
-		if(global.__ONLINE_stgN > @stgFit){
-			@sbX = @spX + @colW - 10;
+		// Geometry was computed above the row loop (a drag moves @stgFirst there);
+		// the thumb brightens while dragged.
+		if(@sbShow){
 			draw_set_color(make_color_rgb(50, 50, 58));
 			draw_rectangle(@sbX, @stgTop + 2, @sbX + 5, @stgBottom, false);
-			@sbH = (@stgBottom - @stgTop - 2) * @stgFit / global.__ONLINE_stgN;
-			if(@sbH < 16) @sbH = 16;
 			@sbY = @stgTop + 2 + (@stgBottom - @stgTop - 2 - @sbH) * @stgFirst / max(1, @stgMaxFirst);
-			draw_set_color(make_color_rgb(150, 150, 165));
+			if(@stgSbDrag){
+				draw_set_color(make_color_rgb(190, 190, 205));
+			}else{
+				draw_set_color(make_color_rgb(150, 150, 165));
+			}
 			draw_rectangle(@sbX, @sbY, @sbX + 5, @sbY + @sbH, false);
 		}
 		draw_set_halign(fa_left);
@@ -832,6 +879,15 @@ return 1;
 			draw_text(@spX + 16, @footerY + 10, @stg_fit_text("Up/Down rows   Left/Right tabs or values   Enter edit   F1 close", @spW - 130));
 		}
 return 0;
+///// script @stg_room_name
+// Save room display name. Saves written before room names were recorded come
+// back as "" or "<undefined>" - present those as "?".
+// args: save index -> text
+var _r;
+_r = @saveHistRoomName[argument0];
+if(_r == "" || _r == "<undefined>") return "?";
+return _r;
+
 ///// script @save_age_text
 // Relative age of a save, exactly as the old panel computed it.
 // args: index -> text
@@ -858,10 +914,15 @@ _n = 0;
 _i = @saveHistCount - 1;
 while(_i >= 0){
   if(@saveHistFilter == 0 || @saveHistFav[_i]){
-    _lbl = "Save " + string(_i + 1) + " - " + @save_age_text(_i);
+    // room + bare coords + age: "Save N" meant nothing while browsing; the
+    // number survives as the detail pane's title
+    _lbl = @stg_room_name(_i) + " " + string(round(@saveHistX[_i])) + "," + string(round(@saveHistY[_i])) + " " + @save_age_text(_i);
     if(@saveHistFav[_i]) _lbl = "* " + _lbl;
+    _lbl = @stg_fit_text(_lbl, @colW - 32 - 56);
     _n += 1;
-    @stg_row_add(6, 20, _lbl, @spX + 16, _y, 0, 0, 0);
+    // the hit zone is stgX..stgCX+stgCW+8 - a 0-width control made only the
+    // first ~90px of every save row clickable
+    @stg_row_add(6, 20, _lbl, @spX + 16, _y, @colW - 32, 0, @spX + 16);
     global.__ONLINE_stgArg[global.__ONLINE_stgN - 1] = _i;
     _y += global.__ONLINE_stgRowH;
   }
@@ -976,16 +1037,33 @@ while(_i < global.__ONLINE_stgN){
 return 0;
 
 ///// script @stg_next_row
-// Moves the selection by argument1 rows, skipping headers/status.
+// Moves the selection by argument1 rows, skipping headers/status. Running off
+// the end lands on the edge-most selectable row in that direction, so the
+// accelerated multi-row steps stay useful at the list ends (a single-step
+// caller at the edge gets its own row back, same as before).
 // args: from, delta -> new row index
 var _i, _d, _n;
 _i = argument0;
 _d = argument1;
 _n = 0;
-while(_n < 64){
+while(_n < 128){
   _i += _d;
-  if(_i < 0) return argument0;
-  if(_i >= global.__ONLINE_stgN) return argument0;
+  if(_i < 0 || _i >= global.__ONLINE_stgN){
+    if(_d > 0){
+      _i = global.__ONLINE_stgN - 1;
+      while(_i > 0){
+        if(global.__ONLINE_stgKind[_i] != 0 && global.__ONLINE_stgKind[_i] != 1 && global.__ONLINE_stgKind[_i] != 7) return _i;
+        _i -= 1;
+      }
+    }else{
+      _i = 0;
+      while(_i < global.__ONLINE_stgN - 1){
+        if(global.__ONLINE_stgKind[_i] != 0 && global.__ONLINE_stgKind[_i] != 1 && global.__ONLINE_stgKind[_i] != 7) return _i;
+        _i += 1;
+      }
+    }
+    return argument0;
+  }
   if(global.__ONLINE_stgKind[_i] != 0 && global.__ONLINE_stgKind[_i] != 1 && global.__ONLINE_stgKind[_i] != 7) return _i;
   _n += 1;
 }
@@ -1335,14 +1413,14 @@ return 0;
 var _v, _old;
 _old = global.__ONLINE_accPassword;
 #if STUDIO
-_v = get_string("Session key (empty = open session)", _old);
+_v = get_string("Leave it empty for no password:", _old);
 #endif
 #if not STUDIO
 #if CJKTEXT
-_v = __ONLINE_ansi_to_utf8(wd_input_box("Password", "Session key (empty = open session):", _old));
+_v = __ONLINE_ansi_to_utf8(wd_input_box("Password", "Leave it empty for no password:", _old));
 #endif
 #if not CJKTEXT
-_v = wd_input_box("Password", "Session key (empty = open session):", _old);
+_v = wd_input_box("Password", "Leave it empty for no password:", _old);
 #endif
 #endif
 _v = @account_trim(_v);

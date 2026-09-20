@@ -2928,6 +2928,7 @@ if(@debug_pick_player){
 if(@settingsOpen && @keybindEditing < 0){
 	if(@kbDelay > 0) @kbDelay -= 1;
 	@kbAct = 0;
+	@kbNavTick = 0;   // nav repeat steps manage their own cadence (no kbDelay)
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 0){
 		if(keyboard_check_pressed(vk_left)){
 			@settingsTab -= 1;
@@ -2950,6 +2951,9 @@ if(@settingsOpen && @keybindEditing < 0){
 	if(@settingsOpen && (@settingsTab == 0 || @settingsTab == 1)){
 		if(mouse_wheel_up()) @stgFirst -= 1;
 		if(mouse_wheel_down()) @stgFirst += 1;
+		// hold-to-accelerate counters for the nav blocks below (reset on release)
+		if(keyboard_check(vk_up)) @kbHoldUp += 1; else @kbHoldUp = 0;
+		if(keyboard_check(vk_down)) @kbHoldDn += 1; else @kbHoldDn = 0;
 		// hover no longer moves the cursor from here: it previews in the draw
 		// (detail + footer follow the pointer), selection happens on click
 		// (@stg_click_row). A parked mouse used to re-pin @kbRow every frame
@@ -2962,14 +2966,20 @@ if(@settingsOpen && @keybindEditing < 0){
 		// Navigation uses @kb_repeat: one step per press, then auto-repeat while held.
 		// The follow flag is raised here - that is, only when a move really happens -
 		// so the wheel is never pinned by a stale focus.
-		if(@kb_repeat(vk_up, 10, 3)){
+		if(@kb_repeat(vk_up, 6, 2)){
 			@stgNavKey = 1;
-			@rowPrev = @stg_next_row(@kbRow[0], -1);
+			@kbNavTick = 1;
+			// the longer the key is held, the bigger the step (500-entry saves list);
+			// 1/3/10 rows at 30 steps/s beats manual mashing (~16/s) immediately
+			@kbStep = 1;
+			if(@kbHoldUp > 45) @kbStep = 3;
+			if(@kbHoldUp > 120) @kbStep = 10;
+			@rowPrev = @stg_next_row(@kbRow[0], -@kbStep);
 			if(@rowPrev == @kbRow[0]){
 				// already on the first selectable row: if the view is still scrolled
 				// down, scroll it up instead of handing focus back to the tab bar
 				if(@stgFirst > 0){
-					@stgFirst -= 1;
+					@stgFirst -= @kbStep;
 				}else{
 					@kbFocus = 0;
 					@kbRow[0] = @stg_first_row();
@@ -2979,9 +2989,13 @@ if(@settingsOpen && @keybindEditing < 0){
 			}
 			@kbAct = 1;
 		}
-		if(@kb_repeat(vk_down, 10, 3)){
+		if(@kb_repeat(vk_down, 6, 2)){
 			@stgNavKey = 1;
-			@kbRow[0] = @stg_next_row(@kbRow[0], 1);
+			@kbNavTick = 1;
+			@kbStep = 1;
+			if(@kbHoldDn > 45) @kbStep = 3;
+			if(@kbHoldDn > 120) @kbStep = 10;
+			@kbRow[0] = @stg_next_row(@kbRow[0], @kbStep);
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
@@ -3007,12 +3021,16 @@ if(@settingsOpen && @keybindEditing < 0){
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && (@settingsTab == 0 || @settingsTab == 1)){
 		if(@settingsTab == 0) @stg_build_rows(@contentY); else @stg_build_saves(@contentY);
 		if(@kbRow[0] < 0 || @kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
-		if(@kb_repeat(vk_up, 10, 3)){
+		if(@kb_repeat(vk_up, 6, 2)){
 			@stgNavKey = 1;
-			@rowPrev = @stg_next_row(@kbRow[0], -1);
+			@kbNavTick = 1;
+			@kbStep = 1;
+			if(@kbHoldUp > 45) @kbStep = 3;
+			if(@kbHoldUp > 120) @kbStep = 10;
+			@rowPrev = @stg_next_row(@kbRow[0], -@kbStep);
 			if(@rowPrev == @kbRow[0]){
 				if(@stgFirst > 0){
-					@stgFirst -= 1;
+					@stgFirst -= @kbStep;
 				}else{
 					@kbFocus = 0;
 					@kbRow[0] = @stg_first_row();
@@ -3022,9 +3040,13 @@ if(@settingsOpen && @keybindEditing < 0){
 			}
 			@kbAct = 1;
 		}
-		if(@kb_repeat(vk_down, 10, 3)){
+		if(@kb_repeat(vk_down, 6, 2)){
 			@stgNavKey = 1;
-			@kbRow[0] = @stg_next_row(@kbRow[0], 1);
+			@kbNavTick = 1;
+			@kbStep = 1;
+			if(@kbHoldDn > 45) @kbStep = 3;
+			if(@kbHoldDn > 120) @kbStep = 10;
+			@kbRow[0] = @stg_next_row(@kbRow[0], @kbStep);
 			@kbAct = 1;
 		}
 		if(keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)){
@@ -3057,6 +3079,10 @@ if(@settingsOpen && @keybindEditing < 0){
 			if(keyboard_check_pressed(ord("7"))) @kbKeyN = 7;
 			if(keyboard_check_pressed(ord("8"))) @kbKeyN = 8;
 			if(@kbKeyN > 0){
+				// one digit = one save: take it away from wherever it was first
+				for(@hkJ = 0; @hkJ < @saveHistCount; @hkJ += 1){
+					if(@saveHistHotkey[@hkJ] == @kbKeyN) @saveHistHotkey[@hkJ] = 0;
+				}
 				@saveHistHotkey[@svI] = @kbKeyN;
 				@saveHistChanged = true;
 				@kbAct = 1;
@@ -3208,7 +3234,10 @@ if(@settingsOpen && @keybindEditing < 0){
             @kbAct = 1;
         }
     }
-	if(@kbAct){
+	// The 6-frame lockout debounces one-shot actions. Nav repeat ticks are
+	// exempt: their cadence is kb_repeat's own (that lockout is what made
+	// long lists crawl at ~7 rows/s).
+	if(@kbAct && @kbNavTick == 0){
 		@kbDelay = 6;
 	}
 }

@@ -932,14 +932,14 @@ if file_exists(@savesPath) {
 		global.__ONLINE_accName = @account_trim(global.__ONLINE_accName);
 		if(global.__ONLINE_accName == "") global.__ONLINE_accName = "Anonymous";
 		#if STUDIO
-			global.__ONLINE_accPassword = get_string("Session key (empty = open session):", "");
+			global.__ONLINE_accPassword = get_string("Leave it empty for no password:", "");
 		#endif
 		#if not STUDIO
 			#if CJKTEXT
-			global.__ONLINE_accPassword = __ONLINE_ansi_to_utf8(wd_input_box("Password", "Session key (empty = open session):", ""));
+			global.__ONLINE_accPassword = __ONLINE_ansi_to_utf8(wd_input_box("Password", "Leave it empty for no password:", ""));
 			#endif
 			#if not CJKTEXT
-			global.__ONLINE_accPassword = wd_input_box("Password", "Session key (empty = open session):", "");
+			global.__ONLINE_accPassword = wd_input_box("Password", "Leave it empty for no password:", "");
 			#endif
 		#endif
 		global.__ONLINE_accPassword = @account_trim(global.__ONLINE_accPassword);
