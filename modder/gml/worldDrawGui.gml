@@ -527,86 +527,11 @@ if(@settingsOpen){
 	// Tabled tabs (0-2 so far) share the one renderer: the builder fills the
 	// row table for the active tab, the renderer draws list + scrollbar +
 	// detail column + footer. Tabs 3-5 keep their hand layout for now.
-	if(@settingsTab <= 2){
+	if(@settingsTab <= 3){
 		@stg_build_tab(@settingsTab);
 		@stg_draw_table();
 	}
 
-	// TAB 3: KEYS
-	if(@settingsTab == 3){
-		@rowY = @contentY + 4;
-		if(@kbFocus == 1 && @kbRow[3] < 11){
-			@kbHi = @rowY - 4 + @kbRow[3] * 28;
-			draw_set_color(make_color_rgb(220, 200, 60));
-			draw_rectangle(@spX + 4, @kbHi, @spX + @colW - 4, @kbHi + 27, true);
-		}
-		draw_set_halign(fa_left);
-		@kbLabels[0] = "Visibility";
-		@kbLabels[1] = "Toggle Save";
-		@kbLabels[2] = "Spectate";
-		@kbLabels[3] = "Chat Log";
-		@kbLabels[4] = "Indicator";
-		@kbLabels[5] = "Options";
-		@kbLabels[6] = "Player List";
-		@kbLabels[7] = "Chat";
-		@kbLabels[8] = "Here";
-		@kbLabels[9] = "Fast Load";
-		@kbLabels[10] = "Canvas";
-		@kbKeys[0] = @keyVis;
-		@kbKeys[1] = @keySave;
-		@kbKeys[2] = @keySpectate;
-		@kbKeys[3] = @keyChatLog;
-		@kbKeys[4] = @keyArrows;
-		@kbKeys[5] = @keySettings;
-		@kbKeys[6] = @keyPlayerList;
-		@kbKeys[7] = @keyChat;
-		@kbKeys[8] = @keyPing;
-		@kbKeys[9] = @keyFastLoad;
-		@kbKeys[10] = @keyCanvas;
-		for(@kI = 0; @kI < 11; @kI += 1){
-			@kbY = @rowY + @kI * 28;
-			draw_set_color(c_white);
-			draw_text(@spX + 16, @kbY, @kbLabels[@kI]);
-			@btnKX = @spX + 140;
-			@btnKY = @kbY - 2;
-			@btnKW = 120;
-			@btnKH = 20;
-			if(@keybindEditing == @kI){
-				draw_set_color(make_color_rgb(160, 120, 40));
-			}else{
-				draw_set_color(make_color_rgb(50, 50, 50));
-			}
-			draw_rectangle(@btnKX, @btnKY, @btnKX + @btnKW, @btnKY + @btnKH, false);
-			draw_set_color(c_white);
-			draw_set_halign(fa_center);
-			if(@keybindEditing == @kI){
-				draw_text(@btnKX + @btnKW/2, @kbY, "Press a key...");
-			}else{
-				if(@kbKeys[@kI] >= 33 && @kbKeys[@kI] <= 126){
-					draw_text(@btnKX + @btnKW/2, @kbY, chr(@kbKeys[@kI]) + " (" + string(@kbKeys[@kI]) + ")");
-				}else if(@kbKeys[@kI] == 32){
-					draw_text(@btnKX + @btnKW/2, @kbY, "SPACE (32)");
-				}else{
-					draw_text(@btnKX + @btnKW/2, @kbY, "Key " + string(@kbKeys[@kI]));
-				}
-			}
-			draw_set_halign(fa_left);
-		}
-		@btnRstX = @spX + @colW/2 - 55;
-		@btnRstY = @rowY + 11 * 28 + 10;
-		@btnRstW = 110;
-		@btnRstH = 22;
-		if(@kbFocus == 1 && @kbRow[3] == 11){
-			draw_set_color(make_color_rgb(220, 200, 60));
-			draw_rectangle(@spX + 4, @btnRstY - 3, @spX + @colW - 4, @btnRstY + @btnRstH + 3, true);
-		}
-		draw_set_color(make_color_rgb(100, 50, 50));
-		draw_rectangle(@btnRstX, @btnRstY, @btnRstX + @btnRstW, @btnRstY + @btnRstH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		draw_text(@btnRstX + @btnRstW/2, @btnRstY + 2, "Reset Keys");
-		draw_set_halign(fa_left);
-	}
 	// TAB 4: SYNC
 	if(@settingsTab == 4){
 		@rowY = @contentY + 4;
@@ -888,7 +813,7 @@ if(@settingsOpen){
 		}
 		// scrollbar: grab the thumb to drag (stg_draw_table tracks it while the
 		// button is held), click the track to page up/down
-		if(!@tabClicked && @settingsTab <= 2 && @sbShow){
+		if(!@tabClicked && @settingsTab <= 3 && @sbShow){
 			if(@mx >= @sbX - 3 && @mx <= @sbX + 8 && @my >= @stgTop + 2 && @my <= @stgBottom){
 				@tabClicked = true;
 				if(@my >= @sbY && @my <= @sbY + @sbH){
@@ -913,7 +838,7 @@ if(@settingsOpen){
 				}
 			}
 		}
-		if(!@tabClicked && @settingsTab <= 2){
+		if(!@tabClicked && @settingsTab <= 3){
 			@stg_build_tab(@settingsTab);
 			// (the wheel is handled in worldEndStep, once per frame - inside this
 			// click branch it only worked while the button was held)
@@ -923,39 +848,6 @@ if(@settingsOpen){
 			if(@rowHit >= 0) @stg_click_row(@rowHit);
 		}
 
-		if(!@tabClicked && @settingsTab == 3){
-			@kbFocus = 1;
-			for(@kI = 0; @kI < 11; @kI += 1){
-				@kbY = @rowY + @kI * 28;
-				@btnKX = @spX + 140;
-				@btnKY = @kbY - 2;
-				@btnKW = 120;
-				@btnKH = 20;
-				if(@mx >= @btnKX && @mx <= @btnKX + @btnKW && @my >= @btnKY && @my <= @btnKY + @btnKH){
-					if(@keybindEditing == @kI){
-						@keybindEditing = -1;
-					}else{
-						@keybindEditing = @kI;
-						@keybindArmTimer = 0;
-					}
-				}
-			}
-			if(@mx >= @btnRstX && @mx <= @btnRstX + @btnRstW && @my >= @btnRstY && @my <= @btnRstY + @btnRstH){
-				@keyVis = 86;
-				@keySave = 84;
-				@keySpectate = 89;
-				@keyChatLog = 85;
-				@keyArrows = 73;
-				@keySettings = 79;
-				@keyPlayerList = 76;
-				@keyChat = 32;
-				@keyPing = 72;
-				@keyFastLoad = 70;
-				@keyCanvas = 78;
-				@keybindEditing = -1;
-				@keybindSave = true;
-			}
-		}
 		if(!@tabClicked && @settingsTab == 4){
 			@kbFocus = 1;
 			if(@mx >= @btnSyncX && @mx <= @btnSyncX + @btnSyncW && @my >= @btnSyncY && @my <= @btnSyncY + @btnSyncH){

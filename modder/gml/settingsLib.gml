@@ -334,6 +334,8 @@ if(_a == 20) return "Enter applies this save. F toggles favourite, 1-8 assigns a
 if(_a == 21) return "Show only favourite saves.";
 if(_a == 22) return "Deletes non-favourite saves.";
 if(_a == 10) return "Choose which player object drives your character.";
+if(_a >= 40 && _a <= 50) return "Rebind this action. Enter starts the capture, then press the key you want; Esc cancels.";
+if(_a == 52) return "Restore every binding above to its default.";
 if(_a == 30) return "Ratings are stored per game on the server; everyone on this server shares the same listing.";
 if(_a == 31) return "Your rating for this game. Left/Right steps through, digits 1-5 set directly, 0 means no rating.";
 if(_a == 32) return "Whether you have cleared this game. Sent together with the stars.";
@@ -369,6 +371,16 @@ _y += 22;
 // card for the Stars row and sit at a FIXED slot (@stgTop + 24) so the click
 // handler in worldDrawGui can hit-test them without replicating this layout
 _val = @stg_value(argument0);
+if(_a >= 40 && _a <= 50){
+  // big key cap in the detail column (mock keysRows)
+  draw_set_color(make_color_rgb(35, 35, 40));
+  draw_rectangle(_x, _y, _x + 24 + string_width(_val) + 24, _y + 26, false);
+  draw_set_color(make_color_rgb(225, 205, 90));
+  draw_rectangle(_x, _y, _x + 24 + string_width(_val) + 24, _y + 26, true);
+  draw_set_color(c_white);
+  draw_text(_x + 12, _y + 6 + @stgTextDY, _val);
+  _y += 36;
+}
 if(_k == 3 && _a == 31){
   _sy = @stgTop + 24;
   for(_i = 1; _i <= 5; _i += 1){
@@ -534,6 +546,8 @@ if(_a == 11 || _a == 15) _acts = "Enter = run";
 if(_a == 10) _acts = "Enter = pick";
 if(_a == 20) _acts = "Enter = apply   F = favourite   1-8 = hotkey";
 if(_a == 21) _acts = "Left/Right = toggle";
+if(_a >= 40 && _a <= 50) _acts = "Enter = rebind";
+if(_a == 52) _acts = "Enter = reset";
 if(_a == 31) _acts = "Left/Right = change   1-5 = set";
 if(_a == 34) _acts = "Enter = submit";
 if(_a == 22){
@@ -1053,11 +1067,50 @@ _y += 6;
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
+///// script @stg_keys_meta
+// The 11 rebindable actions: labels and the world variables they write.
+// (Rebuilt per call, exactly like the old hand layout did per frame.)
+// args: none -> 0
+@kbLabels[0] = "Visibility";   @kbKeys[0] = @keyVis;
+@kbLabels[1] = "Toggle Save";  @kbKeys[1] = @keySave;
+@kbLabels[2] = "Spectate";     @kbKeys[2] = @keySpectate;
+@kbLabels[3] = "Chat Log";     @kbKeys[3] = @keyChatLog;
+@kbLabels[4] = "Indicator";    @kbKeys[4] = @keyArrows;
+@kbLabels[5] = "Options";      @kbKeys[5] = @keySettings;
+@kbLabels[6] = "Player List";  @kbKeys[6] = @keyPlayerList;
+@kbLabels[7] = "Chat";         @kbKeys[7] = @keyChat;
+@kbLabels[8] = "Here";         @kbKeys[8] = @keyPing;
+@kbLabels[9] = "Fast Load";    @kbKeys[9] = @keyFastLoad;
+@kbLabels[10] = "Canvas";      @kbKeys[10] = @keyCanvas;
+return 0;
+
+///// script @stg_key_cap
+// Display text for a key code (the old panel's exact rules).
+// args: keycode -> text
+var _k;
+_k = argument0;
+if(_k == 32) return "SPACE (32)";
+if(_k >= 33 && _k <= 126) return chr(_k) + " (" + string(_k) + ")";
+return "Key " + string(_k);
+
 ///// script @stg_build_keys
-// STUB - converted in a later stage; keeps the dispatcher total.
+// Row table for the Keys tab: one entry per rebindable action + reset. The
+// capture itself lives in worldEndStep's keybind block (@keybindEditing).
 // args: contentY -> 0
+var _y, _i;
 global.__ONLINE_stgN = 0;
-@stg_row_add(0, 0, "KEYS", @spX + 16, argument0 + 2, 0, 0, 0);
+_y = argument0 + 2;
+@stg_keys_meta();
+@stg_row_add(0, 0, "KEY BINDINGS", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+for(_i = 0; _i < 11; _i += 1){
+  @stg_row_add(6, 40 + _i, @kbLabels[_i], @spX + 16, _y, @colW - 32, 0, @spX + 16);
+  global.__ONLINE_stgArg[global.__ONLINE_stgN - 1] = _i;
+  _y += global.__ONLINE_stgRowH;
+}
+_y += 6;
+@stg_row_add(0, 0, "RESET", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(5, 52, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
 ///// script @stg_build_sync
@@ -1254,6 +1307,12 @@ if(_a == 22) return "Clear all";
 if(_a == 10) return "Pick";
 if(_a == 11) return "Reconnect now";
 if(_a == 15) return "Apply & Reconnect";
+if(_a >= 40 && _a <= 50){
+  @stgI = global.__ONLINE_stgArg[argument0];
+  if(@keybindEditing == @stgI) return "<press a key>";
+  return @stg_key_cap(@kbKeys[@stgI]);
+}
+if(_a == 52) return "Reset keys";
 if(_a == 31) return string(@rStars) + " / 5";
 if(_a == 32) return @stg_onoff(@rCleared);
 if(_a == 33) return @stg_rating_status();
@@ -1301,6 +1360,8 @@ if(_a == 20) return "Enter applies this save. F favourite, 1-8 hotkey, Del clear
 if(_a == 21) return "Show only favourite saves.";
 if(_a == 22) return "Deletes every non-favourite save file.";
 if(_a == 10) return "Choose which player object drives your character.";
+if(_a >= 40 && _a <= 50) return "Enter or click starts capture, then press the key. Esc cancels.";
+if(_a == 52) return "Restore every binding above to its default.";
 if(_a == 30) return "This game, as the server identifies it.";
 if(_a == 31) return "Your rating: Left/Right steps, digits 1-5 set directly, 0 clears.";
 if(_a == 32) return "Mark the game as cleared. Sent together with the stars.";
@@ -1427,6 +1488,22 @@ if(_a == 31){
 }
 if(_a == 32){ @rCleared = 1 - @rCleared; return 0; }
 if(_a == 30 || _a == 33) return 0;   // view-only entries
+if(_a >= 40 && _a <= 50){
+  // arm the capture; the keybind block in worldEndStep takes over while the
+  // settings keyboard block is skipped (@keybindEditing >= 0)
+  @keybindEditing = _a - 40;
+  @keybindArmTimer = 6;
+  return 0;
+}
+if(_a == 52){
+  // the default set (the old Reset Keys button's exact values)
+  @keyVis = 86; @keySave = 84; @keySpectate = 89; @keyChatLog = 85; @keyArrows = 73; @keySettings = 79;
+  @keyPlayerList = 76; @keyChat = 32; @keyPing = 72; @keyFastLoad = 70; @keyCanvas = 78;
+  @keybindEditing = -1;
+  @keybindSave = true;
+  @stg_toast("Keys reset to defaults", 1);
+  return 0;
+}
 if(_a == 34){
   if(!@connected){ @stg_toast("Not connected", 1); return 0; }
   if(@ratingSubmitting) return 0;

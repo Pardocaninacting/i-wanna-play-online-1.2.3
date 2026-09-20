@@ -2954,7 +2954,7 @@ if(@settingsOpen && @keybindEditing < 0){
 	// QoL: wheel scrolling for the settings list. This lives here (not in the draw
 	// click branch) so it works without holding a mouse button. Covers every
 	// table-driven tab (Settings + Saves), not just tab 0.
-	if(@settingsOpen && @settingsTab <= 2){
+	if(@settingsOpen && @settingsTab <= 3){
 		if(mouse_wheel_up()) @stgFirst -= 1;
 		if(mouse_wheel_down()) @stgFirst += 1;
 		// hold-to-accelerate counters for the nav blocks below (reset on release)
@@ -3024,7 +3024,7 @@ if(@settingsOpen && @keybindEditing < 0){
 	}
 	// TAB 1 uses the SAME navigation as tab 0 (one row per press, auto-repeat,
 	// wheel, scrolling viewport); the save-specific keys stay below.
-	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab <= 2){
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab <= 3){
 		@stg_build_tab(@settingsTab);
 		if(@kbRow[0] < 0 || @kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
 		if(@kb_repeat(vk_up, 6, 2)){
@@ -3110,42 +3110,6 @@ if(@settingsOpen && @keybindEditing < 0){
 		}
 	}
 
-	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 3){
-		if(keyboard_check_pressed(vk_up)){
-			if(@kbRow[3] <= 0){
-				@kbRow[3] = 0;
-				@kbFocus = 0;
-			}else{
-				@kbRow[3] -= 1;
-			}
-			@kbAct = 1;
-		}
-		if(keyboard_check_pressed(vk_down)){
-			@kbRow[3] += 1; if(@kbRow[3] > 11) @kbRow[3] = 11;
-			@kbAct = 1;
-		}
-		if(keyboard_check_pressed(vk_enter)){
-			if(@kbRow[3] < 11){
-				@keybindEditing = @kbRow[3];
-				@keybindArmTimer = 6;
-			}else{
-				@keyVis = 86;
-				@keySave = 84;
-				@keySpectate = 89;
-				@keyChatLog = 85;
-				@keyArrows = 73;
-				@keySettings = 79;
-				@keyPlayerList = 76;
-				@keyChat = 32;
-				@keyPing = 72;
-				@keyFastLoad = 70;
-				@keyCanvas = 78;
-				@keybindEditing = -1;
-				@keybindSave = true;
-			}
-			@kbAct = 1;
-		}
-	}
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 4){
 		if(keyboard_check_pressed(vk_up)){
 			@kbFocus = 0;
