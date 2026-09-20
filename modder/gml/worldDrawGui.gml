@@ -524,211 +524,11 @@ if(@settingsOpen){
 	}
 	#endif
 
-	// Tabled tabs (0-2 so far) share the one renderer: the builder fills the
-	// row table for the active tab, the renderer draws list + scrollbar +
-	// detail column + footer. Tabs 3-5 keep their hand layout for now.
-	if(@settingsTab <= 4){
-		@stg_build_tab(@settingsTab);
-		@stg_draw_table();
-	}
+	// Every tab is table-driven: the builder fills the row table for the
+	// active tab, the shared renderer draws list + scrollbar + detail + footer.
+	@stg_build_tab(@settingsTab);
+	@stg_draw_table();
 
-    // TAB 5: SKINS
-    if(@settingsTab == 5){
-        draw_set_halign(fa_left);
-        // Paged list paradigm copied from the Saves tab (12 rows per page).
-        @skPageSize = 12;
-        @skPages = floor((@skinVisCount + @skPageSize - 1) / @skPageSize);
-        if(@skPages < 1) @skPages = 1;
-        if(@skinPage >= @skPages) @skinPage = @skPages - 1;
-        if(@skinPage < 0) @skinPage = 0;
-        @skStart = @skinPage * @skPageSize;
-        @skEnd = @skStart + @skPageSize;
-        if(@skEnd > @skinVisCount) @skEnd = @skinVisCount;
-        @rowY = @contentY + 2;
-        @btnSkPFX = @spX + 8;
-        @btnSkPFY = @rowY - 2;
-        @btnSkPFW = 20;
-        @btnSkPFH = 18;
-        draw_set_color(c_gray);
-        draw_rectangle(@btnSkPFX, @btnSkPFY, @btnSkPFX + @btnSkPFW, @btnSkPFY + @btnSkPFH, false);
-        draw_set_color(c_white);
-        draw_set_halign(fa_center);
-        draw_text(@btnSkPFX + @btnSkPFW/2, @rowY, "<<");
-        @btnSkPLX = @spX + 32;
-        @btnSkPLY = @rowY - 2;
-        @btnSkPLW = 20;
-        @btnSkPLH = 18;
-        draw_set_color(c_gray);
-        draw_rectangle(@btnSkPLX, @btnSkPLY, @btnSkPLX + @btnSkPLW, @btnSkPLY + @btnSkPLH, false);
-        draw_set_color(c_white);
-        draw_text(@btnSkPLX + @btnSkPLW/2, @rowY, "<");
-        draw_text(@spX + 82, @rowY, string(@skinPage + 1) + "/" + string(@skPages));
-        @btnSkPRX = @spX + 120;
-        @btnSkPRY = @rowY - 2;
-        @btnSkPRW = 20;
-        @btnSkPRH = 18;
-        draw_set_color(c_gray);
-        draw_rectangle(@btnSkPRX, @btnSkPRY, @btnSkPRX + @btnSkPRW, @btnSkPRY + @btnSkPRH, false);
-        draw_set_color(c_white);
-        draw_text(@btnSkPRX + @btnSkPRW/2, @rowY, ">");
-        @btnSkPEX = @spX + 144;
-        @btnSkPEY = @rowY - 2;
-        @btnSkPEW = 20;
-        @btnSkPEH = 18;
-        draw_set_color(c_gray);
-        draw_rectangle(@btnSkPEX, @btnSkPEY, @btnSkPEX + @btnSkPEW, @btnSkPEY + @btnSkPEH, false);
-        draw_set_color(c_white);
-        draw_text(@btnSkPEX + @btnSkPEW/2, @rowY, ">>");
-        draw_set_halign(fa_left);
-        draw_set_color(c_gray);
-        draw_text(@spX + 180, @rowY, string(@skinVisCount) + " skin(s)");
-        for(@skVI = @skStart; @skVI < @skEnd; @skVI += 1){
-            @entIdx = @skVI - @skStart;
-            @entY = @contentY + 28 + @entIdx * 22;
-            if(!@skinParsed[@skVI]) @skin_parse(@skVI);
-            if(@skVI == @skinSel){
-                draw_set_color(make_color_rgb(30, 60, 30));
-            }else{
-                draw_set_color(make_color_rgb(30, 30, 30));
-            }
-            draw_rectangle(@spX + 8, @entY - 3, @spX + 268, @entY + 17, false);
-            if(@kbFocus == 1 && @kbRow[5] == @skVI){
-                draw_set_color(make_color_rgb(220, 200, 60));
-                draw_rectangle(@spX + 4, @entY - 4, @spX + 272, @entY + 18, true);
-            }
-            draw_set_halign(fa_left);
-            if(@skVI == @skinSel){
-                draw_set_color(c_lime);
-            }else{
-                draw_set_color(c_white);
-            }
-            @skLabel = @skinName[@skVI];
-            // A skin without idle.png breaks the whole fallback chain; flag it
-            // in the list (still selectable, the draw falls back per-state).
-            if(!@skinHas[@skVI, 0]) @skLabel = "[!] " + @skLabel;
-            if(@skinMaker[@skVI] != "") @skLabel += " (" + @skinMaker[@skVI] + ")";
-            if(string_length(@skLabel) > 30) @skLabel = string_copy(@skLabel, 1, 30) + "..";
-            draw_text(@spX + 14, @entY, @skLabel);
-            if(@skVI == @skinLoaded){
-                draw_set_color(c_gray);
-                draw_text(@spX + 246, @entY, "*");
-            }
-        }
-        if(@skinVisCount == 0){
-            draw_set_color(c_gray);
-            draw_set_halign(fa_center);
-            draw_text(@spX + @colW/2, @contentY + 120, "No skins found in iwposkins" + chr(92));
-            draw_set_halign(fa_left);
-        }
-        // Row after the list: Auto-download toggle (keyboard row @skinVisCount).
-        @rowY = @contentY + 28 + 12 * 22 + 4;
-        if(@kbFocus == 1 && @kbRow[5] == @skinVisCount){
-            draw_set_color(make_color_rgb(220, 200, 60));
-            draw_rectangle(@spX + 4, @rowY - 3, @spX + 272, @rowY + 21, true);
-        }
-        draw_set_color(c_white);
-        draw_set_halign(fa_left);
-        draw_text(@spX + 16, @rowY, "Auto-download:");
-        @btnSkAdLX = @spX + 150;
-        @btnSkAdLY = @rowY;
-        @btnSkAdLW = 20;
-        @btnSkAdLH = 18;
-        draw_set_color(c_gray);
-        draw_rectangle(@btnSkAdLX, @btnSkAdLY, @btnSkAdLX + @btnSkAdLW, @btnSkAdLY + @btnSkAdLH, false);
-        draw_set_color(c_white);
-        draw_set_halign(fa_center);
-        draw_text(@btnSkAdLX + @btnSkAdLW/2, @rowY, "<");
-        if(@skinAutoDL){
-            draw_set_color(make_color_rgb(40, 160, 40));
-            draw_text(@spX + 205, @rowY, "On");
-        }else{
-            draw_set_color(c_gray);
-            draw_text(@spX + 205, @rowY, "Off");
-        }
-        @btnSkAdRX = @spX + 240;
-        @btnSkAdRY = @rowY;
-        @btnSkAdRW = 20;
-        @btnSkAdRH = 18;
-        draw_set_color(c_gray);
-        draw_rectangle(@btnSkAdRX, @btnSkAdRY, @btnSkAdRX + @btnSkAdRW, @btnSkAdRY + @btnSkAdRH, false);
-        draw_set_color(c_white);
-        draw_text(@btnSkAdRX + @btnSkAdRW/2, @rowY, ">");
-        draw_set_halign(fa_left);
-        // Last row: clear the current skin (keyboard row @skinVisCount + 1).
-        @rowY += 26;
-        if(@kbFocus == 1 && @kbRow[5] == @skinVisCount + 1){
-            draw_set_color(make_color_rgb(220, 200, 60));
-            draw_rectangle(@spX + 4, @rowY - 3, @spX + 272, @rowY + 21, true);
-        }
-        draw_set_color(c_white);
-        draw_set_halign(fa_left);
-        draw_text(@spX + 16, @rowY, "Skin:");
-        @btnSkClrX = @spX + 150;
-        @btnSkClrY = @rowY;
-        @btnSkClrW = 56;
-        @btnSkClrH = 18;
-        draw_set_color(make_color_rgb(140, 50, 50));
-        draw_rectangle(@btnSkClrX, @btnSkClrY, @btnSkClrX + @btnSkClrW, @btnSkClrY + @btnSkClrH, false);
-        draw_set_color(c_white);
-        draw_set_halign(fa_center);
-        draw_text(@btnSkClrX + @btnSkClrW/2, @rowY, "Clear");
-        draw_set_halign(fa_left);
-        // PREVIEW: dwell 15 frames on a skin row before loading it into the
-        // preview slot (row changes reset the dwell and unload the slot), so
-        // fast scrolling never thrashes sprite_add.
-        @skPvRow = -1;
-        if(@kbRow[5] >= 0 && @kbRow[5] < @skinVisCount) @skPvRow = @kbRow[5];
-        if(@skPvRow != @skinPrevRow){
-            @skinPrevRow = @skPvRow;
-            @skinPrevTimer = 0;
-            if(@skinPrevLoaded >= 0) @skin_prev_unload();
-        }
-        if(@skPvRow >= 0 && @skinPrevLoaded != @skPvRow){
-            @skinPrevTimer += 1;
-            if(@skinPrevTimer >= 15) @skin_prev_load(@skPvRow);
-        }
-        @pvBX = @spX + 288;
-        @pvBY = @contentY + 28;
-        @pvBW = 116;
-        @pvBH = 150;
-        draw_set_color(make_color_rgb(20, 20, 20));
-        draw_rectangle(@pvBX, @pvBY, @pvBX + @pvBW, @pvBY + @pvBH, false);
-        draw_set_color(make_color_rgb(60, 60, 60));
-        draw_rectangle(@pvBX, @pvBY, @pvBX + @pvBW, @pvBY + @pvBH, true);
-        if(@skinPrevLoaded >= 0 && @skinPrevSpr[0] >= 0){
-            // Absolute per-frame pacing (same semantics as @skin_draw): one
-            // strip frame per 100ms tick, no fast-forward on many-frame skins.
-            @pvFrames = @skinFrames[@skinPrevLoaded, 0];
-            if(@pvFrames < 1) @pvFrames = 1;
-            @pvFrame = floor(current_time / 100) mod @pvFrames;
-            draw_sprite_ext(@skinPrevSpr[0], @pvFrame, @pvBX + @pvBW/2, @pvBY + 90, 2, 2, 0, c_white, 1);
-        }else{
-            draw_set_color(make_color_rgb(50, 50, 50));
-            draw_set_halign(fa_center);
-            draw_text(@pvBX + @pvBW/2, @pvBY + 70, "preview");
-            draw_set_halign(fa_left);
-        }
-        if(@skinPrevLoaded >= 0){
-            draw_set_halign(fa_center);
-            draw_set_color(c_white);
-            @pvName = @skinName[@skinPrevLoaded];
-            if(string_length(@pvName) > 14) @pvName = string_copy(@pvName, 1, 14) + "..";
-            draw_text(@pvBX + @pvBW/2, @pvBY + @pvBH + 4, @pvName);
-            if(@skinMaker[@skinPrevLoaded] != ""){
-                draw_set_color(c_gray);
-                @pvMaker = @skinMaker[@skinPrevLoaded];
-                if(string_length(@pvMaker) > 14) @pvMaker = string_copy(@pvMaker, 1, 14) + "..";
-                draw_text(@pvBX + @pvBW/2, @pvBY + @pvBH + 20, @pvMaker);
-            }
-            if(!@skinHas[@skinPrevLoaded, 0]){
-                draw_set_color(make_color_rgb(255, 120, 120));
-                @pvWarnY = @pvBY + @pvBH + 20;
-                if(@skinMaker[@skinPrevLoaded] != "") @pvWarnY += 16;
-                draw_text(@pvBX + @pvBW/2, @pvWarnY, "[!] no idle.png");
-            }
-            draw_set_halign(fa_left);
-        }
-    }
 	// Close lives in the footer band, right-aligned (matches the tab-0 footer;
 	// other tabs keep their content above @footerY)
 	@btnCW = 70;
@@ -761,7 +561,7 @@ if(@settingsOpen){
 		}
 		// scrollbar: grab the thumb to drag (stg_draw_table tracks it while the
 		// button is held), click the track to page up/down
-		if(!@tabClicked && @settingsTab <= 4 && @sbShow){
+		if(!@tabClicked && @sbShow){
 			if(@mx >= @sbX - 3 && @mx <= @sbX + 8 && @my >= @stgTop + 2 && @my <= @stgBottom){
 				@tabClicked = true;
 				if(@my >= @sbY && @my <= @sbY + @sbH){
@@ -786,7 +586,7 @@ if(@settingsOpen){
 				}
 			}
 		}
-		if(!@tabClicked && @settingsTab <= 4){
+		if(!@tabClicked){
 			@stg_build_tab(@settingsTab);
 			// (the wheel is handled in worldEndStep, once per frame - inside this
 			// click branch it only worked while the button was held)
@@ -796,42 +596,6 @@ if(@settingsOpen){
 			if(@rowHit >= 0) @stg_click_row(@rowHit);
 		}
 
-        if(!@tabClicked && @settingsTab == 5){
-            @kbFocus = 1;
-            if(@mx >= @btnSkPFX && @mx <= @btnSkPFX + @btnSkPFW && @my >= @btnSkPFY && @my <= @btnSkPFY + @btnSkPFH){
-                @skinPage = 0;
-            }
-            if(@mx >= @btnSkPLX && @mx <= @btnSkPLX + @btnSkPLW && @my >= @btnSkPLY && @my <= @btnSkPLY + @btnSkPLH){
-                if(@skinPage > 0) @skinPage -= 1;
-            }
-            if(@mx >= @btnSkPRX && @mx <= @btnSkPRX + @btnSkPRW && @my >= @btnSkPRY && @my <= @btnSkPRY + @btnSkPRH){
-                if(@skinPage < @skPages - 1) @skinPage += 1;
-            }
-            if(@mx >= @btnSkPEX && @mx <= @btnSkPEX + @btnSkPEW && @my >= @btnSkPEY && @my <= @btnSkPEY + @btnSkPEH){
-                @skinPage = @skPages - 1;
-            }
-            for(@skVI = @skStart; @skVI < @skEnd; @skVI += 1){
-                @entY = @contentY + 28 + (@skVI - @skStart) * 22;
-                if(@mx >= @spX + 8 && @mx <= @spX + 268 && @my >= @entY - 3 && @my <= @entY + 17){
-                    @kbRow[5] = @skVI;
-                    @skin_select(@skVI);
-                }
-            }
-            if(@mx >= @btnSkAdLX && @mx <= @btnSkAdLX + @btnSkAdLW && @my >= @btnSkAdLY && @my <= @btnSkAdLY + @btnSkAdLH){
-                @skinAutoDL = 1 - @skinAutoDL;
-                @skinAutoDLChanged = true;
-                @kbRow[5] = @skinVisCount;
-            }
-            if(@mx >= @btnSkAdRX && @mx <= @btnSkAdRX + @btnSkAdRW && @my >= @btnSkAdRY && @my <= @btnSkAdRY + @btnSkAdRH){
-                @skinAutoDL = 1 - @skinAutoDL;
-                @skinAutoDLChanged = true;
-                @kbRow[5] = @skinVisCount;
-            }
-            if(@mx >= @btnSkClrX && @mx <= @btnSkClrX + @btnSkClrW && @my >= @btnSkClrY && @my <= @btnSkClrY + @btnSkClrH){
-                @skin_clear();
-                @kbRow[5] = @skinVisCount + 1;
-            }
-        }
 		if(@mx >= @btnCX && @mx <= @btnCX + @btnCW && @my >= @btnCY && @my <= @btnCY + @btnCH){
 			@settingsOpen = false;
 		}

@@ -2954,7 +2954,7 @@ if(@settingsOpen && @keybindEditing < 0){
 	// QoL: wheel scrolling for the settings list. This lives here (not in the draw
 	// click branch) so it works without holding a mouse button. Covers every
 	// table-driven tab (Settings + Saves), not just tab 0.
-	if(@settingsOpen && @settingsTab <= 4){
+	if(@settingsOpen){
 		if(mouse_wheel_up()) @stgFirst -= 1;
 		if(mouse_wheel_down()) @stgFirst += 1;
 		// hold-to-accelerate counters for the nav blocks below (reset on release)
@@ -2965,66 +2965,9 @@ if(@settingsOpen && @keybindEditing < 0){
 		// (@stg_click_row). A parked mouse used to re-pin @kbRow every frame
 		// and fight the arrow keys.
 	}
-	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 0){
-		// QoL: the same row table the panel draws from.
-		@stg_build_rows(@contentY);
-		if(@kbRow[0] < 0 || @kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
-		// Navigation uses @kb_repeat: one step per press, then auto-repeat while held.
-		// The follow flag is raised here - that is, only when a move really happens -
-		// so the wheel is never pinned by a stale focus.
-		if(@kb_repeat(vk_up, 6, 2)){
-			@stgNavKey = 1;
-			@kbNavTick = 1;
-			// the longer the key is held, the bigger the step (500-entry saves list);
-			// 1/3/10 rows at 30 steps/s beats manual mashing (~16/s) immediately
-			@kbStep = 1;
-			if(@kbHoldUp > 45) @kbStep = 3;
-			if(@kbHoldUp > 120) @kbStep = 10;
-			@rowPrev = @stg_next_row(@kbRow[0], -@kbStep);
-			if(@rowPrev == @kbRow[0]){
-				// already on the first selectable row: if the view is still scrolled
-				// down, scroll it up instead of handing focus back to the tab bar
-				if(@stgFirst > 0){
-					@stgFirst -= @kbStep;
-				}else{
-					@kbFocus = 0;
-					@kbRow[0] = @stg_first_row();
-				}
-			}else{
-				@kbRow[0] = @rowPrev;
-			}
-			@kbAct = 1;
-		}
-		if(@kb_repeat(vk_down, 6, 2)){
-			@stgNavKey = 1;
-			@kbNavTick = 1;
-			@kbStep = 1;
-			if(@kbHoldDn > 45) @kbStep = 3;
-			if(@kbHoldDn > 120) @kbStep = 10;
-			@kbRow[0] = @stg_next_row(@kbRow[0], @kbStep);
-			@kbAct = 1;
-		}
-		if(keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
-			if(keyboard_check_pressed(vk_right)) @kbDir = 1; else @kbDir = -1;
-			@stg_act_dir(@kbRow[0], @kbDir);
-			@kbAct = 1;
-		}
-		if(keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)){
-			if(global.__ONLINE_stgClearRow >= 0){
-				@acc_clear_commit();
-			}else{
-				@stg_act(@kbRow[0]);
-			}
-			@kbAct = 1;
-		}
-		if(global.__ONLINE_stgClearRow >= 0 && (keyboard_check_pressed(vk_escape) || keyboard_check_pressed(vk_backspace))){
-			@acc_clear_cancel();
-			@kbAct = 1;
-		}
-	}
-	// TAB 1 uses the SAME navigation as tab 0 (one row per press, auto-repeat,
-	// wheel, scrolling viewport); the save-specific keys stay below.
-	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab <= 4){
+	// One nav block for every tab (they are all table-driven now): the shared
+	// row table, auto-repeat with acceleration, and the per-tab extra keys below.
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1){
 		@stg_build_tab(@settingsTab);
 		if(@kbRow[0] < 0 || @kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
 		if(@kb_repeat(vk_up, 6, 2)){
@@ -3110,60 +3053,6 @@ if(@settingsOpen && @keybindEditing < 0){
 		}
 	}
 
-    if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 5){
-        // Rows 0..skinCount-1 are skins, row skinCount is Auto-download,
-        // row skinCount+1 is Clear.
-        @skRows = @skinVisCount + 2;
-        if(@kbRow[5] > @skRows - 1) @kbRow[5] = @skRows - 1;
-        if(keyboard_check_pressed(vk_up)){
-            if(@kbRow[5] <= 0){
-                @kbRow[5] = 0;
-                @kbFocus = 0;
-            }else{
-                @kbRow[5] -= 1;
-            }
-            if(@kbRow[5] < @skinVisCount) @skinPage = @kbRow[5] div 12;
-            @kbAct = 1;
-        }
-        if(keyboard_check_pressed(vk_down)){
-            @kbRow[5] += 1;
-            if(@kbRow[5] > @skRows - 1) @kbRow[5] = @skRows - 1;
-            if(@kbRow[5] < @skinVisCount) @skinPage = @kbRow[5] div 12;
-            @kbAct = 1;
-        }
-        if(keyboard_check_pressed(vk_pageup)){
-            @kbRow[5] -= 12;
-            if(@kbRow[5] < 0) @kbRow[5] = 0;
-            if(@kbRow[5] < @skinVisCount) @skinPage = @kbRow[5] div 12;
-            @kbAct = 1;
-        }
-        if(keyboard_check_pressed(vk_pagedown)){
-            @kbRow[5] += 12;
-            if(@kbRow[5] > @skRows - 1) @kbRow[5] = @skRows - 1;
-            if(@kbRow[5] < @skinVisCount) @skinPage = @kbRow[5] div 12;
-            @kbAct = 1;
-        }
-        if(@kbRow[5] == @skinVisCount && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_enter))){
-            @skinAutoDL = 1 - @skinAutoDL;
-            @skinAutoDLChanged = true;
-            if(@skinAutoDL == 1){
-                // Re-enabled: forget the one-per-hash notice/download marks so
-                // the next roster replay re-triggers unknown skins as downloads.
-                for(@skH = 0; @skH < 8; @skH += 1){
-                    @skinHint[@skH] = "";
-                }
-            }
-            @kbAct = 1;
-        }
-        if(@kbRow[5] < @skinVisCount && keyboard_check_pressed(vk_enter)){
-            @skin_select(@kbRow[5]);
-            @kbAct = 1;
-        }
-        if(@kbRow[5] == @skinVisCount + 1 && keyboard_check_pressed(vk_enter)){
-            @skin_clear();
-            @kbAct = 1;
-        }
-    }
 	// The 6-frame lockout debounces one-shot actions. Nav repeat ticks are
 	// exempt: their cadence is kb_repeat's own (that lockout is what made
 	// long lists crawl at ~7 rows/s).

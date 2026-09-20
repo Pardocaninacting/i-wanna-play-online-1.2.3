@@ -337,6 +337,9 @@ if(_a == 10) return "Choose which player object drives your character.";
 if(_a >= 40 && _a <= 50) return "Rebind this action. Enter starts the capture, then press the key you want; Esc cancels.";
 if(_a == 52) return "Restore every binding above to its default.";
 if(_a == 53) return "Sends the listed global variables to everyone in the room, on save and whenever their bits change.";
+if(_a == 55) return "A player skin from iwposkins. Enter applies it; the preview above shows its idle animation.";
+if(_a == 56) return "When another player uses a skin you do not have, fetch it automatically.";
+if(_a == 57) return "Unload the current skin and return to the game's default player sprite.";
 if(_a == 54) return "Sent on save and whenever its bits change. Entries whose global is missing in this game are skipped (see Present).";
 if(_a == 30) return "Ratings are stored per game on the server; everyone on this server shares the same listing.";
 if(_a == 31) return "Your rating for this game. Left/Right steps through, digits 1-5 set directly, 0 means no rating.";
@@ -382,6 +385,10 @@ if(_a >= 40 && _a <= 50){
   draw_set_color(c_white);
   draw_text(_x + 12, _y + 6 + @stgTextDY, _val);
   _y += 36;
+}
+if(_a == 55){
+  @stg_skin_preview(argument0, _x, _y);
+  _y += 124;
 }
 if(_k == 3 && _a == 31){
   _sy = @stgTop + 24;
@@ -498,6 +505,24 @@ if(_k == 1){
   global.__ONLINE_detFV[0] = @stg_server_text();
   _fn = 1;
 }
+if(_a == 55){
+  @stgI = global.__ONLINE_stgArg[argument0];
+  @skin_parse(@stgI);   // the facts read parsed fields; cheap once parsed
+  global.__ONLINE_detFK[0] = "Maker";  global.__ONLINE_detFV[0] = @skinMaker[@stgI];
+  global.__ONLINE_detFK[1] = "Source"; global.__ONLINE_detFV[1] = @skinSource[@stgI];
+  @skFTotal = 0;
+  for(@skFJ = 0; @skFJ < 7; @skFJ += 1) @skFTotal += @skinFrames[@stgI, @skFJ];
+  global.__ONLINE_detFK[2] = "Frames"; global.__ONLINE_detFV[2] = string(@skFTotal);
+  global.__ONLINE_detFK[3] = "Status";
+  if(!@skinHas[@stgI, 0]){
+    global.__ONLINE_detFV[3] = "[!] no idle.png";
+  }else if(@stgI == @skinLoaded){
+    global.__ONLINE_detFV[3] = "loaded";
+  }else{
+    global.__ONLINE_detFV[3] = "not loaded";
+  }
+  _fn = 4;
+}
 if(_a == 54){
   @stgI = global.__ONLINE_stgArg[argument0];
   global.__ONLINE_detFK[0] = "Global";  global.__ONLINE_detFV[0] = "global." + @syncName[@stgI];
@@ -563,6 +588,8 @@ if(_a == 20) _acts = "Enter = apply   F = favourite   1-8 = hotkey";
 if(_a == 21) _acts = "Left/Right = toggle";
 if(_a >= 40 && _a <= 50) _acts = "Enter = rebind";
 if(_a == 52) _acts = "Enter = reset";
+if(_a == 55) _acts = "Enter = apply";
+if(_a == 57) _acts = "Enter = clear";
 if(_a == 31) _acts = "Left/Right = change   1-5 = set";
 if(_a == 34) _acts = "Enter = submit";
 if(_a == 22){
@@ -1153,11 +1180,82 @@ for(_i = 0; _i < @syncEntryCount; _i += 1){
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
+///// script @stg_skin_preview
+// Dwell-loads and draws the idle-frame preview for a skins entry row. Lives in
+// the detail pane (full layout); the narrow layout has no preview (by design,
+// narrow is list-only). The dwell means fast scrolling never thrashes
+// sprite_add; the leak guard in worldDrawGui unloads when the menu closes.
+// args: row, x, y -> 0
+var _i;
+_i = global.__ONLINE_stgAct[argument0];
+if(_i != 55) return 0;   // only skin entries preview
+_i = global.__ONLINE_stgArg[argument0];
+if(_i < 0 || _i >= @skinVisCount) return 0;
+if(@skinPrevRow != _i){
+  @skinPrevRow = _i;
+  @skinPrevTimer = 0;
+  if(@skinPrevLoaded >= 0) @skin_prev_unload();
+}
+if(@skinPrevLoaded != _i){
+  @skinPrevTimer += 1;
+  if(@skinPrevTimer >= 15) @skin_prev_load(_i);
+}
+draw_set_color(make_color_rgb(8, 8, 10));
+draw_rectangle(argument1, argument2, argument1 + 116, argument2 + 116, false);
+draw_set_color(make_color_rgb(70, 80, 95));
+draw_rectangle(argument1, argument2, argument1 + 116, argument2 + 116, true);
+if(@skinPrevLoaded == _i && @skinPrevSpr[0] >= 0){
+  // absolute per-frame pacing (same semantics as @skin_draw): one strip frame
+  // per 100ms tick, no fast-forward on many-frame skins
+  @pvFrames = @skinFrames[@skinPrevLoaded, 0];
+  if(@pvFrames < 1) @pvFrames = 1;
+  @pvFrame = floor(current_time / 100) mod @pvFrames;
+  draw_sprite_ext(@skinPrevSpr[0], @pvFrame, argument1 + 58, argument2 + 86, 2, 2, 0, c_white, 1);
+}else{
+  draw_set_color(make_color_rgb(95, 101, 107));
+  draw_set_halign(fa_center);
+  draw_text(argument1 + 58, argument2 + 50 + @stgTextDY, "preview");
+  draw_set_halign(fa_left);
+}
+return 0;
+
 ///// script @stg_build_skins
-// STUB - converted in a later stage; keeps the dispatcher total.
+// Row table for the Skins tab: one entry per installed skin (the list scrolls,
+// so the old 12-per-page pager is gone), then the manage rows. Fields come from
+// skinLib's scan (skinName/skinMaker/skinSource/skinHas/skinFrames; see DESIGN
+// 9.4). The preview lives in the detail pane.
 // args: contentY -> 0
+var _y, _i, _lbl;
 global.__ONLINE_stgN = 0;
-@stg_row_add(0, 0, "SKINS", @spX + 16, argument0 + 2, 0, 0, 0);
+_y = argument0 + 2;
+@stg_row_add(0, 0, "INSTALLED (" + string(@skinVisCount) + ")", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+if(@skinVisCount == 0){
+  @stg_row_add(2, 0, "(no skins found in iwposkins)", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+}
+// parse only what the viewport can show (plus a small margin): parsing every
+// entry on the first visit was a visible ~1s hitch on big packs - the old
+// pager parsed just its page per frame, this is the same amortisation
+@skParseTo = @stgFirst + @stgFit + 2;
+if(@skParseTo > @skinVisCount) @skParseTo = @skinVisCount;
+for(@skPI = max(0, @stgFirst - 2); @skPI < @skParseTo; @skPI += 1) @skin_parse(@skPI);
+for(_i = 0; _i < @skinVisCount; _i += 1){
+  if(@skinParsed[_i]){
+    _lbl = @skinName[_i] + " (" + @skinMaker[_i] + ")";
+    if(!@skinHas[_i, 0]) _lbl = "[!] " + _lbl;
+  }else{
+    // unparsed (off-screen): the folder name; it upgrades on scroll-into-view
+    _lbl = @skinDir[_i];
+  }
+  _lbl = @stg_fit_text(_lbl, @colW - 32 - 56);
+  @stg_row_add(6, 55, _lbl, @spX + 16, _y, @colW - 32, 0, @spX + 16);
+  global.__ONLINE_stgArg[global.__ONLINE_stgN - 1] = _i;
+  _y += global.__ONLINE_stgRowH;
+}
+_y += 6;
+@stg_row_add(0, 0, "MANAGE", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(4, 56, "Auto-download", @spX + 16, _y, 130, 0, @spX + @colW - 146); _y += global.__ONLINE_stgRowH;
+@stg_row_add(5, 57, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
 ///// script @stg_row_add
@@ -1346,6 +1444,13 @@ if(_a >= 40 && _a <= 50){
   return @stg_key_cap(@kbKeys[@stgI]);
 }
 if(_a == 53) return @stg_onoff(@syncEnabled);
+if(_a == 55){
+  @stgI = global.__ONLINE_stgArg[argument0];
+  if(@stgI == @skinLoaded) return "loaded";
+  return "";
+}
+if(_a == 56) return @stg_onoff(@skinAutoDL);
+if(_a == 57) return "Clear skin";
 if(_a == 54){
   @stgI = global.__ONLINE_stgArg[argument0];
   return string(@syncCount[@stgI]) + " bits";
@@ -1402,6 +1507,9 @@ if(_a >= 40 && _a <= 50) return "Enter or click starts capture, then press the k
 if(_a == 52) return "Restore every binding above to its default.";
 if(_a == 53) return "Share the configured globals with the room.";
 if(_a == 54) return "A synced global variable.";
+if(_a == 55) return "Enter applies this skin. The detail pane previews its idle animation.";
+if(_a == 56) return "Fetch unknown skins seen in the roster automatically.";
+if(_a == 57) return "Back to the game's default player sprite.";
 if(_a == 30) return "This game, as the server identifies it.";
 if(_a == 31) return "Your rating: Left/Right steps, digits 1-5 set directly, 0 clears.";
 if(_a == 32) return "Mark the game as cleared. Sent together with the stars.";
@@ -1538,6 +1646,25 @@ if(_a >= 40 && _a <= 50){
 if(_a == 53){
   @syncEnabled = 1 - @syncEnabled;
   @syncEnabledChanged = true;
+  return 0;
+}
+if(_a == 55){
+  @skin_select(global.__ONLINE_stgArg[argument0]);
+  return 0;
+}
+if(_a == 56){
+  @skinAutoDL = 1 - @skinAutoDL;
+  @skinAutoDLChanged = true;
+  if(@skinAutoDL){
+    // re-enabled: forget the one-per-hash notice/download marks so the next
+    // roster replay re-triggers unknown skins as downloads
+    for(@skH = 0; @skH < 8; @skH += 1) @skinHint[@skH] = "";
+  }
+  return 0;
+}
+if(_a == 57){
+  @skin_clear();
+  @stg_toast("Skin cleared", 1);
   return 0;
 }
 if(_a == 54) return 0;   // view-only entry
