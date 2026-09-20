@@ -524,135 +524,14 @@ if(@settingsOpen){
 	}
 	#endif
 
-	// TAB 0: SETTINGS
-if(@settingsTab == 0){
-		@stg_build_rows(@contentY);
-		@stg_draw_table();
-	}
-	// TAB 1: SAVES - same table renderer as Settings (hover, arrows, wheel, detail)
-	if(@settingsTab == 1){
-		@stg_build_saves(@contentY);
+	// Tabled tabs (0-2 so far) share the one renderer: the builder fills the
+	// row table for the active tab, the renderer draws list + scrollbar +
+	// detail column + footer. Tabs 3-5 keep their hand layout for now.
+	if(@settingsTab <= 2){
+		@stg_build_tab(@settingsTab);
 		@stg_draw_table();
 	}
 
-	// TAB 2: RATING
-	if(@settingsTab == 2){
-		@rowY = @contentY + 4;
-		if(@kbFocus == 1){
-			if(@kbRow[2] == 0) @kbHi = @contentY + 24;
-			if(@kbRow[2] == 1) @kbHi = @contentY + 54;
-			if(@kbRow[2] == 2) @kbHi = @contentY + 101;
-			draw_set_color(make_color_rgb(220, 200, 60));
-			draw_rectangle(@spX + 4, @kbHi, @spX + @colW - 4, @kbHi + 28, true);
-		}
-		draw_set_halign(fa_left);
-		draw_set_color(c_white);
-		@gameLabel = "Game: " + @gameName;
-		#if GM80
-		__ONLINE_fw_use_font(@gameLabel);
-		fw_draw_set_halign(fa_left);
-		fw_draw_set_valign(fa_top);
-		fw_draw_text_ext(@spX + 16, @rowY, @gameLabel, 9999);
-		#endif
-		#if CJKTEXT
-		global.__ONLINE_cjkHalign = 0;
-		global.__ONLINE_cjkValign = 0;
-		__ONLINE_cjk_draw_text(@spX + 16, @rowY, @gameLabel, 9999);
-		#endif
-		#if not GM80
-		#if not CJKTEXT
-		draw_text(@spX + 16, @rowY, @gameLabel);
-		#endif
-		#endif
-		@rowY += 26;
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Rating:");
-		@starX = @spX + 100;
-		@starY = @rowY - 2;
-		@starW = 28;
-		@starH = 22;
-		for(@sI = 1; @sI <= 5; @sI += 1){
-			@sX = @starX + (@sI - 1) * @starW;
-			if(@sI <= @rStars){
-				draw_set_color(make_color_rgb(255, 200, 40));
-			}else{
-				draw_set_color(make_color_rgb(60, 60, 60));
-			}
-			draw_rectangle(@sX, @starY, @sX + @starW - 2, @starY + @starH, false);
-			draw_set_color(c_white);
-			draw_set_halign(fa_center);
-			draw_text(@sX + @starW/2 - 1, @rowY, string(@sI));
-		}
-		draw_set_halign(fa_left);
-		@rowY += 30;
-		draw_set_color(c_white);
-		draw_text(@spX + 16, @rowY, "Cleared:");
-		@btnClrRX = @spX + 100;
-		@btnClrRY = @rowY - 2;
-		@btnClrRW = 50;
-		@btnClrRH = 20;
-		if(@rCleared){
-			draw_set_color(make_color_rgb(40, 160, 40));
-		}else{
-			draw_set_color(make_color_rgb(50, 50, 50));
-		}
-		draw_rectangle(@btnClrRX, @btnClrRY, @btnClrRX + @btnClrRW, @btnClrRY + @btnClrRH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		if(@rCleared){
-			draw_text(@btnClrRX + @btnClrRW/2, @rowY, "Yes");
-		}else{
-			draw_text(@btnClrRX + @btnClrRW/2, @rowY, "No");
-		}
-		draw_set_halign(fa_left);
-		draw_set_color(c_gray);
-		draw_text(@spX + 160, @rowY, "(optional)");
-		if(@rClearWarn > 0){
-			@rowY += 24;
-			draw_set_color(c_yellow);
-			draw_text(@spX + 16, @rowY, "Game not cleared. Are you sure?");
-			@rowY += 22;
-		}else{
-			@rowY += 46;
-		}
-		@btnSubX = @spX + @colW/2 - 55;
-		@btnSubY = @rowY - 2;
-		@btnSubW = 110;
-		@btnSubH = 22;
-		if(@ratingSubmitting){
-			draw_set_color(make_color_rgb(60, 60, 60));
-		}else if(@ratingCooldown > current_time){
-			draw_set_color(make_color_rgb(80, 80, 40));
-		}else if(@rStars == 0){
-			draw_set_color(make_color_rgb(60, 60, 60));
-		}else{
-			draw_set_color(make_color_rgb(40, 100, 160));
-		}
-		draw_rectangle(@btnSubX, @btnSubY, @btnSubX + @btnSubW, @btnSubY + @btnSubH, false);
-		draw_set_color(c_white);
-		draw_set_halign(fa_center);
-		if(@ratingSubmitting){
-			draw_text(@btnSubX + @btnSubW/2, @rowY, "Sending...");
-		}else if(@ratingCooldown > current_time){
-			// QoL fix: the cooldown is stored in FRAMES (worldEndStep sets
-			// room_speed * 10) but this used to divide by a hardcoded 30, so a
-			// 60 fps game displayed 20 s and counted down at double speed.
-			draw_text(@btnSubX + @btnSubW/2, @rowY, "Wait " + string(max(1, ceil((@ratingCooldown - current_time) / 1000))) + "s");
-		}else{
-			draw_text(@btnSubX + @btnSubW/2, @rowY, "Submit Rating");
-		}
-		if(@ratingResultTimer > current_time){
-			@rowY += 30;
-			if(@ratingResult == 1){
-				draw_set_color(c_lime);
-				draw_text(@spX + @colW/2, @rowY, "Rating submitted!");
-			}else if(@ratingResult == 2){
-				draw_set_color(c_yellow);
-				draw_text(@spX + @colW/2, @rowY, "Submit failed (cooldown)");
-			}
-		}
-		draw_set_halign(fa_left);
-	}
 	// TAB 3: KEYS
 	if(@settingsTab == 3){
 		@rowY = @contentY + 4;
@@ -1009,7 +888,7 @@ if(@settingsTab == 0){
 		}
 		// scrollbar: grab the thumb to drag (stg_draw_table tracks it while the
 		// button is held), click the track to page up/down
-		if(!@tabClicked && (@settingsTab == 0 || @settingsTab == 1) && @sbShow){
+		if(!@tabClicked && @settingsTab <= 2 && @sbShow){
 			if(@mx >= @sbX - 3 && @mx <= @sbX + 8 && @my >= @stgTop + 2 && @my <= @stgBottom){
 				@tabClicked = true;
 				if(@my >= @sbY && @my <= @sbY + @sbH){
@@ -1022,8 +901,20 @@ if(@settingsTab == 0){
 				}
 			}
 		}
-		if(!@tabClicked && @settingsTab == 0){
-			@stg_build_rows(@contentY);
+		// rating stars: the detail pane's star boxes are directly clickable
+		// (fixed slot @stgTop + 24, see @stg_draw_detail); same toggle-off as the
+		// old per-star click
+		if(!@tabClicked && @settingsTab == 2 && @detW > 0 && global.__ONLINE_stgAct[@stgPrevRow] == 31){
+			for(@rI = 1; @rI <= 5; @rI += 1){
+				@rSX = @spX + @colW + 12 + (@rI - 1) * 30;
+				if(@mx >= @rSX && @mx <= @rSX + 26 && @my >= @stgTop + 24 && @my <= @stgTop + 46){
+					if(@rStars == @rI) @rStars = 0; else @rStars = @rI;
+					@tabClicked = true;
+				}
+			}
+		}
+		if(!@tabClicked && @settingsTab <= 2){
+			@stg_build_tab(@settingsTab);
 			// (the wheel is handled in worldEndStep, once per frame - inside this
 			// click branch it only worked while the button was held)
 			// same coordinate space as the draw (@stgYOff) - using the table-space
@@ -1031,40 +922,7 @@ if(@settingsTab == 0){
 			@rowHit = @stg_hit_row_view(@mx, @my, @stgYOff);
 			if(@rowHit >= 0) @stg_click_row(@rowHit);
 		}
-		if(!@tabClicked && @settingsTab == 1){
-			@stg_build_saves(@contentY);
-			// (the wheel is handled once per frame in worldEndStep)
-			@rowHit = @stg_hit_row_view(@mx, @my, @stgYOff);
-			if(@rowHit >= 0) @stg_click_row(@rowHit);
-		}
 
-		if(!@tabClicked && @settingsTab == 2){
-			@kbFocus = 1;
-			for(@sI = 1; @sI <= 5; @sI += 1){
-				@sX = @starX + (@sI - 1) * @starW;
-				if(@mx >= @sX && @mx <= @sX + @starW - 2 && @my >= @starY && @my <= @starY + @starH){
-					if(@rStars == @sI){
-						@rStars = 0;
-					}else{
-						@rStars = @sI;
-					}
-				}
-			}
-			if(@mx >= @btnClrRX && @mx <= @btnClrRX + @btnClrRW && @my >= @btnClrRY && @my <= @btnClrRY + @btnClrRH){
-				if(@rCleared){
-					@rCleared = 0;
-					@rClearWarn = 0;
-				}else{
-					@rCleared = 1;
-					@rClearWarn = 0;
-				}
-			}
-			if(!@ratingSubmitting && @ratingCooldown <= current_time && @rStars >= 1){
-				if(@mx >= @btnSubX && @mx <= @btnSubX + @btnSubW && @my >= @btnSubY && @my <= @btnSubY + @btnSubH){
-					@ratingSubmit = true;
-				}
-			}
-		}
 		if(!@tabClicked && @settingsTab == 3){
 			@kbFocus = 1;
 			for(@kI = 0; @kI < 11; @kI += 1){

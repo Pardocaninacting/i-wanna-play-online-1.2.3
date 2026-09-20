@@ -2954,7 +2954,7 @@ if(@settingsOpen && @keybindEditing < 0){
 	// QoL: wheel scrolling for the settings list. This lives here (not in the draw
 	// click branch) so it works without holding a mouse button. Covers every
 	// table-driven tab (Settings + Saves), not just tab 0.
-	if(@settingsOpen && (@settingsTab == 0 || @settingsTab == 1)){
+	if(@settingsOpen && @settingsTab <= 2){
 		if(mouse_wheel_up()) @stgFirst -= 1;
 		if(mouse_wheel_down()) @stgFirst += 1;
 		// hold-to-accelerate counters for the nav blocks below (reset on release)
@@ -3024,8 +3024,8 @@ if(@settingsOpen && @keybindEditing < 0){
 	}
 	// TAB 1 uses the SAME navigation as tab 0 (one row per press, auto-repeat,
 	// wheel, scrolling viewport); the save-specific keys stay below.
-	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && (@settingsTab == 0 || @settingsTab == 1)){
-		if(@settingsTab == 0) @stg_build_rows(@contentY); else @stg_build_saves(@contentY);
+	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab <= 2){
+		@stg_build_tab(@settingsTab);
 		if(@kbRow[0] < 0 || @kbRow[0] >= global.__ONLINE_stgN) @kbRow[0] = @stg_first_row();
 		if(@kb_repeat(vk_up, 6, 2)){
 			@stgNavKey = 1;
@@ -3067,6 +3067,15 @@ if(@settingsOpen && @keybindEditing < 0){
 			@acc_clear_cancel();
 			@kbAct = 1;
 		}
+		// rating quick-set: digits 1-5 set the stars directly (same digit = off)
+		if(@settingsTab == 2){
+			for(@rI = 1; @rI <= 5; @rI += 1){
+				if(keyboard_check_pressed(48 + @rI)){
+					if(@rStars == @rI) @rStars = 0; else @rStars = @rI;
+					@kbAct = 1;
+				}
+			}
+		}
 		// save-specific keys act on the selected save row
 		if(@settingsTab == 1 && global.__ONLINE_stgAct[@kbRow[0]] == 20){
 			@svI = global.__ONLINE_stgArg[@kbRow[0]];
@@ -3101,44 +3110,6 @@ if(@settingsOpen && @keybindEditing < 0){
 		}
 	}
 
-	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 2){
-		if(keyboard_check_pressed(vk_up)){
-			if(@kbRow[2] <= 0){
-				@kbRow[2] = 0;
-				@kbFocus = 0;
-			}else{
-				@kbRow[2] -= 1;
-			}
-			@kbAct = 1;
-		}
-		if(keyboard_check_pressed(vk_down)){
-			@kbRow[2] += 1; if(@kbRow[2] > 2) @kbRow[2] = 2;
-			@kbAct = 1;
-		}
-		for(@kbI = 1; @kbI <= 5; @kbI += 1){
-			if(keyboard_check_pressed(48 + @kbI)){
-				if(@rStars == @kbI) @rStars = 0; else @rStars = @kbI;
-				@kbRow[2] = 0;
-				@kbAct = 1;
-			}
-		}
-		if(@kbAct == 0 && @kbRow[2] == 0 && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right))){
-			if(keyboard_check_pressed(vk_left)) @rStars -= 1; else @rStars += 1;
-			if(@rStars < 0) @rStars = 5;
-			if(@rStars > 5) @rStars = 0;
-			@kbAct = 1;
-		}
-		if(@kbAct == 0 && (@kbRow[2] == 1 && (keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right) || keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)))){
-			@rCleared = 1 - @rCleared;
-			@kbAct = 1;
-		}
-		if(@kbAct == 0 && @kbRow[2] == 2 && keyboard_check_pressed(vk_enter)){
-			if(@rStars > 0 && @ratingCooldown <= current_time && !@ratingSubmitting){
-				@ratingSubmit = true;
-			}
-			@kbAct = 1;
-		}
-	}
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1 && @settingsTab == 3){
 		if(keyboard_check_pressed(vk_up)){
 			if(@kbRow[3] <= 0){

@@ -334,6 +334,11 @@ if(_a == 20) return "Enter applies this save. F toggles favourite, 1-8 assigns a
 if(_a == 21) return "Show only favourite saves.";
 if(_a == 22) return "Deletes non-favourite saves.";
 if(_a == 10) return "Choose which player object drives your character.";
+if(_a == 30) return "Ratings are stored per game on the server; everyone on this server shares the same listing.";
+if(_a == 31) return "Your rating for this game. Left/Right steps through, digits 1-5 set directly, 0 means no rating.";
+if(_a == 32) return "Whether you have cleared this game. Sent together with the stars.";
+if(_a == 33) return "The server's response to your last submission. Two submissions need a few seconds between them.";
+if(_a == 34) return "Sends the rating to the server.";
 return "";
 
 ///// script @stg_draw_detail
@@ -360,9 +365,30 @@ if(_k == 1) _txt = "Connection";
 if(_a == 20) _txt = "Save " + string(global.__ONLINE_stgArg[argument0] + 1);
 draw_text(_x, _y, _txt);
 _y += 22;
-// value card (green frame when a toggle is on)
+// value card (green frame when a toggle is on); the rating stars replace the
+// card for the Stars row and sit at a FIXED slot (@stgTop + 24) so the click
+// handler in worldDrawGui can hit-test them without replicating this layout
 _val = @stg_value(argument0);
-if((_k == 4 || _k == 3 || _k == 2) && _val != ""){
+if(_k == 3 && _a == 31){
+  _sy = @stgTop + 24;
+  for(_i = 1; _i <= 5; _i += 1){
+    _sx = _x + (_i - 1) * 30;
+    if(_i <= @rStars){
+      draw_set_color(make_color_rgb(220, 190, 60));
+    }else{
+      draw_set_color(make_color_rgb(45, 45, 50));
+    }
+    draw_rectangle(_sx, _sy, _sx + 26, _sy + 22, false);
+    draw_set_color(make_color_rgb(90, 90, 96));
+    draw_rectangle(_sx, _sy, _sx + 26, _sy + 22, true);
+    draw_set_color(c_white);
+    draw_set_halign(fa_center);
+    draw_text(_sx + 13, _sy + 3 + @stgTextDY, string(_i));
+  }
+  draw_set_halign(fa_left);
+  _y = _sy + 32;
+}
+if((_k == 4 || _k == 3 || _k == 2) && _val != "" && _a != 31){
   if(_k == 4 && _val == "ON"){
     draw_set_color(make_color_rgb(50, 170, 80));
   }else{
@@ -458,6 +484,12 @@ if(_k == 1){
   global.__ONLINE_detFV[0] = @stg_server_text();
   _fn = 1;
 }
+if(_a == 33){
+  global.__ONLINE_detFK[0] = "State";   global.__ONLINE_detFV[0] = @stg_rating_status();
+  global.__ONLINE_detFK[1] = "Stars";   global.__ONLINE_detFV[1] = string(@rStars) + " / 5";
+  global.__ONLINE_detFK[2] = "Cleared"; global.__ONLINE_detFV[2] = @stg_onoff(@rCleared);
+  _fn = 3;
+}
 if(_a == 14){
   global.__ONLINE_detFK[0] = "This folder";
   global.__ONLINE_detFV[0] = global.__ONLINE_accLocalPath;
@@ -502,6 +534,8 @@ if(_a == 11 || _a == 15) _acts = "Enter = run";
 if(_a == 10) _acts = "Enter = pick";
 if(_a == 20) _acts = "Enter = apply   F = favourite   1-8 = hotkey";
 if(_a == 21) _acts = "Left/Right = toggle";
+if(_a == 31) _acts = "Left/Right = change   1-5 = set";
+if(_a == 34) _acts = "Enter = submit";
 if(_a == 22){
   if(global.__ONLINE_stgClearRow == 22) _acts = "Click again to confirm"; else _acts = "Click to clear";
 }
@@ -984,6 +1018,62 @@ draw_set_halign(fa_left);
 #endif
 return 0;
 
+///// script @stg_build_tab
+// Builds the row table for one tab. Every tab is table-driven, so the shared
+// renderer/input paths (@stg_draw_table, @stg_click_row, the nav block) cover
+// all six without per-tab forks.
+// args: tab -> 0
+if(argument0 == 0) return @stg_build_rows(@contentY);
+if(argument0 == 1) return @stg_build_saves(@contentY);
+if(argument0 == 2) return @stg_build_rating(@contentY);
+if(argument0 == 3) return @stg_build_keys(@contentY);
+if(argument0 == 4) return @stg_build_sync(@contentY);
+return @stg_build_skins(@contentY);
+
+///// script @stg_build_rating
+// Row table for the Rating tab. Only real fields (worldCreate: rStars,
+// rCleared, ratingSubmitting/ratingResult/ratingResultTimer/ratingCooldown);
+// the star boxes live in the detail pane (and are clickable there).
+// args: contentY -> 0
+var _y, _ctlX;
+global.__ONLINE_stgN = 0;
+_y = argument0 + 2;
+_ctlX = @spX + @colW - 16 - 130;
+@stg_row_add(0, 0, "THIS GAME", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(6, 30, @stg_fit_text(@gameName, @colW - 32), @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+_y += 6;
+@stg_row_add(0, 0, "RATING", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(3, 31, "Stars", @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 32, "Cleared", @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+_y += 6;
+@stg_row_add(0, 0, "STATUS", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(6, 33, "Last result", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+_y += 6;
+@stg_row_add(5, 34, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+global.__ONLINE_stgHeight = _y - argument0;
+return 0;
+
+///// script @stg_build_keys
+// STUB - converted in a later stage; keeps the dispatcher total.
+// args: contentY -> 0
+global.__ONLINE_stgN = 0;
+@stg_row_add(0, 0, "KEYS", @spX + 16, argument0 + 2, 0, 0, 0);
+return 0;
+
+///// script @stg_build_sync
+// STUB - converted in a later stage; keeps the dispatcher total.
+// args: contentY -> 0
+global.__ONLINE_stgN = 0;
+@stg_row_add(0, 0, "SYNC", @spX + 16, argument0 + 2, 0, 0, 0);
+return 0;
+
+///// script @stg_build_skins
+// STUB - converted in a later stage; keeps the dispatcher total.
+// args: contentY -> 0
+global.__ONLINE_stgN = 0;
+@stg_row_add(0, 0, "SKINS", @spX + 16, argument0 + 2, 0, 0, 0);
+return 0;
+
 ///// script @stg_row_add
 // Appends one row and returns its index.
 // args: kind, act, label, x, y, controlWidth, controlStyle, cxOverride
@@ -1091,6 +1181,18 @@ if(@tcpState == 2) return make_color_rgb(60, 200, 100);
 if(@socketConnectResult == 0) return make_color_rgb(220, 80, 80);
 return make_color_rgb(220, 200, 60);
 
+///// script @stg_rating_status
+// One-line state of the rating pipeline (status row, detail facts, button).
+// args: none -> text
+if(@ratingSubmitting) return "Sending...";
+if(@ratingCooldown > current_time) return "Cooldown " + string(max(1, ceil((@ratingCooldown - current_time) / 1000))) + "s";
+if(@ratingResultTimer > current_time){
+  if(@ratingResult == 1) return "Rating submitted!";
+  if(@ratingResult == 2) return "Submit failed (cooldown)";
+}
+if(!@connected) return "Offline";
+return "Idle";
+
 ///// script @stg_server_text
 // Server address row content - what the client is actually pointed at, so an
 // offline player can see whether the ini points somewhere stale.
@@ -1152,6 +1254,14 @@ if(_a == 22) return "Clear all";
 if(_a == 10) return "Pick";
 if(_a == 11) return "Reconnect now";
 if(_a == 15) return "Apply & Reconnect";
+if(_a == 31) return string(@rStars) + " / 5";
+if(_a == 32) return @stg_onoff(@rCleared);
+if(_a == 33) return @stg_rating_status();
+if(_a == 34){
+  if(@ratingSubmitting) return "Sending...";
+  if(@ratingCooldown > current_time) return "Wait " + string(max(1, ceil((@ratingCooldown - current_time) / 1000))) + "s";
+  return "Submit Rating";
+}
 return "";
 
 ///// script @stg_onoff
@@ -1187,6 +1297,15 @@ if(_a == 6) return "Show the direction indicator above remote players.";
 if(_a == 7) return "Spectator camera mode.";
 if(_a == 8) return "Player versus player mode. Bullets stay visible while it is on.";
 if(_a == 9) return "Share your bullets with the room (locked on in PVP).";
+if(_a == 20) return "Enter applies this save. F favourite, 1-8 hotkey, Del clears.";
+if(_a == 21) return "Show only favourite saves.";
+if(_a == 22) return "Deletes every non-favourite save file.";
+if(_a == 10) return "Choose which player object drives your character.";
+if(_a == 30) return "This game, as the server identifies it.";
+if(_a == 31) return "Your rating: Left/Right steps, digits 1-5 set directly, 0 clears.";
+if(_a == 32) return "Mark the game as cleared. Sent together with the stars.";
+if(_a == 33) return "The server's response to your last submission.";
+if(_a == 34) return "Send the rating to the server.";
 return "Up/Down rows, Left/Right change, Enter edit - F1 or O closes.";
 
 ///// script @stg_click_row
@@ -1301,6 +1420,21 @@ if(_a == 12){ @acc_edit_name(); return 0; }
 if(_a == 13){ @acc_edit_pass(); return 0; }
 if(_a == 14){ @acc_toggle_store(); return 0; }
 if(_a == 15){ @acc_apply_reconnect(); return 0; }
+if(_a == 31){
+  @rStars += 1;
+  if(@rStars > 5) @rStars = 0;
+  return 0;
+}
+if(_a == 32){ @rCleared = 1 - @rCleared; return 0; }
+if(_a == 30 || _a == 33) return 0;   // view-only entries
+if(_a == 34){
+  if(!@connected){ @stg_toast("Not connected", 1); return 0; }
+  if(@ratingSubmitting) return 0;
+  if(@ratingCooldown > current_time){ @stg_toast("Cooldown - wait " + string(max(1, ceil((@ratingCooldown - current_time) / 1000))) + "s", 1); return 0; }
+  if(@rStars < 1){ @stg_toast("Pick 1-5 stars first", 1); return 0; }
+  @ratingSubmit = true;
+  return 0;
+}
 return 0;
 
 ///// script @stg_act_dir
@@ -1308,6 +1442,12 @@ return 0;
 // args: row, dir -> 1 when the action closed the menu
 var _a;
 _a = global.__ONLINE_stgAct[argument0];
+if(_a == 31){
+  @rStars += argument1;
+  if(@rStars < 0) @rStars = 5;
+  if(@rStars > 5) @rStars = 0;
+  return 0;
+}
 if(_a == 1){
   @team += argument1;
   if(@team < 0) @team = 7;
