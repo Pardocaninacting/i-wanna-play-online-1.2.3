@@ -586,6 +586,18 @@ if(@settingsOpen){
 				}
 			}
 		}
+		// skin preview state cycler (detail pane, fixed slot: box @stgTop+24,
+		// strip @stgTop+146 - see @stg_skin_preview)
+		if(!@tabClicked && @settingsTab == 5 && @detW > 0 && global.__ONLINE_stgAct[@stgPrevRow] == 55){
+			if(@my >= @stgTop + 146 && @my <= @stgTop + 166){
+				if(@mx >= @spX + @colW + 12 && @mx < @spX + @colW + 34){
+					@stg_skin_prev_state_dir(-1); @tabClicked = true;
+				}
+				if(@mx >= @spX + @colW + 106 && @mx < @spX + @colW + 128){
+					@stg_skin_prev_state_dir(1); @tabClicked = true;
+				}
+			}
+		}
 		if(!@tabClicked){
 			@stg_build_tab(@settingsTab);
 			// (the wheel is handled in worldEndStep, once per frame - inside this

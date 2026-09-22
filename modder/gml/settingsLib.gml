@@ -337,9 +337,10 @@ if(_a == 10) return "Choose which player object drives your character.";
 if(_a >= 40 && _a <= 50) return "Rebind this action. Enter starts the capture, then press the key you want; Esc cancels.";
 if(_a == 52) return "Restore every binding above to its default.";
 if(_a == 53) return "Sends the listed global variables to everyone in the room, on save and whenever their bits change.";
-if(_a == 55) return "A player skin from iwposkins. Enter applies it; the preview above shows its idle animation.";
+if(_a == 55) return "A player skin from iwposkins. Enter applies it. Left/Right (or the < > under the preview) cycles through all seven animation states.";
 if(_a == 56) return "When another player uses a skin you do not have, fetch it automatically.";
 if(_a == 57) return "Unload the current skin and return to the game's default player sprite.";
+if(_a == 58) return "Filter the list by name, maker or source (case-insensitive). An empty keyword shows everything again.";
 if(_a == 54) return "Sent on save and whenever its bits change. Entries whose global is missing in this game are skipped (see Present).";
 if(_a == 30) return "Ratings are stored per game on the server; everyone on this server shares the same listing.";
 if(_a == 31) return "Your rating for this game. Left/Right steps through, digits 1-5 set directly, 0 means no rating.";
@@ -388,7 +389,7 @@ if(_a >= 40 && _a <= 50){
 }
 if(_a == 55){
   @stg_skin_preview(argument0, _x, _y);
-  _y += 124;
+  _y += 148;   // 116 box + 6 gap + 22 cycler + 4
 }
 if(_k == 3 && _a == 31){
   _sy = @stgTop + 24;
@@ -1180,11 +1181,32 @@ for(_i = 0; _i < @syncEntryCount; _i += 1){
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
+///// script @stg_skin_state_name
+// args: state 0..6 -> display name (also the png filename stem)
+if(argument0 == 0) return "idle";
+if(argument0 == 1) return "run";
+if(argument0 == 2) return "jump";
+if(argument0 == 3) return "fall";
+if(argument0 == 4) return "slide";
+if(argument0 == 5) return "bow";
+return "bullet";
+
+///// script @stg_skin_prev_state_dir
+// args: -1/+1 -> 0 (cycles the preview's animation state)
+@skinPrevState += argument0;
+if(@skinPrevState < 0) @skinPrevState = 6;
+if(@skinPrevState > 6) @skinPrevState = 0;
+return 0;
+
 ///// script @stg_skin_preview
-// Dwell-loads and draws the idle-frame preview for a skins entry row. Lives in
-// the detail pane (full layout); the narrow layout has no preview (by design,
-// narrow is list-only). The dwell means fast scrolling never thrashes
+// Dwell-loads and draws the preview for a skins entry row: a 116x116 animation
+// box plus a < state > cycler underneath (all seven states, lazy per-state
+// sprite load; states the skin does not ship read "no <state>"). Lives in the
+// detail pane (full layout); the narrow layout has no preview (list-only by
+// design). The dwell on ROW changes keeps fast scrolling from thrashing
 // sprite_add; the leak guard in worldDrawGui unloads when the menu closes.
+// Cycler geometry is fixed (@stgTop + 24 box, +146 strip) so the click handler
+// in worldDrawGui can hit-test it.
 // args: row, x, y -> 0
 var _i;
 _i = global.__ONLINE_stgAct[argument0];
@@ -1194,6 +1216,7 @@ if(_i < 0 || _i >= @skinVisCount) return 0;
 if(@skinPrevRow != _i){
   @skinPrevRow = _i;
   @skinPrevTimer = 0;
+  @skinPrevState = 0;
   if(@skinPrevLoaded >= 0) @skin_prev_unload();
 }
 if(@skinPrevLoaded != _i){
@@ -1204,19 +1227,47 @@ draw_set_color(make_color_rgb(8, 8, 10));
 draw_rectangle(argument1, argument2, argument1 + 116, argument2 + 116, false);
 draw_set_color(make_color_rgb(70, 80, 95));
 draw_rectangle(argument1, argument2, argument1 + 116, argument2 + 116, true);
-if(@skinPrevLoaded == _i && @skinPrevSpr[0] >= 0){
-  // absolute per-frame pacing (same semantics as @skin_draw): one strip frame
-  // per 100ms tick, no fast-forward on many-frame skins
-  @pvFrames = @skinFrames[@skinPrevLoaded, 0];
-  if(@pvFrames < 1) @pvFrames = 1;
-  @pvFrame = floor(current_time / 100) mod @pvFrames;
-  draw_sprite_ext(@skinPrevSpr[0], @pvFrame, argument1 + 58, argument2 + 86, 2, 2, 0, c_white, 1);
+if(@skinPrevLoaded == _i){
+  if(@skinHas[_i, @skinPrevState]){
+    // lazy per-state load (a deliberate cycler action, so no dwell here)
+    if(@skinPrevSpr[@skinPrevState] < 0){
+      @skPath = "iwposkins" + chr(92) + @skinDir[_i] + chr(92) + @stg_skin_state_name(@skinPrevState) + ".png";
+      @skinPrevSpr[@skinPrevState] = sprite_add(@skPath, @skinFrames[_i, @skinPrevState], 0, 0, @skinOx[_i, @skinPrevState], @skinOy[_i, @skinPrevState]);
+      global.@skinPrevSpr[@skinPrevState] = @skinPrevSpr[@skinPrevState];
+    }
+    // absolute per-frame pacing (same semantics as @skin_draw): one strip
+    // frame per 100ms tick, no fast-forward on many-frame skins
+    @pvFrames = @skinFrames[_i, @skinPrevState];
+    if(@pvFrames < 1) @pvFrames = 1;
+    @pvFrame = floor(current_time / 100) mod @pvFrames;
+    draw_sprite_ext(@skinPrevSpr[@skinPrevState], @pvFrame, argument1 + 58, argument2 + 86, 2, 2, 0, c_white, 1);
+  }else{
+    draw_set_color(make_color_rgb(95, 101, 107));
+    draw_set_halign(fa_center);
+    draw_text(argument1 + 58, argument2 + 50 + @stgTextDY, "no " + @stg_skin_state_name(@skinPrevState));
+    draw_set_halign(fa_left);
+  }
 }else{
   draw_set_color(make_color_rgb(95, 101, 107));
   draw_set_halign(fa_center);
   draw_text(argument1 + 58, argument2 + 50 + @stgTextDY, "preview");
   draw_set_halign(fa_left);
 }
+// state cycler: < idle > (fixed slot - see the header note)
+@pvCY = argument2 + 122;
+draw_set_color(make_color_rgb(45, 45, 52));
+draw_rectangle(argument1, @pvCY, argument1 + 22, @pvCY + 20, false);
+draw_rectangle(argument1 + 94, @pvCY, argument1 + 116, @pvCY + 20, false);
+draw_set_color(make_color_rgb(90, 95, 105));
+draw_rectangle(argument1, @pvCY, argument1 + 22, @pvCY + 20, true);
+draw_rectangle(argument1 + 94, @pvCY, argument1 + 116, @pvCY + 20, true);
+draw_set_halign(fa_center);
+draw_set_color(make_color_rgb(170, 170, 175));
+draw_text(argument1 + 11, @pvCY + 4 + @stgTextDY, "<");
+draw_text(argument1 + 105, @pvCY + 4 + @stgTextDY, ">");
+draw_set_color(c_white);
+draw_text(argument1 + 58, @pvCY + 4 + @stgTextDY, @stg_skin_state_name(@skinPrevState));
+draw_set_halign(fa_left);
 return 0;
 
 ///// script @stg_build_skins
@@ -1228,9 +1279,34 @@ return 0;
 var _y, _i, _lbl;
 global.__ONLINE_stgN = 0;
 _y = argument0 + 2;
-@stg_row_add(0, 0, "INSTALLED (" + string(@skinVisCount) + ")", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+// an active filter searches name/maker/source, which only exist once parsed:
+// parse everything once per filter change (a deliberate user action), never
+// per frame
+if(@skinFilter != @skinFilterParsed){
+  if(@skinFilter != ""){
+    for(_i = 0; _i < @skinVisCount; _i += 1) @skin_parse(_i);
+  }
+  @skinFilterParsed = @skinFilter;
+  @stgFirst = 0;   // the old scroll offset is meaningless across a filter change
+}
+@skShowN = 0;
+for(_i = 0; _i < @skinVisCount; _i += 1){
+  if(@skinFilter != ""){
+    if(string_pos(@skinFilter, string_lower(@skinName[_i])) == 0
+    && string_pos(@skinFilter, string_lower(@skinMaker[_i])) == 0
+    && string_pos(@skinFilter, string_lower(@skinSource[_i])) == 0) continue;
+  }
+  @skShowN += 1;
+}
+if(@skinFilter == ""){
+  @stg_row_add(0, 0, "INSTALLED (" + string(@skinVisCount) + ")", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+}else{
+  @stg_row_add(0, 0, "INSTALLED (" + string(@skShowN) + " of " + string(@skinVisCount) + ")", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+}
 if(@skinVisCount == 0){
   @stg_row_add(2, 0, "(no skins found in iwposkins)", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+}else if(@skShowN == 0){
+  @stg_row_add(2, 0, "(no matches)", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 }
 // parse only what the viewport can show (plus a small margin): parsing every
 // entry on the first visit was a visible ~1s hitch on big packs - the old
@@ -1239,8 +1315,14 @@ if(@skinVisCount == 0){
 if(@skParseTo > @skinVisCount) @skParseTo = @skinVisCount;
 for(@skPI = max(0, @stgFirst - 2); @skPI < @skParseTo; @skPI += 1) @skin_parse(@skPI);
 for(_i = 0; _i < @skinVisCount; _i += 1){
+  if(@skinFilter != ""){
+    if(string_pos(@skinFilter, string_lower(@skinName[_i])) == 0
+    && string_pos(@skinFilter, string_lower(@skinMaker[_i])) == 0
+    && string_pos(@skinFilter, string_lower(@skinSource[_i])) == 0) continue;
+  }
   if(@skinParsed[_i]){
-    _lbl = @skinName[_i] + " (" + @skinMaker[_i] + ")";
+    // name only in the list - the maker reads in the detail pane
+    _lbl = @skinName[_i];
     if(!@skinHas[_i, 0]) _lbl = "[!] " + _lbl;
   }else{
     // unparsed (off-screen): the folder name; it upgrades on scroll-into-view
@@ -1253,6 +1335,7 @@ for(_i = 0; _i < @skinVisCount; _i += 1){
 }
 _y += 6;
 @stg_row_add(0, 0, "MANAGE", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(5, 58, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 @stg_row_add(4, 56, "Auto-download", @spX + 16, _y, 130, 0, @spX + @colW - 146); _y += global.__ONLINE_stgRowH;
 @stg_row_add(5, 57, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
@@ -1451,6 +1534,10 @@ if(_a == 55){
 }
 if(_a == 56) return @stg_onoff(@skinAutoDL);
 if(_a == 57) return "Clear skin";
+if(_a == 58){
+  if(@skinFilter == "") return "Search...";
+  return "Search: " + @skinFilter;
+}
 if(_a == 54){
   @stgI = global.__ONLINE_stgArg[argument0];
   return string(@syncCount[@stgI]) + " bits";
@@ -1507,9 +1594,10 @@ if(_a >= 40 && _a <= 50) return "Enter or click starts capture, then press the k
 if(_a == 52) return "Restore every binding above to its default.";
 if(_a == 53) return "Share the configured globals with the room.";
 if(_a == 54) return "A synced global variable.";
-if(_a == 55) return "Enter applies this skin. The detail pane previews its idle animation.";
+if(_a == 55) return "Enter applies. Left/Right cycles the preview animation.";
 if(_a == 56) return "Fetch unknown skins seen in the roster automatically.";
 if(_a == 57) return "Back to the game's default player sprite.";
+if(_a == 58) return "Filter by name, maker or source. Empty shows all.";
 if(_a == 30) return "This game, as the server identifies it.";
 if(_a == 31) return "Your rating: Left/Right steps, digits 1-5 set directly, 0 clears.";
 if(_a == 32) return "Mark the game as cleared. Sent together with the stars.";
@@ -1667,6 +1755,22 @@ if(_a == 57){
   @stg_toast("Skin cleared", 1);
   return 0;
 }
+if(_a == 58){
+  // same modal route as the account fields (IME-safe CJK input included)
+  #if STUDIO
+  @skSearch = get_string("Search skins (empty = show all)", @skinFilter);
+  #endif
+  #if not STUDIO
+  @skSearch = wd_input_box("Search skins", "Leave it empty to show all:", @skinFilter);
+  #endif
+  @skinFilter = string_lower(@account_trim(@skSearch));
+  if(@skinFilter == ""){
+    @stg_toast("Showing all skins", 1);
+  }else{
+    @stg_toast("Filtering by '" + @skinFilter + "'", 1);
+  }
+  return 0;
+}
 if(_a == 54) return 0;   // view-only entry
 if(_a == 52){
   // the default set (the old Reset Keys button's exact values)
@@ -1692,6 +1796,11 @@ return 0;
 // args: row, dir -> 1 when the action closed the menu
 var _a;
 _a = global.__ONLINE_stgAct[argument0];
+if(_a == 55){
+  // skins rows: Left/Right cycles the preview's animation state
+  @stg_skin_prev_state_dir(argument1);
+  return 0;
+}
 if(_a == 31){
   @rStars += argument1;
   if(@rStars < 0) @rStars = 5;

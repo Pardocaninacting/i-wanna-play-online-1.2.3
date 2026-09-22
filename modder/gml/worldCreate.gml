@@ -319,6 +319,9 @@ for(@scI = 0; @scI < 16; @scI += 1){
 @skinPage = 0;
 @skinPrevLoaded = -1;
 @skinPrevRow = -1;
+@skinPrevState = 0;       // preview animation state 0..6 (idle/run/...)
+@skinFilter = "";         // skins tab keyword filter ("" = all)
+@skinFilterParsed = "";   // the filter value the full parse pass covered
 @skinPrevTimer = 0;
 @skinVisCount = 0;
 @skinUnknown = -1;

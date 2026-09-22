@@ -2998,6 +2998,17 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbRow[0] = @stg_next_row(@kbRow[0], @kbStep);
 			@kbAct = 1;
 		}
+		if(keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
+			// only value rows react to Left/Right (toggle/select); on anything else
+			// an arrow key must not fire the row's action (stg_act would). This
+			// branch lived in the old tab-0 block and was lost in the nav collapse.
+			if(keyboard_check_pressed(vk_right)) @kbDir = 1; else @kbDir = -1;
+			// skins rows are entries (kind 6) but Left/Right cycles their preview
+			if(global.__ONLINE_stgKind[@kbRow[0]] == 3 || global.__ONLINE_stgKind[@kbRow[0]] == 4 || global.__ONLINE_stgAct[@kbRow[0]] == 55){
+				@stg_act_dir(@kbRow[0], @kbDir);
+				@kbAct = 1;
+			}
+		}
 		if(keyboard_check_pressed(vk_enter) || keyboard_check_pressed(vk_space)){
 			if(global.__ONLINE_stgClearRow >= 0){
 				@acc_clear_commit();

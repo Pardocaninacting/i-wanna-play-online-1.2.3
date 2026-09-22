@@ -266,6 +266,9 @@ for(@scI = 0; @scI < 16; @scI += 1){
 @skinPage = 0;
 @skinPrevLoaded = -1;
 @skinPrevRow = -1;
+@skinPrevState = 0;
+@skinFilter = "";
+@skinFilterParsed = "";
 @skinPrevTimer = 0;
 @skinVisCount = 0;
 @skinUnknown = -1;
