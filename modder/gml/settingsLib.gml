@@ -1715,7 +1715,7 @@ if(_a == 8){
 if(_a == 9){
   if(@pvpMode == 0){
     @bulletShow = !@bulletShow;
-    @bulletChanged = true;
+    @bulletShowChanged = true;
   }else{
     @stg_toast("Bullets are locked on in PVP", 1);
   }
