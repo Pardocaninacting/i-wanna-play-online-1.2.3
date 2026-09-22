@@ -2951,6 +2951,16 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 	}
+	// skins: F = find (the Ctrl+F gesture - saves already uses F for favourite,
+	// so the same key feels at home on the other list tab). Works from any focus
+	// position: the dialog does not need the list cursor.
+	if(@kbDelay <= 0 && @kbAct == 0 && @settingsTab == 5 && keyboard_check_pressed(70)){
+		for(@skFI = 0; @skFI < global.__ONLINE_stgN; @skFI += 1){
+			if(global.__ONLINE_stgAct[@skFI] == 58) break;
+		}
+		if(@skFI < global.__ONLINE_stgN) @stg_act(@skFI);
+		@kbAct = 1;
+	}
 	// QoL: wheel scrolling for the settings list. This lives here (not in the draw
 	// click branch) so it works without holding a mouse button. Covers every
 	// table-driven tab (Settings + Saves), not just tab 0.

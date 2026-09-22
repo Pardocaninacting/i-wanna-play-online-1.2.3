@@ -161,6 +161,9 @@ if(@spX < 0) @spX = 0;
 if(@spY < 0) @spY = 0;
 @menuMode = 0;
 if(@detW > 0) @menuMode = 1;
+// the footer rides along: a game that swaps view ports between rooms moves
+// spY/spH every frame, and the init-time footer floated at the stale height
+@footerY = @spY + @spH - 34;
 return 0;
 
 ///// script @stg_build_rows
@@ -235,6 +238,10 @@ return _n;
 // pointer is mapped through the same values (one grid, no drift).
 // args: mx, my, yOffset -> row index / -1
 var _i, _y, _h;
+// outside the visible band there is nothing to hit: hovering the dead space
+// above/below the list used to select a scrolled-out row (the detail pane
+// betrayed it), and clicking there acted on it blindly
+if(argument1 < @stgTop || argument1 >= @stgBottom) return -1;
 _i = 0;
 while(_i < global.__ONLINE_stgN){
   _y = global.__ONLINE_stgY[_i] - argument2;
@@ -340,7 +347,7 @@ if(_a == 53) return "Sends the listed global variables to everyone in the room, 
 if(_a == 55) return "A player skin from iwposkins. Enter applies it. Left/Right (or the < > under the preview) cycles through all seven animation states.";
 if(_a == 56) return "When another player uses a skin you do not have, fetch it automatically.";
 if(_a == 57) return "Unload the current skin and return to the game's default player sprite.";
-if(_a == 58) return "Filter the list by name, maker or source (case-insensitive). An empty keyword shows everything again.";
+if(_a == 58) return "Filter the list by name, maker or source (case-insensitive). F opens this from anywhere on the tab; an empty keyword shows everything again.";
 if(_a == 54) return "Sent on save and whenever its bits change. Entries whose global is missing in this game are skipped (see Present).";
 if(_a == 30) return "Ratings are stored per game on the server; everyone on this server shares the same listing.";
 if(_a == 31) return "Your rating for this game. Left/Right steps through, digits 1-5 set directly, 0 means no rating.";
@@ -371,7 +378,8 @@ _txt = global.__ONLINE_stgLabel[argument0];
 if(_txt == "") _txt = @stg_value(argument0);
 if(_k == 1) _txt = "Connection";
 if(_a == 20) _txt = "Save " + string(global.__ONLINE_stgArg[argument0] + 1);
-draw_text(_x, _y, _txt);
+// titles may carry CJK (room names, skin names)
+@stg_text_cjk(_x, _y, _txt, 0);
 _y += 22;
 // value card (green frame when a toggle is on); the rating stars replace the
 // card for the Stars row and sit at a FIXED slot (@stgTop + 24) so the click
@@ -569,9 +577,15 @@ if(_fn > 0){
     draw_set_color(make_color_rgb(120, 126, 134));
     draw_text(_x, _y + @stgTextDY, global.__ONLINE_detFK[_i]);
     draw_set_color(c_white);
-    // wrap instead of truncating: a store path is long and the tail (the file
-    // name) is the informative part, so cutting it off hid what the row was for.
-    _vh = @stg_wrap(_x + _kw, _y + @stgTextDY, global.__ONLINE_detFV[_i], _w - _kw - 4, 2);
+    if(@stg_is_ascii(global.__ONLINE_detFV[_i])){
+      // wrap instead of truncating: a store path is long and the tail (the file
+      // name) is the informative part, so cutting it off hid what the row was for.
+      _vh = @stg_wrap(_x + _kw, _y + @stgTextDY, global.__ONLINE_detFV[_i], _w - _kw - 4, 2);
+    }else{
+      // user text (save player names, CJK skin metadata) goes the CJK route
+      @stg_text_cjk(_x + _kw, _y + @stgTextDY, @stg_fit_text(global.__ONLINE_detFV[_i], _w - _kw - 4), 0);
+      _vh = 16;
+    }
     // @stg_wrap measures with string_width; if a font under-reports, the line could
     // still run past the column, so the clamp below is a hard guarantee.
     if(_vh > 16) _y += (_vh - 16);
@@ -996,7 +1010,7 @@ return string(date_get_month(@saveHistTime[argument0])) + "/" + string(date_get_
 // list scrolls, so the old paging buttons are gone). Save rows carry their index
 // in @stgArg so the dispatcher and the detail pane can read the real fields.
 // args: contentY -> 0
-var _y, _i, _n, _lbl;
+var _y, _i, _n, _lbl, _tail, _pfx;
 global.__ONLINE_stgN = 0;
 _y = argument0 + 2;
 @stg_row_add(0, 0, "SAVE HISTORY", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
@@ -1006,10 +1020,13 @@ _i = @saveHistCount - 1;
 while(_i >= 0){
   if(@saveHistFilter == 0 || @saveHistFav[_i]){
     // room + bare coords + age: "Save N" meant nothing while browsing; the
-    // number survives as the detail pane's title
-    _lbl = @stg_room_name(_i) + " " + string(round(@saveHistX[_i])) + "," + string(round(@saveHistY[_i])) + " " + @save_age_text(_i);
-    if(@saveHistFav[_i]) _lbl = "* " + _lbl;
-    _lbl = @stg_fit_text(_lbl, @colW - 32 - 56);
+    // number survives as the detail pane's title. The room name is fitted to
+    // the space the tail leaves, so long names truncate instead of eating the
+    // coordinates (rmMountainBased...)
+    _tail = " " + string(round(@saveHistX[_i])) + "," + string(round(@saveHistY[_i])) + " " + @save_age_text(_i);
+    _pfx = "";
+    if(@saveHistFav[_i]) _pfx = "* ";
+    _lbl = _pfx + @stg_fit_text(@stg_room_name(_i), @colW - 32 - 56 - string_width(_tail) - string_width(_pfx)) + _tail;
     _n += 1;
     // the hit zone is stgX..stgCX+stgCW+8 - a 0-width control made only the
     // first ~90px of every save row clickable
@@ -1029,6 +1046,17 @@ _y += 6;
 @stg_row_add(5, 22, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
+
+///// script @stg_is_ascii
+// args: text -> 1 when every char is printable ASCII (stg_text_cjk's check,
+// shared so a caller can pick a path before drawing)
+var _i, _n, _c;
+_n = string_length(argument0);
+for(_i = 1; _i <= _n; _i += 1){
+  _c = ord(string_char_at(argument0, _i));
+  if(_c < 32 || _c > 126) return 0;
+}
+return 1;
 
 ///// script @stg_text_cjk
 // Draws a panel string that may contain user text (account name, save player
@@ -1597,7 +1625,7 @@ if(_a == 54) return "A synced global variable.";
 if(_a == 55) return "Enter applies. Left/Right cycles the preview animation.";
 if(_a == 56) return "Fetch unknown skins seen in the roster automatically.";
 if(_a == 57) return "Back to the game's default player sprite.";
-if(_a == 58) return "Filter by name, maker or source. Empty shows all.";
+if(_a == 58) return "Filter by name, maker or source (F anywhere on this tab). Empty shows all.";
 if(_a == 30) return "This game, as the server identifies it.";
 if(_a == 31) return "Your rating: Left/Right steps, digits 1-5 set directly, 0 clears.";
 if(_a == 32) return "Mark the game as cleared. Sent together with the stars.";
