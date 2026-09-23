@@ -138,12 +138,16 @@ if(@menuModePref == 0 && _w >= 660 && _h >= 420) _full = true;
 if(_full){
   @colW = 268;
   @detW = 372;
+  @spH = 460;
 }else{
-  @colW = 600;
+  // narrow really narrows: the mock's 480x420 list-only panel (the 600px
+  // "narrow" was only 40px slimmer than full and hid the detail column for no
+  // visible gain)
+  @colW = 480;
   @detW = 0;
+  @spH = 420;
 }
 @spW = @colW + @detW;
-@spH = 460;
 if(@spW > _w - 16){
   // not enough room: shrink, and give up the detail column before squeezing the
   // content below a usable width
@@ -185,6 +189,8 @@ if(_fw < 120) _fw = 120;
 @stg_row_add(5, 15, "", _cl, _y, _btnW, 1, _cl); _y += global.__ONLINE_stgRowH;
 @stg_row_add(3, 63, "On failure", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(2, 64, "Server", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
+@stg_row_add(2, 68, "TCP port", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
+@stg_row_add(2, 69, "UDP port", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
 // --- account
 _y += 6;
 @stg_row_add(0, 0, "ACCOUNT", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
@@ -343,7 +349,9 @@ if(_a == 14) return "Where name and key are saved. Global covers every game on t
 if(_a == 1) return "Team colour, used for names and the roster.";
 if(_a == 2) return "Interpolate remote players between network updates: smoother but behind. Light = 0.35, Standard = 0.5, Strong = 0.65 per frame.";
 if(_a == 63) return "When every reconnect attempt fails: stay in the game offline (you can reconnect from the menu) or quit.";
-if(_a == 64) return "Server as host[:tcp[:udp]]. Saved to the config and reconnects immediately. Only a tcp port given -> udp = tcp + 1.";
+if(_a == 64) return "Server host. Saved to the config and reconnects immediately - the escape hatch when the current server is unreachable.";
+if(_a == 68) return "TCP port for the game traffic (login, saves, chat). Saved and reconnects.";
+if(_a == 69) return "UDP port for the live player positions. Saved and reconnects.";
 if(_a == 66) return "Local shared-save history cap. Older non-favourite entries are dropped past this.";
 if(_a == 67) return "Chat log length in lines.";
 if(_a == 3) return "Shared online saves. The T key toggles this while playing.";
@@ -353,7 +361,7 @@ if(_a == 9) return "Share your bullets with the room. Locked on while PVP is ena
 if(_a == 5) return "How other players are drawn: full, names only, or hidden.";
 if(_a == 6) return "Direction indicator above remote players.";
 if(_a == 7) return "Spectator camera mode.";
-if(_a == 62) return "Auto picks the layout from the window size; Full always shows the detail pane; Narrow is always list-only.";
+if(_a == 62) return "Auto picks the layout from the window size; Narrow is the compact 480px list-only panel; Full always shows the detail pane.";
 if(_a == 60) return "Other players' notes are not drawn and their arrival sound is muted. Your own notes still show.";
 if(_a == 61) return "No notes are drawn at all. Sending yours keeps working, and the canvas mode still collects them.";
 if(_a == 20) return "Enter applies this save. F toggles favourite, 1-8 assigns a hotkey, Del clears it.";
@@ -1165,13 +1173,12 @@ return 0;
 @kbLabels[1] = "Toggle Save";  @kbKeys[1] = @keySave;
 @kbLabels[2] = "Spectate";     @kbKeys[2] = @keySpectate;
 @kbLabels[3] = "Chat Log";     @kbKeys[3] = @keyChatLog;
-@kbLabels[4] = "Indicator";    @kbKeys[4] = @keyArrows;
-@kbLabels[5] = "Options";      @kbKeys[5] = @keySettings;
-@kbLabels[6] = "Player List";  @kbKeys[6] = @keyPlayerList;
-@kbLabels[7] = "Chat";         @kbKeys[7] = @keyChat;
-@kbLabels[8] = "Here";         @kbKeys[8] = @keyPing;
-@kbLabels[9] = "Fast Load";    @kbKeys[9] = @keyFastLoad;
-@kbLabels[10] = "Canvas";      @kbKeys[10] = @keyCanvas;
+@kbLabels[4] = "Options";      @kbKeys[4] = @keySettings;
+@kbLabels[5] = "Player List";  @kbKeys[5] = @keyPlayerList;
+@kbLabels[6] = "Chat";         @kbKeys[6] = @keyChat;
+@kbLabels[7] = "Here";         @kbKeys[7] = @keyPing;
+@kbLabels[8] = "Fast Load";    @kbKeys[8] = @keyFastLoad;
+@kbLabels[9] = "Canvas";       @kbKeys[9] = @keyCanvas;
 return 0;
 
 ///// script @stg_key_cap
@@ -1192,7 +1199,7 @@ global.__ONLINE_stgN = 0;
 _y = argument0 + 2;
 @stg_keys_meta();
 @stg_row_add(0, 0, "KEY BINDINGS", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-for(_i = 0; _i < 11; _i += 1){
+for(_i = 0; _i < 10; _i += 1){
   @stg_row_add(6, 40 + _i, @kbLabels[_i], @spX + 16, _y, @colW - 32, 0, @spX + 16);
   global.__ONLINE_stgArg[global.__ONLINE_stgN - 1] = _i;
   _y += global.__ONLINE_stgRowH;
@@ -1540,10 +1547,12 @@ if(_a == 2){
   return @lerpNames[@lerpMode];
 }
 if(_a == 63){
-  if(@reconnectQuitOnFail) return "Quit game";
-  return "Stay offline";
+  if(@reconnectQuitOnFail) return "Quit";
+  return "Stay";
 }
-if(_a == 64) return @server + ":" + string(@tcpPort);
+if(_a == 64) return @server;
+if(_a == 68) return string(@tcpPort);
+if(_a == 69) return string(@udpPort);
 if(_a == 66) return string(@saveHistMax);
 if(_a == 67) return string(@chatHistMax);
 if(_a == 3) return @stg_onoff(@save_enabled);
@@ -1643,7 +1652,9 @@ if(_a == 10) return "Choose which player object drives your character.";
 if(_a == 1) return "Team colour used for names and the roster.";
 if(_a == 2) return "Remote-player smoothing strength: OFF, Light, Standard, Strong.";
 if(_a == 63) return "What happens when the server stays unreachable.";
-if(_a == 64) return "Server address as host[:tcp[:udp]]. Applies and reconnects.";
+if(_a == 68) return "TCP port (game traffic).";
+if(_a == 69) return "UDP port (player positions).";
+if(_a == 64) return "Server host. Applies and reconnects.";
 if(_a == 66) return "How many shared saves are kept locally.";
 if(_a == 67) return "How many chat lines are kept.";
 if(_a == 3) return "Shared online saves (T key toggles this in game).";
@@ -1651,7 +1662,7 @@ if(_a == 4) return "Fast save/load path for game_restart engines.";
 if(_a == 5) return "How other players are drawn: full, names only, or hidden.";
 if(_a == 6) return "Show the direction indicator above remote players.";
 if(_a == 7) return "Spectator camera mode.";
-if(_a == 62) return "Menu layout: Auto follows the window, or force Full / Narrow.";
+if(_a == 62) return "Menu layout: Auto by window, Narrow, or Full (with detail).";
 if(_a == 60) return "Do not draw other players' notes (yours still show).";
 if(_a == 61) return "Do not draw any notes at all (sending keeps working).";
 if(_a == 8) return "Player versus player mode. Bullets stay visible while it is on.";
@@ -1739,7 +1750,9 @@ if(_a == 63){
   @reconnectQuitChanged = true;
   return 0;
 }
-if(_a == 64){ @stg_server_edit(); return 0; }
+if(_a == 64){ @stg_conn_edit(0); return 0; }
+if(_a == 68){ @stg_conn_edit(1); return 0; }
+if(_a == 69){ @stg_conn_edit(2); return 0; }
 if(_a == 66){
   if(@saveHistMax == 250) @saveHistMax = 500; else if(@saveHistMax == 500) @saveHistMax = 1000; else @saveHistMax = 250;
   @saveHistMaxChanged = true;
@@ -1875,7 +1888,7 @@ if(_a == 58){
 if(_a == 54) return 0;   // view-only entry
 if(_a == 52){
   // the default set (the old Reset Keys button's exact values)
-  @keyVis = 86; @keySave = 84; @keySpectate = 89; @keyChatLog = 85; @keyArrows = 73; @keySettings = 79;
+  @keyVis = 86; @keySave = 84; @keySpectate = 89; @keyChatLog = 85; @keySettings = 79;
   @keyPlayerList = 76; @keyChat = 32; @keyPing = 72; @keyFastLoad = 70; @keyCanvas = 78;
   @keybindEditing = -1;
   @keybindSave = true;
@@ -1917,7 +1930,26 @@ if(_a == 63){
   @reconnectQuitChanged = true;
   return 0;
 }
-if(_a == 55){
+if(_a == 66){
+  if(argument1 > 0){
+    if(@saveHistMax == 250) @saveHistMax = 500; else if(@saveHistMax == 500) @saveHistMax = 1000; else @saveHistMax = 250;
+  }else{
+    if(@saveHistMax == 1000) @saveHistMax = 500; else if(@saveHistMax == 500) @saveHistMax = 250; else @saveHistMax = 1000;
+  }
+  @saveHistMaxChanged = true;
+  return 0;
+}
+if(_a == 67){
+  if(argument1 > 0){
+    if(@chatHistMax == 30) @chatHistMax = 60; else if(@chatHistMax == 60) @chatHistMax = 120; else @chatHistMax = 30;
+  }else{
+    if(@chatHistMax == 120) @chatHistMax = 60; else if(@chatHistMax == 60) @chatHistMax = 30; else @chatHistMax = 120;
+  }
+  @stg_chat_trim();
+  @chatHistMaxChanged = true;
+  return 0;
+}
+if(_a == 2){
   // skins rows: Left/Right cycles the preview's animation state
   @stg_skin_prev_state_dir(argument1);
   return 0;
@@ -1987,48 +2019,42 @@ if(@chatHistCount > @chatHistMax){
 }
 return 0;
 
-///// script @stg_server_edit
-// Edits the server (and optionally ports) as host[:tcp[:udp]] and reconnects
-// - the point of the row is escaping an unreachable server without an ini
-// editor. Only tcp given -> udp = tcp + 1 (the production convention).
-// args: none -> 0
-var _v, _old, _p1, _p2, _h, _t, _u;
-_old = @server + ":" + string(@tcpPort);
+///// script @stg_conn_edit
+// Edits one connection field and reconnects - the escape hatch for an
+// unreachable server, without an ini editor.
+// args: field (0 host, 1 tcp port, 2 udp port) -> 0
+var _v, _old, _t;
+if(argument0 == 0) _old = @server;
+if(argument0 == 1) _old = string(@tcpPort);
+if(argument0 == 2) _old = string(@udpPort);
 #if STUDIO
-_v = get_string("Server as host[:tcp[:udp]]", _old);
+if(argument0 == 0) _v = get_string("Server host", _old);
+if(argument0 == 1) _v = get_string("TCP port", _old);
+if(argument0 == 2) _v = get_string("UDP port", _old);
 #endif
 #if not STUDIO
 #if CJKTEXT
-_v = __ONLINE_ansi_to_utf8(wd_input_box("Server", "host[:tcp[:udp]]:", _old));
+if(argument0 == 0) _v = __ONLINE_ansi_to_utf8(wd_input_box("Server", "host:", _old));
+if(argument0 == 1) _v = __ONLINE_ansi_to_utf8(wd_input_box("TCP port", "port:", _old));
+if(argument0 == 2) _v = __ONLINE_ansi_to_utf8(wd_input_box("UDP port", "port:", _old));
 #endif
 #if not CJKTEXT
-_v = wd_input_box("Server", "host[:tcp[:udp]]:", _old);
+if(argument0 == 0) _v = wd_input_box("Server", "host:", _old);
+if(argument0 == 1) _v = wd_input_box("TCP port", "port:", _old);
+if(argument0 == 2) _v = wd_input_box("UDP port", "port:", _old);
 #endif
 #endif
 _v = @account_trim(_v);
 if(_v == _old) return 0;
-if(_v == ""){ @stg_toast("Server unchanged", 1); return 0; }
-_h = _v;
-_t = 0;
-_u = 0;
-_p1 = string_pos(":", _v);
-if(_p1 > 0){
-  _h = string_copy(_v, 1, _p1 - 1);
-  _p2 = string_pos(":", string_delete(_v, 1, _p1));
-  if(_p2 > 0){
-    _t = real(string_copy(_v, _p1 + 1, _p2 - 1));
-    _u = real(string_delete(_v, 1, _p1 + _p2));
-  }else{
-    _t = real(string_delete(_v, 1, _p1));
-    _u = _t + 1;
-  }
+if(argument0 == 0){
+  if(_v == ""){ @stg_toast("Invalid server", 2); return 0; }
+  @server = _v;
+}else{
+  _t = floor(real(_v));
+  if(_t < 1 || _t > 65535){ @stg_toast("Invalid port", 2); return 0; }
+  if(argument0 == 1) @tcpPort = _t;
+  if(argument0 == 2) @udpPort = _t;
 }
-if(_h == ""){ @stg_toast("Invalid server", 2); return 0; }
-if(_t != 0 && (_t < 1 || _t > 65535)){ @stg_toast("Invalid tcp port", 2); return 0; }
-if(_u != 0 && (_u < 1 || _u > 65535)){ @stg_toast("Invalid udp port", 2); return 0; }
-@server = _h;
-if(_t > 0) @tcpPort = floor(_t);
-if(_u > 0) @udpPort = floor(_u);
 @serverChanged = true;
 @manualReconnect = true;
 @stg_toast("Reconnecting to " + @server + "...", 1);

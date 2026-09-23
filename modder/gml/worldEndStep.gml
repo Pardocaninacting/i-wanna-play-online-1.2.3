@@ -1670,22 +1670,6 @@ if(@udpState == 1){
 	@chatLogOpen = !@chatLogOpen;
 	@chatLogScroll = 0;
 }
-	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyArrows) && !@settingsOpen && !@noteNoClick){
-	@showArrows = !@showArrows;
-	@showArrowsChanged = true;
-	#if GMS2
-		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
-	#endif
-	#if not GMS2
-		@a = instance_create(0, 0, @playerSaved);
-	#endif
-	if(@showArrows){
-		@a.@name = "Indicator: on";
-	}else{
-		@a.@name = "Indicator: off";
-	}
-	@a.@state = -2;
-}
 // CANVAS VIEW MODE (N): 0 transient (toast only), 1 canvas (all notes, no
 // names), 2 off. Notes no longer follow @vis.
 	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyCanvas) && !@settingsOpen && !@noteNoClick){
@@ -2438,6 +2422,8 @@ if(@visChanged){
 	ini_open("@config.ini");
 	ini_write_real("config", "vis", @vis);
 	ini_close();
+	// V/T/N are hotkey toggles: their state changes still broadcast through
+	// playerSaved (menu-only options no longer do)
 	#if GMS2
 		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
 	#endif
@@ -2460,18 +2446,6 @@ if(@saveChanged){
 }
 if(@fastLoadChanged){
 	@fastLoadChanged = false;
-	#if GMS2
-		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
-	#endif
-	#if not GMS2
-		@a = instance_create(0, 0, @playerSaved);
-	#endif
-	if(@fastLoadEnabled){
-		@a.@name = "Fast: on";
-	}else{
-		@a.@name = "Fast: off";
-	}
-	@a.@state = -2;
 	ini_open("@config.ini");
 	ini_write_real("config", "fast_load", @fastLoadEnabled);
 	ini_close();
@@ -2541,18 +2515,6 @@ if(@menuModePrefChanged){
 }
 if(@lerpChanged){
 	@lerpChanged = false;
-	#if GMS2
-		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
-	#endif
-	#if not GMS2
-		@a = instance_create(0, 0, @playerSaved);
-	#endif
-	@a.@name = "";
-	if(@lerpEnabled){
-		@a.@state = 5;
-	}else{
-		@a.@state = 6;
-	}
 	ini_open("@config.ini");
 	ini_write_real("config", "lerp", @lerpEnabled);
 	ini_write_real("config", "lerp_mode", @lerpMode);
@@ -3179,13 +3141,12 @@ if(@keybindEditing >= 0 && @settingsOpen && @settingsTab == 3 && @keybindArmTime
 			if(@keybindEditing == 1) @keySave = @kbPressed;
 			if(@keybindEditing == 2) @keySpectate = @kbPressed;
 			if(@keybindEditing == 3) @keyChatLog = @kbPressed;
-			if(@keybindEditing == 4) @keyArrows = @kbPressed;
-			if(@keybindEditing == 5) @keySettings = @kbPressed;
-			if(@keybindEditing == 6) @keyPlayerList = @kbPressed;
-			if(@keybindEditing == 7) @keyChat = @kbPressed;
-			if(@keybindEditing == 8) @keyPing = @kbPressed;
-			if(@keybindEditing == 9) @keyFastLoad = @kbPressed;
-			if(@keybindEditing == 10) @keyCanvas = @kbPressed;
+			if(@keybindEditing == 4) @keySettings = @kbPressed;
+			if(@keybindEditing == 5) @keyPlayerList = @kbPressed;
+			if(@keybindEditing == 6) @keyChat = @kbPressed;
+			if(@keybindEditing == 7) @keyPing = @kbPressed;
+			if(@keybindEditing == 8) @keyFastLoad = @kbPressed;
+			if(@keybindEditing == 9) @keyCanvas = @kbPressed;
 			@keybindSave = true;
 		}
 		@keybindEditing = -1;
@@ -3203,7 +3164,6 @@ if(@keybindSave){
 	ini_write_real("config", "key_settings", @keySettings);
 	ini_write_real("config", "key_chatlog", @keyChatLog);
 	ini_write_real("config", "key_spectate", @keySpectate);
-	ini_write_real("config", "key_arrows", @keyArrows);
 	ini_write_real("config", "key_ping", @keyPing);
 	ini_write_real("config", "key_canvas", @keyCanvas);
 	ini_write_real("config", "key_fastload", @keyFastLoad);

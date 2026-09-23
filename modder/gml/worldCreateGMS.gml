@@ -83,7 +83,7 @@ set_utf8_mode(1);
 @teamChanged = false;
 @visChanged = false;
 @saveChanged = false;
-@reconnectQuitOnFail = 0;
+@reconnectQuitOnFail = 1;   // default: quit on repeated failure (the pre-option behaviour)
 @reconnectQuitChanged = false;
 @serverChanged = false;
 @saveHistMaxChanged = false;
@@ -150,7 +150,6 @@ set_utf8_mode(1);
 global.@ftOnline = %arg7;
 @team = 0;
 @keySpectate = 89;
-@keyArrows = 73;
 @keyPing = 72;
 @keyCanvas = 78;
 @spectating = false;
@@ -478,7 +477,6 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		@keySettings = ini_read_real("config", "key_settings", @keySettings);
 		@keyChatLog = ini_read_real("config", "key_chatlog", @keyChatLog);
 		@keySpectate = ini_read_real("config", "key_spectate", @keySpectate);
-		@keyArrows = ini_read_real("config", "key_arrows", @keyArrows);
 		@keyPing = ini_read_real("config", "key_ping", @keyPing);
 		@keyCanvas = ini_read_real("config", "key_canvas", @keyCanvas);
 		@keyFastLoad = ini_read_real("config", "key_fastload", @keyFastLoad);
