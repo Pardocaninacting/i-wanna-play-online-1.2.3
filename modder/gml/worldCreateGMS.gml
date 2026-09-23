@@ -83,6 +83,10 @@ set_utf8_mode(1);
 @teamChanged = false;
 @visChanged = false;
 @saveChanged = false;
+@showArrowsChanged = false;
+@specCamChanged = false;
+@showPlayerListChanged = false;
+@noteCanvasModeChanged = false;
 @noteHideChanged = false;
 @menuModePrefChanged = false;
 @lerpChanged = false;
@@ -489,6 +493,13 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		// A PVP player must never hide the bullets that can kill them.
 		if(@pvpMode != 0) @bulletShow = 1;
 		@team = ini_read_real("config", "team", @team);
+		@vis = ini_read_real("config", "vis", @vis);
+		if(@vis < 0 || @vis > 2) @vis = 0;
+		@showArrows = ini_read_real("config", "indicator", @showArrows);
+		@specCamMode = ini_read_real("config", "spec_cam", @specCamMode);
+		@showPlayerList = ini_read_real("config", "player_list", @showPlayerList);
+		@noteCanvasMode = ini_read_real("notes", "canvas_mode", @noteCanvasMode);
+		if(@noteCanvasMode < 0 || @noteCanvasMode > 2) @noteCanvasMode = 0;
 		if(@team < 0 || @team > 7) @team = 0;
 		@team = floor(@team);
 		@skinAutoDL = ini_read_real("config", "skinAutoDL", 1);

@@ -1631,6 +1631,7 @@ if(@udpState == 1){
 }
 	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyPlayerList) && !@settingsOpen && !@noteNoClick){
 	@showPlayerList = !@showPlayerList;
+	@showPlayerListChanged = true;
 }
 	// QoL: F1 is an IME-safe alternate for the settings panel - with a Chinese
 	// IME active the runner never sees the letter key (the IME swallows it), which
@@ -1655,6 +1656,7 @@ if(@udpState == 1){
 }
 	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyArrows) && !@settingsOpen && !@noteNoClick){
 	@showArrows = !@showArrows;
+	@showArrowsChanged = true;
 	#if GMS2
 		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
 	#endif
@@ -1672,6 +1674,7 @@ if(@udpState == 1){
 // names), 2 off. Notes no longer follow @vis.
 	if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyCanvas) && !@settingsOpen && !@noteNoClick){
 	@noteCanvasMode = (@noteCanvasMode + 1) mod 3;
+	@noteCanvasModeChanged = true;
 	#if GMS2
 		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
 	#endif
@@ -2017,6 +2020,7 @@ if(@udpState == 1){
 if(@spectating){
 	if(keyboard_check_pressed(vk_up) || keyboard_check_pressed(vk_down)){
 		@specCamMode = 1 - @specCamMode;
+		@specCamChanged = true;
 	}
 }
 if(@specProgress >= 1){
@@ -2415,6 +2419,9 @@ if(@spectating != @spectatingPrev && @socket != -1){
 }
 if(@visChanged){
 	@visChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "vis", @vis);
+	ini_close();
 	#if GMS2
 		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
 	#endif
@@ -2451,6 +2458,30 @@ if(@fastLoadChanged){
 	@a.@state = -2;
 	ini_open("@config.ini");
 	ini_write_real("config", "fast_load", @fastLoadEnabled);
+	ini_close();
+}
+if(@showArrowsChanged){
+	@showArrowsChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "indicator", @showArrows);
+	ini_close();
+}
+if(@specCamChanged){
+	@specCamChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "spec_cam", @specCamMode);
+	ini_close();
+}
+if(@showPlayerListChanged){
+	@showPlayerListChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "player_list", @showPlayerList);
+	ini_close();
+}
+if(@noteCanvasModeChanged){
+	@noteCanvasModeChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("notes", "canvas_mode", @noteCanvasMode);
 	ini_close();
 }
 if(@noteHideChanged){

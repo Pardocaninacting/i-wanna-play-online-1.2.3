@@ -1717,8 +1717,8 @@ if(_a == 3){
 }
 if(_a == 4){ @fastLoadEnabled = !@fastLoadEnabled; @fastLoadChanged = true; return 0; }
 if(_a == 5){ @vis += 1; if(@vis > 2) @vis = 0; @visChanged = true; return 0; }
-if(_a == 6){ @showArrows = !@showArrows; @stg_toast("Indicator: " + @stg_onoff(@showArrows), 1); return 0; }
-if(_a == 7){ @specCamMode = 1 - @specCamMode; @stg_toast("Spec Cam: " + @stg_value(argument0), 1); return 0; }
+if(_a == 6){ @showArrows = !@showArrows; @showArrowsChanged = true; @stg_toast("Indicator: " + @stg_onoff(@showArrows), 1); return 0; }
+if(_a == 7){ @specCamMode = 1 - @specCamMode; @specCamChanged = true; @stg_toast("Spec Cam: " + @stg_value(argument0), 1); return 0; }
 if(_a == 8){
   if(@pvpAvail){
     @pvpMode += 1;
@@ -1884,6 +1884,7 @@ if(_a == 5){
 }
 if(_a == 7){
   @specCamMode = 1 - @specCamMode;
+  @specCamChanged = true;
   @stg_toast("Spec Cam: " + @stg_value(argument0), 1);
   return 0;
 }
