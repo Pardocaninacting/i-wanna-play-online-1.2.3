@@ -130,6 +130,11 @@ global.__ONLINE_guiAlive = false;
 @teamChanged = false;
 @visChanged = false;
 @saveChanged = false;
+@reconnectQuitOnFail = 0;
+@reconnectQuitChanged = false;
+@serverChanged = false;
+@saveHistMaxChanged = false;
+@chatHistMaxChanged = false;
 @showArrowsChanged = false;
 @specCamChanged = false;
 @showPlayerListChanged = false;
@@ -137,6 +142,8 @@ global.__ONLINE_guiAlive = false;
 @noteHideChanged = false;
 @menuModePrefChanged = false;
 @lerpChanged = false;
+@lerpFactor = 0.5;
+@lerpMode = -1;   // resolved in the config loop below (legacy key fallback there)
 @fastLoadChanged = false;
 @syncEnabledChanged = false;
 // S5 (PVP): mode 0=Off/1=Team/2=FFA; bullets visible by default and forced
@@ -624,11 +631,28 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		if(@pvpMode != 0) @bulletShow = 1;
 		@team = ini_read_real("config", "team", @team);
 		@vis = ini_read_real("config", "vis", @vis);
+		@lerpMode = ini_read_real("config", "lerp_mode", -1);
+		if(@lerpMode < 0){
+			// legacy bool key: on -> Standard, off -> OFF
+			@lerpMode = 2;
+			if(!@lerpEnabled) @lerpMode = 0;
+		}
+		if(@lerpMode > 3) @lerpMode = 2;
+		@stg_lerp_apply();
 		if(@vis < 0 || @vis > 2) @vis = 0;
 		@showArrows = ini_read_real("config", "indicator", @showArrows);
 		@specCamMode = ini_read_real("config", "spec_cam", @specCamMode);
 		@showPlayerList = ini_read_real("config", "player_list", @showPlayerList);
 		@noteCanvasMode = ini_read_real("notes", "canvas_mode", @noteCanvasMode);
+		@reconnectQuitOnFail = ini_read_real("config", "reconnect_quit", @reconnectQuitOnFail);
+		@tcpPort = ini_read_real("config", "tcp_port", @tcpPort);
+		@udpPort = ini_read_real("config", "udp_port", @udpPort);
+		@saveHistMax = ini_read_real("config", "save_hist_max", @saveHistMax);
+		if(@saveHistMax < 100) @saveHistMax = 100;
+		if(@saveHistMax > 2000) @saveHistMax = 2000;
+		@chatHistMax = ini_read_real("config", "chat_hist_max", @chatHistMax);
+		if(@chatHistMax < 10) @chatHistMax = 10;
+		if(@chatHistMax > 300) @chatHistMax = 300;
 		if(@noteCanvasMode < 0 || @noteCanvasMode > 2) @noteCanvasMode = 0;
 		if(@team < 0 || @team > 7) @team = 0;
 		@team = floor(@team);

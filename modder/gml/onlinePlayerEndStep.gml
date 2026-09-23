@@ -10,8 +10,8 @@ if(@avatarAlive && @lerpInit){
 		@oWorld = instance_find(%arg2, 0);
 	}
 	if(@oWorld != noone && @oWorld.@lerpEnabled){
-		x += (@targetX - x) * 0.5;
-		y += (@targetY - y) * 0.5;
+		x += (@targetX - x) * @oWorld.@lerpFactor;
+		y += (@targetY - y) * @oWorld.@lerpFactor;
 	}else{
 		x = @targetX;
 		y = @targetY;

@@ -183,6 +183,8 @@ if(_fw < 120) _fw = 120;
 @stg_row_add(1, 0, "", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgRowH;
 @stg_row_add(5, 11, "", _cl, _y, _btnW, 1, _cl); _y += global.__ONLINE_stgRowH;
 @stg_row_add(5, 15, "", _cl, _y, _btnW, 1, _cl); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 63, "On failure", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(2, 64, "Server", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
 // --- account
 _y += 6;
 @stg_row_add(0, 0, "ACCOUNT", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
@@ -196,7 +198,7 @@ _y += 6;
 // made both halves harder to scan.
 @stg_row_add(0, 0, "GAMEPLAY", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 @stg_row_add(3, 1, "Team", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 2, "Lerp", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 2, "Lerp", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(4, 3, "Save", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(4, 4, "Fast", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(3, 8, "PVP", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
@@ -215,6 +217,10 @@ _y += 6;
 @stg_row_add(0, 0, "NOTES", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 @stg_row_add(4, 60, "Hide others", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(4, 61, "Hide all", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+_y += 6;
+@stg_row_add(0, 0, "ADVANCED", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(3, 66, "Save history", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 67, "Chat history", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
@@ -335,7 +341,11 @@ if(_a == 12) return "Your in-game name. It is written to the account store and s
 if(_a == 13) return "Session key: players who use the same key meet each other. It is not an account password and may be empty.";
 if(_a == 14) return "Where name and key are saved. Global covers every game on this PC.";
 if(_a == 1) return "Team colour, used for names and the roster.";
-if(_a == 2) return "Interpolate remote players between network updates: smoother, but about one update behind.";
+if(_a == 2) return "Interpolate remote players between network updates: smoother but behind. Light = 0.35, Standard = 0.5, Strong = 0.65 per frame.";
+if(_a == 63) return "When every reconnect attempt fails: stay in the game offline (you can reconnect from the menu) or quit.";
+if(_a == 64) return "Server as host[:tcp[:udp]]. Saved to the config and reconnects immediately. Only a tcp port given -> udp = tcp + 1.";
+if(_a == 66) return "Local shared-save history cap. Older non-favourite entries are dropped past this.";
+if(_a == 67) return "Chat log length in lines.";
 if(_a == 3) return "Shared online saves. The T key toggles this while playing.";
 if(_a == 4) return "Fast save/load path, for engines that restart the room on load.";
 if(_a == 8) return "Player versus player. Bullets stay visible while it is on.";
@@ -1525,7 +1535,17 @@ if(_a == 1){
   @teamNames[4] = "Purple"; @teamNames[5] = "Green"; @teamNames[6] = "Orange"; @teamNames[7] = "Cyan";
   return string(@team) + " " + @teamNames[@team];
 }
-if(_a == 2) return @stg_onoff(@lerpEnabled);
+if(_a == 2){
+  @lerpNames[0] = "OFF"; @lerpNames[1] = "Light"; @lerpNames[2] = "Standard"; @lerpNames[3] = "Strong";
+  return @lerpNames[@lerpMode];
+}
+if(_a == 63){
+  if(@reconnectQuitOnFail) return "Quit game";
+  return "Stay offline";
+}
+if(_a == 64) return @server + ":" + string(@tcpPort);
+if(_a == 66) return string(@saveHistMax);
+if(_a == 67) return string(@chatHistMax);
 if(_a == 3) return @stg_onoff(@save_enabled);
 if(_a == 4) return @stg_onoff(@fastLoadEnabled);
 if(_a == 5){
@@ -1621,7 +1641,11 @@ if(_a == 15) return "Save the account and reconnect with the new identity (no re
 if(_a == 11) return "Drop the current connection and connect again.";
 if(_a == 10) return "Choose which player object drives your character.";
 if(_a == 1) return "Team colour used for names and the roster.";
-if(_a == 2) return "Interpolate remote players between network updates.";
+if(_a == 2) return "Remote-player smoothing strength: OFF, Light, Standard, Strong.";
+if(_a == 63) return "What happens when the server stays unreachable.";
+if(_a == 64) return "Server address as host[:tcp[:udp]]. Applies and reconnects.";
+if(_a == 66) return "How many shared saves are kept locally.";
+if(_a == 67) return "How many chat lines are kept.";
 if(_a == 3) return "Shared online saves (T key toggles this in game).";
 if(_a == 4) return "Fast save/load path for game_restart engines.";
 if(_a == 5) return "How other players are drawn: full, names only, or hidden.";
@@ -1703,7 +1727,30 @@ if(_a == 1){
   @teamChanged = true;
   return 0;
 }
-if(_a == 2){ @lerpEnabled = !@lerpEnabled; @lerpChanged = true; return 0; }
+if(_a == 2){
+  @lerpMode += 1;
+  if(@lerpMode > 3) @lerpMode = 0;
+  @stg_lerp_apply();
+  @lerpChanged = true;
+  return 0;
+}
+if(_a == 63){
+  @reconnectQuitOnFail = 1 - @reconnectQuitOnFail;
+  @reconnectQuitChanged = true;
+  return 0;
+}
+if(_a == 64){ @stg_server_edit(); return 0; }
+if(_a == 66){
+  if(@saveHistMax == 250) @saveHistMax = 500; else if(@saveHistMax == 500) @saveHistMax = 1000; else @saveHistMax = 250;
+  @saveHistMaxChanged = true;
+  return 0;
+}
+if(_a == 67){
+  if(@chatHistMax == 30) @chatHistMax = 60; else if(@chatHistMax == 60) @chatHistMax = 120; else @chatHistMax = 30;
+  @stg_chat_trim();
+  @chatHistMaxChanged = true;
+  return 0;
+}
 if(_a == 3){
   @save_enabled = 1 - @save_enabled;
   @saveChanged = true;
@@ -1857,6 +1904,19 @@ if(_a == 62){
   @menuModePrefChanged = true;
   return 0;
 }
+if(_a == 2){
+  @lerpMode += argument1;
+  if(@lerpMode < 0) @lerpMode = 3;
+  if(@lerpMode > 3) @lerpMode = 0;
+  @stg_lerp_apply();
+  @lerpChanged = true;
+  return 0;
+}
+if(_a == 63){
+  @reconnectQuitOnFail = 1 - @reconnectQuitOnFail;
+  @reconnectQuitChanged = true;
+  return 0;
+}
 if(_a == 55){
   // skins rows: Left/Right cycles the preview's animation state
   @stg_skin_prev_state_dir(argument1);
@@ -1902,9 +1962,79 @@ if(_a == 8){
 }
 return @stg_act(argument0);
 
+///// script @stg_lerp_apply
+// Derives the live lerp state from the 4-value mode row.
+// args: none -> 0
+@lerpEnabled = (@lerpMode > 0);
+@lerpFactor = 0.5;
+if(@lerpMode == 1) @lerpFactor = 0.35;
+if(@lerpMode == 3) @lerpFactor = 0.65;
+return 0;
+
+///// script @stg_chat_trim
+// After lowering the chat history cap, keep the NEWEST entries and drop the
+// count to the cap (the ring shows [0..count), so a shrunk cap would
+// otherwise leave stale garbage at the tail).
+// args: none -> 0
+var _ci;
+if(@chatHistCount > @chatHistMax){
+  for(_ci = 0; _ci < @chatHistMax; _ci += 1){
+    @chatHistName[_ci] = @chatHistName[_ci + @chatHistCount - @chatHistMax];
+    @chatHistMsg[_ci] = @chatHistMsg[_ci + @chatHistCount - @chatHistMax];
+    @chatHistTeam[_ci] = @chatHistTeam[_ci + @chatHistCount - @chatHistMax];
+  }
+  @chatHistCount = @chatHistMax;
+}
+return 0;
+
+///// script @stg_server_edit
+// Edits the server (and optionally ports) as host[:tcp[:udp]] and reconnects
+// - the point of the row is escaping an unreachable server without an ini
+// editor. Only tcp given -> udp = tcp + 1 (the production convention).
+// args: none -> 0
+var _v, _old, _p1, _p2, _h, _t, _u;
+_old = @server + ":" + string(@tcpPort);
+#if STUDIO
+_v = get_string("Server as host[:tcp[:udp]]", _old);
+#endif
+#if not STUDIO
+#if CJKTEXT
+_v = __ONLINE_ansi_to_utf8(wd_input_box("Server", "host[:tcp[:udp]]:", _old));
+#endif
+#if not CJKTEXT
+_v = wd_input_box("Server", "host[:tcp[:udp]]:", _old);
+#endif
+#endif
+_v = @account_trim(_v);
+if(_v == _old) return 0;
+if(_v == ""){ @stg_toast("Server unchanged", 1); return 0; }
+_h = _v;
+_t = 0;
+_u = 0;
+_p1 = string_pos(":", _v);
+if(_p1 > 0){
+  _h = string_copy(_v, 1, _p1 - 1);
+  _p2 = string_pos(":", string_delete(_v, 1, _p1));
+  if(_p2 > 0){
+    _t = real(string_copy(_v, _p1 + 1, _p2 - 1));
+    _u = real(string_delete(_v, 1, _p1 + _p2));
+  }else{
+    _t = real(string_delete(_v, 1, _p1));
+    _u = _t + 1;
+  }
+}
+if(_h == ""){ @stg_toast("Invalid server", 2); return 0; }
+if(_t != 0 && (_t < 1 || _t > 65535)){ @stg_toast("Invalid tcp port", 2); return 0; }
+if(_u != 0 && (_u < 1 || _u > 65535)){ @stg_toast("Invalid udp port", 2); return 0; }
+@server = _h;
+if(_t > 0) @tcpPort = floor(_t);
+if(_u > 0) @udpPort = floor(_u);
+@serverChanged = true;
+@manualReconnect = true;
+@stg_toast("Reconnecting to " + @server + "...", 1);
+return 0;
+
 ///// script @stg_toast
-// REMOVED: the transient pop-up duplicated what the detail pane and the footer
-// hint already say, and it overlapped the list. Returning immediately keeps every
 // call site valid while nothing is ever stored, so @stg_toast_active() stays false
 // and no box is drawn anywhere.
 // args: text, kind -> 0

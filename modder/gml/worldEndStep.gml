@@ -905,13 +905,29 @@ if(@reconnecting){
 	if(@reconnectTimer <= 0){
 		@reconnectAttempts += 1;
 		if(@reconnectAttempts > 10){
-			#if STUDIO
-				show_message("Failed to reconnect after multiple attempts.");
-			#endif
-			#if not STUDIO
-				wd_message_simple("Failed to reconnect after multiple attempts.");
-			#endif
-			@mustQuit = true;
+			if(@reconnectQuitOnFail){
+				#if STUDIO
+					show_message("Failed to reconnect after multiple attempts.");
+				#endif
+				#if not STUDIO
+					wd_message_simple("Failed to reconnect after multiple attempts.");
+				#endif
+				@mustQuit = true;
+			}else{
+				// stay offline: stop retrying, keep the game alive as a standalone;
+				// the menu's Reconnect rows can try again any time
+				@reconnecting = false;
+				@reconnectAttempts = 0;
+				@socketConnectResult = 0;
+				#if GMS2
+					@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
+				#endif
+				#if not GMS2
+					@a = instance_create(0, 0, @playerSaved);
+				#endif
+				@a.@name = "Offline - open the menu to reconnect";
+				@a.@state = -2;
+			}
 		}else{
 			__ONLINE_socket_destroy(@socket);
 			@socket = __ONLINE_socket_create();
@@ -2460,6 +2476,32 @@ if(@fastLoadChanged){
 	ini_write_real("config", "fast_load", @fastLoadEnabled);
 	ini_close();
 }
+if(@reconnectQuitChanged){
+	@reconnectQuitChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "reconnect_quit", @reconnectQuitOnFail);
+	ini_close();
+}
+if(@serverChanged){
+	@serverChanged = false;
+	ini_open("@config.ini");
+	ini_write_string("config", "server", @server);
+	ini_write_real("config", "tcp_port", @tcpPort);
+	ini_write_real("config", "udp_port", @udpPort);
+	ini_close();
+}
+if(@saveHistMaxChanged){
+	@saveHistMaxChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "save_hist_max", @saveHistMax);
+	ini_close();
+}
+if(@chatHistMaxChanged){
+	@chatHistMaxChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "chat_hist_max", @chatHistMax);
+	ini_close();
+}
 if(@showArrowsChanged){
 	@showArrowsChanged = false;
 	ini_open("@config.ini");
@@ -2513,6 +2555,7 @@ if(@lerpChanged){
 	}
 	ini_open("@config.ini");
 	ini_write_real("config", "lerp", @lerpEnabled);
+	ini_write_real("config", "lerp_mode", @lerpMode);
 	ini_close();
 }
 // S5 (PVP): persist mode/visibility changes. Switching PVP on forces bullet
