@@ -83,6 +83,8 @@ set_utf8_mode(1);
 @teamChanged = false;
 @visChanged = false;
 @saveChanged = false;
+@noteHideChanged = false;
+@menuModePrefChanged = false;
 @lerpChanged = false;
 @fastLoadChanged = false;
 @syncEnabledChanged = false;

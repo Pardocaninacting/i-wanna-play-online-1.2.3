@@ -1058,10 +1058,9 @@ if(@showArrows || @spectating){
 		if(@noteHideOthers && @noteSenderArr[@i] != @selfID) continue;
 		@pAge = current_time - @noteT[@i];
 		if(@pAge < 0) @pAge = 0;
+		// every kind shares the emoji's appear-stay-disappear timing (maintainer
+		// decision: the per-kind 15s/20s variants were inconsistent, not richer)
 		@pToastMs = @noteToastMs;
-		if(@noteKindArr[@i] == 1) @pToastMs = 15000;
-		if(@noteKindArr[@i] == 2) @pToastMs = 20000;
-		if(@noteKindArr[@i] == 3) @pToastMs = 20000;
 		@pOuterAlpha = 0;
 		@pOuterR = 0;
 		if(@pAge < @pToastMs){

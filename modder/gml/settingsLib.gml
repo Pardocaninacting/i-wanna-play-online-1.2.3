@@ -206,9 +206,15 @@ _y += 6;
 @stg_row_add(3, 5, "Visual", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(4, 6, "Indicator", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(3, 7, "Spec Cam", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 62, "Menu layout", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 #if PLAYER_LIST
 @stg_row_add(5, 10, "Player Objects", _cl, _y, 130, 1, _ctlX); _y += global.__ONLINE_stgRowH;
 #endif
+_y += 6;
+// notes visibility (the [notes] ini keys already exist; these rows just expose them)
+@stg_row_add(0, 0, "NOTES", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(4, 60, "Hide others", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 61, "Hide all", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
@@ -337,6 +343,9 @@ if(_a == 9) return "Share your bullets with the room. Locked on while PVP is ena
 if(_a == 5) return "How other players are drawn: full, names only, or hidden.";
 if(_a == 6) return "Direction indicator above remote players.";
 if(_a == 7) return "Spectator camera mode.";
+if(_a == 62) return "Auto picks the layout from the window size; Full always shows the detail pane; Narrow is always list-only.";
+if(_a == 60) return "Other players' notes are not drawn and their arrival sound is muted. Your own notes still show.";
+if(_a == 61) return "No notes are drawn at all. Sending yours keeps working, and the canvas mode still collects them.";
 if(_a == 20) return "Enter applies this save. F toggles favourite, 1-8 assigns a hotkey, Del clears it.";
 if(_a == 21) return "Show only favourite saves.";
 if(_a == 22) return "Deletes non-favourite saves.";
@@ -1546,6 +1555,12 @@ if(_a == 20){
 }
 if(_a == 21) return @stg_onoff(@saveHistFilter);
 if(_a == 22) return "Clear all";
+if(_a == 60) return @stg_onoff(@noteHideOthers);
+if(_a == 61) return @stg_onoff(@noteHideAll);
+if(_a == 62){
+  @mlNames[0] = "Auto"; @mlNames[1] = "Narrow"; @mlNames[2] = "Full";
+  return @mlNames[@menuModePref];
+}
 if(_a == 10) return "Pick";
 if(_a == 11) return "Reconnect now";
 if(_a == 15) return "Apply & Reconnect";
@@ -1612,6 +1627,9 @@ if(_a == 4) return "Fast save/load path for game_restart engines.";
 if(_a == 5) return "How other players are drawn: full, names only, or hidden.";
 if(_a == 6) return "Show the direction indicator above remote players.";
 if(_a == 7) return "Spectator camera mode.";
+if(_a == 62) return "Menu layout: Auto follows the window, or force Full / Narrow.";
+if(_a == 60) return "Do not draw other players' notes (yours still show).";
+if(_a == 61) return "Do not draw any notes at all (sending keeps working).";
 if(_a == 8) return "Player versus player mode. Bullets stay visible while it is on.";
 if(_a == 9) return "Share your bullets with the room (locked on in PVP).";
 if(_a == 20) return "Enter applies this save. F favourite, 1-8 hotkey, Del clears.";
@@ -1727,6 +1745,14 @@ if(_a == 20){
   return 1;
 }
 if(_a == 21){ @saveHistFilter = 1 - @saveHistFilter; return 0; }
+if(_a == 60){ @noteHideOthers = 1 - @noteHideOthers; @noteHideChanged = true; return 0; }
+if(_a == 61){ @noteHideAll = 1 - @noteHideAll; @noteHideChanged = true; return 0; }
+if(_a == 62){
+  @menuModePref += 1;
+  if(@menuModePref > 2) @menuModePref = 0;
+  @menuModePrefChanged = true;
+  return 0;
+}
 if(_a == 22){
   // destructive, so it takes two clicks: the first arms the confirmation, a
   // second click on the same button performs it (the pointer can always finish
@@ -1824,6 +1850,13 @@ return 0;
 // args: row, dir -> 1 when the action closed the menu
 var _a;
 _a = global.__ONLINE_stgAct[argument0];
+if(_a == 62){
+  @menuModePref += argument1;
+  if(@menuModePref < 0) @menuModePref = 2;
+  if(@menuModePref > 2) @menuModePref = 0;
+  @menuModePrefChanged = true;
+  return 0;
+}
 if(_a == 55){
   // skins rows: Left/Right cycles the preview's animation state
   @stg_skin_prev_state_dir(argument1);

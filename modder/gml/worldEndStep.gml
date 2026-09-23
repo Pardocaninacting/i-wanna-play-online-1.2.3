@@ -2453,6 +2453,19 @@ if(@fastLoadChanged){
 	ini_write_real("config", "fast_load", @fastLoadEnabled);
 	ini_close();
 }
+if(@noteHideChanged){
+	@noteHideChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("notes", "hide_others", @noteHideOthers);
+	ini_write_real("notes", "hide_all", @noteHideAll);
+	ini_close();
+}
+if(@menuModePrefChanged){
+	@menuModePrefChanged = false;
+	ini_open("@config.ini");
+	ini_write_real("config", "menu_mode", @menuModePref);
+	ini_close();
+}
 if(@lerpChanged){
 	@lerpChanged = false;
 	#if GMS2
