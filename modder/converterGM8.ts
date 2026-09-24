@@ -1099,9 +1099,6 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	if(pvpKillScript !== ""){
 		console.log(`[pvp] kill script -> ${pvpKillScript} (PVP available)`);
 		GMLCode.addVariables("PVPKILL");
-		// the menu blend reset is safe on every GM8 runner we ship (it resolves
-		// draw_set_blend_mode as a builtin); the GMS path gates it by FUNC presence
-		GMLCode.addVariables("HAS_BLENDMODE");
 	}else{
 		console.log(`[pvp] no kill script resolved; PVP unavailable for this game`);
 	}

@@ -242,18 +242,6 @@ static class Program
         {
             Console.WriteLine("HTTP DLL md5_dir export: missing (pure-GML hash fallback)");
         }
-        // The menu's blend reset only compiles where the game already uses
-        // draw_set_blend_mode (a game that never sets a blend mode stays in
-        // bm_normal anyway, so the reset is redundant there - and on GMS2 an
-        // unused builtin compiles into an unresolvable variable read).
-        if (Data.Functions.ByName("draw_set_blend_mode") != null)
-        {
-            activeFlags.Add("HAS_BLENDMODE");
-        }
-        else
-        {
-            Console.WriteLine("Game never uses draw_set_blend_mode: the menu's blend reset is omitted (it is redundant there)");
-        }
         if (Config.UseX64NativeHttpDll)
         {
             AddNativeX64ExtensionIfMissing(md5DirAvailable);

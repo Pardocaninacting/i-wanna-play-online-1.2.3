@@ -446,7 +446,13 @@ if(@settingsOpen){
 	// The game's own draw state leaks into this event (e.g. fish's title glow
 	// uses bm_add, under which a black panel plate adds zero and vanishes);
 	// always draw the chrome under the normal blend mode.
-	#if HAS_BLENDMODE
+	// GMS2 renamed the blend functions to gpu_set_blendmode (the legacy
+	// draw_set_blend_mode only exists in UTMT's !gms2 builtin table - on a GMS2
+	// game it compiles into an unresolvable variable read)
+	#if GMS2
+	gpu_set_blendmode(bm_normal);
+	#endif
+	#if not GMS2
 	draw_set_blend_mode(bm_normal);
 	#endif
 	// panel: flat dark plate + thin frame
