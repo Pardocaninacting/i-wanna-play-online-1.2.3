@@ -108,6 +108,13 @@ if(@hudFirst < 0 || view_current == @hudFirst){
 @hudGuiOn = true;
 @hudWinW = display_get_gui_width();
 @hudWinH = display_get_gui_height();
+// A Studio 2 game with no GUI layer configured reports 0 here. The guard used to switch
+// the whole overlay off, so the panel stayed invisible while its Step logic kept
+// working ("the menu works but nothing is drawn"). Fall back to the window size: with
+// no GUI layer the Draw GUI surface is the window. The GM8 branch above falls back the
+// same way (view_wport -> room_width).
+if(@hudWinW < 1) @hudWinW = window_get_width();
+if(@hudWinH < 1) @hudWinH = window_get_height();
 if(@hudWinW < 1) @hudGuiOn = false;
 if(@hudWinH < 1) @hudGuiOn = false;
 #endif
