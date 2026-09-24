@@ -724,6 +724,11 @@ static class Program
             // area, so the shared account store goes through native code
             DefineNative(file, ref functionId, "hfile_read_text", "file_read_text", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
             DefineNative(file, ref functionId, "hfile_write_text", "file_write_text", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.String, UndertaleExtensionVarType.String, UndertaleExtensionVarType.Double);
+            // the shared account store calls the PLAIN names directly (the GML
+            // templates do not rewrite them) - register both aliases so x64 games
+            // resolve them the same way the x86 path does
+            DefineNative(file, ref functionId, "file_read_text", "file_read_text", UndertaleExtensionVarType.String, UndertaleExtensionVarType.String);
+            DefineNative(file, ref functionId, "file_write_text", "file_write_text", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.String, UndertaleExtensionVarType.String, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_uint8", "buffer_write_uint8", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_uint16", "buffer_write_uint16", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
         DefineNative(file, ref functionId, "hbuffer_write_int16", "buffer_write_int16", UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double, UndertaleExtensionVarType.Double);
