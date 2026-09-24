@@ -446,7 +446,9 @@ if(@settingsOpen){
 	// The game's own draw state leaks into this event (e.g. fish's title glow
 	// uses bm_add, under which a black panel plate adds zero and vanishes);
 	// always draw the chrome under the normal blend mode.
+	#if HAS_BLENDMODE
 	draw_set_blend_mode(bm_normal);
+	#endif
 	// panel: flat dark plate + thin frame
 	draw_set_alpha(0.90);
 	draw_set_color(c_black);
