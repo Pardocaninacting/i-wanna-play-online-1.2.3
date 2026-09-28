@@ -234,6 +234,8 @@ export const ConverterGMS = async function(input: string, gameName: string, serv
 	console.log("Converting data.win...");
 	await ConvertDataWin(oldDataWin, newDataWin, gameName, uniqueKey, server, ports, useX64NativeHttpDll, customSlot, defines);
 	await fs.unlink(oldDataWin);
+	// i18n: iwpo-settings.ini [iwpo] lang=<code> overrides the shipped default UI language
+	const langSuffix: string = defines.has("iwpo.lang") ? `\nlang=${(defines.get("iwpo.lang") as string).trim()}` : "";
 	if(isPacked){
 		const onlineDir: string = path.join(path.dirname(input), `${gameName}_online`);
 		await Utils.rimraf(onlineDir);
@@ -245,7 +247,7 @@ export const ConverterGMS = async function(input: string, gameName: string, serv
 		// a GM8.0-only concern (converterGM8 writes them there).
 		if(await fs.pathExists(path.join(__dirname, "lang")))
 			await Utils.copyDir(path.join(__dirname, "lang"), path.join(onlineDir, "lang"));
-		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1\nskin=\nskinAutoDL=1`;
+		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1\nskin=\nskinAutoDL=1` + langSuffix;
 		await fs.writeFile(path.join(onlineDir, CONFIG_FILENAME), configContent, "utf8");
 		if(customSlot) await WriteRuntimeSyncDefaults(onlineDir, customSlot);
 	}else{
@@ -257,7 +259,7 @@ export const ConverterGMS = async function(input: string, gameName: string, serv
 		// i18n: see the packed branch above
 		if(await fs.pathExists(path.join(__dirname, "lang")))
 			await Utils.copyDir(path.join(__dirname, "lang"), path.join(path.dirname(input), "lang"));
-		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1\nskin=\nskinAutoDL=1`;
+		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1\nskin=\nskinAutoDL=1` + langSuffix;
 		await fs.writeFile(path.join(path.dirname(input), CONFIG_FILENAME), configContent, "utf8");
 		if(customSlot) await WriteRuntimeSyncDefaults(path.dirname(input), customSlot);
 	}

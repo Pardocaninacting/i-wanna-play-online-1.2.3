@@ -1637,6 +1637,8 @@ if(@udpState == 1){
 			@kbFocus = 0;
 			@kbRow[0] = @stg_first_row();
 			@keybindEditing = -1;
+			// pick up language files dropped into lang/ since boot
+			@lang_scan();
 		}else{
 			@keybindEditing = -1;
 		}
@@ -2476,6 +2478,12 @@ if(@menuModePrefChanged){
 	@menuModePrefChanged = false;
 	ini_open("@config.ini");
 	ini_write_real("config", "menu_mode", @menuModePref);
+	ini_close();
+}
+if(@langChanged){
+	@langChanged = false;
+	ini_open("@config.ini");
+	ini_write_string("config", "lang", global.__ONLINE_lang);
 	ini_close();
 }
 if(@lerpChanged){

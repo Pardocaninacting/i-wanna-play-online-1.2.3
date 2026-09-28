@@ -362,6 +362,9 @@ global.__ONLINE_LK_HUD_PICK_CURRENT = 319;
 global.__ONLINE_LK_HUD_PICK_REMOVE = 320;
 global.__ONLINE_LK_HUD_PICK_NO_INSTANCE = 321;
 global.__ONLINE_LK_NOTIFY_RECONNECT_FAILED = 322;
+global.__ONLINE_LK_ROW_LANGUAGE = 323;
+global.__ONLINE_LK_DESC_LANGUAGE = 324;
+global.__ONLINE_LK_HINT_LANGUAGE = 325;
 global.__ONLINE_LangKey[0] = "menu.tab.settings";
 global.__ONLINE_LangKey[1] = "menu.tab.saves";
 global.__ONLINE_LangKey[2] = "menu.tab.rating";
@@ -685,7 +688,10 @@ global.__ONLINE_LangKey[319] = "hud.pick_current";
 global.__ONLINE_LangKey[320] = "hud.pick_remove";
 global.__ONLINE_LangKey[321] = "hud.pick_no_instance";
 global.__ONLINE_LangKey[322] = "notify.reconnect_failed";
-global.__ONLINE_LangCount = 323;
+global.__ONLINE_LangKey[323] = "menu.row.language";
+global.__ONLINE_LangKey[324] = "menu.desc.language";
+global.__ONLINE_LangKey[325] = "menu.hint.language";
+global.__ONLINE_LangCount = 326;
 // every slot pre-initialised: on GMS, reading an array slot that was never
 // written aborts the event (GML_COMPAT.md section 1)
 for(_i = 0; _i < global.__ONLINE_LangCap; _i += 1) global.__ONLINE_Lang[_i] = "";
@@ -778,3 +784,39 @@ while(string_length(_rest) > 0){
   }
 }
 return _n;
+
+///// script @lang_scan
+// Enumerates the available languages into global.__ONLINE_langList[0..N):
+// "en" first (the built-in fallback - there is no en.ini), then one entry per
+// lang/<code>.ini next to the exe. The path is RELATIVE on purpose: it is the
+// sandbox-friendly route (same as iwposkins); GM8.0 additionally filters the
+// .gbk.ini copies out (they are the same languages re-encoded).
+// args: none -> count
+var _f, _code;
+global.__ONLINE_langList[0] = "en";
+global.__ONLINE_langListN = 1;
+_f = file_find_first("lang" + chr(92) + "*.ini", 0);
+while(_f != ""){
+  if(string_pos(".gbk.ini", string_lower(_f)) == 0){
+    _code = string_copy(_f, 1, string_length(_f) - 4);
+    if(_code != "en"){
+      global.__ONLINE_langList[global.__ONLINE_langListN] = _code;
+      global.__ONLINE_langListN += 1;
+    }
+  }
+  _f = file_find_next();
+}
+file_find_close();
+return global.__ONLINE_langListN;
+
+///// script @lang_apply
+// Switch language at runtime: rebuild the table (every slot back to the English
+// fallback), then load the new file. Instant effect - the row table is rebuilt
+// every frame, so the next frame reads the new strings.
+// args: code -> 0
+var _keep;
+_keep = argument0;
+@lang_init();
+global.__ONLINE_lang = _keep;
+@lang_load(_keep);
+return 0;

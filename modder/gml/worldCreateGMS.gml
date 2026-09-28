@@ -97,6 +97,7 @@ set_utf8_mode(1);
 @noteCanvasModeChanged = false;
 @noteHideChanged = false;
 @menuModePrefChanged = false;
+@langChanged = false;
 @lerpChanged = false;
 @lerpFactor = 0.5;
 @lerpMode = -1;   // resolved in the config loop below (legacy key fallback there)
@@ -556,6 +557,7 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 // i18n: load the language file now that the config loop has settled the code.
 // Missing file/keys are fine - @L falls back to the English at the call site.
 @lang_load(global.__ONLINE_lang);
+@lang_scan();
 // SKINS: wipe a stale half-downloaded package (see worldCreate.gml).
 if(@skinDlTmp != ""){
 	@skin_dl_wipe(@skinDlTmp);

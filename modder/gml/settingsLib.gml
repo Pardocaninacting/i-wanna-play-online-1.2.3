@@ -212,6 +212,7 @@ _y += 6;
 @stg_row_add(4, 6, @L(global.__ONLINE_LK_ROW_INDICATOR, "Indicator"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(3, 7, @L(global.__ONLINE_LK_ROW_SPEC_CAM, "Spec Cam"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(3, 62, @L(global.__ONLINE_LK_ROW_MENU_LAYOUT, "Menu layout"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 70, @L(global.__ONLINE_LK_ROW_LANGUAGE, "Language"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 #if PLAYER_LIST
 @stg_row_add(5, 10, @L(global.__ONLINE_LK_ROW_PLAYER_OBJECTS, "Player Objects"), _cl, _y, 130, 1, _ctlX); _y += global.__ONLINE_stgRowH;
 #endif
@@ -359,6 +360,7 @@ if(_a == 5) return @L(global.__ONLINE_LK_DESC_VISUAL, "How other players are dra
 if(_a == 6) return @L(global.__ONLINE_LK_DESC_INDICATOR, "Direction indicator above remote players.");
 if(_a == 7) return @L(global.__ONLINE_LK_DESC_SPEC_CAM, "Spectator camera mode.");
 if(_a == 62) return @L(global.__ONLINE_LK_DESC_MENU_LAYOUT, "Auto picks the layout from the window size; Narrow is the compact 480px list-only panel; Full always shows the detail pane.");
+if(_a == 70) return @L(global.__ONLINE_LK_DESC_LANGUAGE, "Menu and message text language. Applies instantly and is remembered; drop a new <code>.ini into the lang folder to add one.");
 if(_a == 60) return @L(global.__ONLINE_LK_DESC_HIDE_OTHERS, "Other players' notes are not drawn and their arrival sound is muted. Your own notes still show.");
 if(_a == 61) return @L(global.__ONLINE_LK_DESC_HIDE_ALL, "No notes are drawn at all. Sending yours keeps working, and the canvas mode still collects them.");
 if(_a == 20) return @L(global.__ONLINE_LK_DESC_SAVE_ROW, "Enter applies this save. F toggles favourite, 1-8 assigns a hotkey, Del clears it.");
@@ -1603,6 +1605,12 @@ if(_a == 62){
   @mlNames[0] = @L(global.__ONLINE_LK_VAL_LAYOUT_AUTO, "Auto"); @mlNames[1] = @L(global.__ONLINE_LK_VAL_LAYOUT_NARROW, "Narrow"); @mlNames[2] = @L(global.__ONLINE_LK_VAL_LAYOUT_FULL, "Full");
   return @mlNames[@menuModePref];
 }
+if(_a == 70){
+  // the active file's [meta] name when there is one ("简体中文"), else the code
+  if(global.__ONLINE_lang == "en") return "English";
+  if(global.__ONLINE_LangName != "") return global.__ONLINE_LangName;
+  return global.__ONLINE_lang;
+}
 if(_a == 10) return @L(global.__ONLINE_LK_VAL_PICK, "Pick");
 if(_a == 11) return @L(global.__ONLINE_LK_VAL_RECONNECT_NOW, "Reconnect now");
 if(_a == 15) return @L(global.__ONLINE_LK_VAL_APPLY_RECONNECT, "Apply & Reconnect");
@@ -1697,6 +1705,7 @@ if(_a == 5) return @L(global.__ONLINE_LK_HINT_VISUAL, "How other players are dra
 if(_a == 6) return @L(global.__ONLINE_LK_HINT_INDICATOR, "Show the direction indicator above remote players.");
 if(_a == 7) return @L(global.__ONLINE_LK_HINT_SPEC_CAM, "Spectator camera mode.");
 if(_a == 62) return @L(global.__ONLINE_LK_HINT_MENU_LAYOUT, "Menu layout: Auto by window, Narrow, or Full (with detail).");
+if(_a == 70) return @L(global.__ONLINE_LK_HINT_LANGUAGE, "UI language. Left/Right switches, applies instantly.");
 if(_a == 60) return @L(global.__ONLINE_LK_HINT_HIDE_OTHERS, "Do not draw other players' notes (yours still show).");
 if(_a == 61) return @L(global.__ONLINE_LK_HINT_HIDE_ALL, "Do not draw any notes at all (sending keeps working).");
 if(_a == 8) return @L(global.__ONLINE_LK_HINT_PVP, "Player versus player mode. Bullets stay visible while it is on.");
@@ -1841,6 +1850,7 @@ if(_a == 62){
   @menuModePrefChanged = true;
   return 0;
 }
+if(_a == 70){ @stg_lang_cycle(1); return 0; }
 if(_a == 22){
   // destructive, so it takes two clicks: the first arms the confirmation, a
   // second click on the same button performs it (the pointer can always finish
@@ -1937,6 +1947,7 @@ if(_a == 62){
   @menuModePrefChanged = true;
   return 0;
 }
+if(_a == 70){ @stg_lang_cycle(argument1); return 0; }
 if(_a == 2){
   @lerpMode += argument1;
   if(@lerpMode < 0) @lerpMode = 3;
@@ -2009,6 +2020,23 @@ if(_a == 8){
   return 0;
 }
 return @stg_act(argument0);
+
+///// script @stg_lang_cycle
+// Cycles the Language row by argument0 (+1/-1) over the scanned list. The
+// current language might be absent from the list (its file was deleted); the
+// cycle then starts from "en".
+// args: dir -> 0
+var _i, _cur;
+_cur = 0;
+for(_i = 0; _i < global.__ONLINE_langListN; _i += 1){
+  if(global.__ONLINE_langList[_i] == global.__ONLINE_lang){ _cur = _i; break; }
+}
+_cur += argument0;
+if(_cur < 0) _cur = global.__ONLINE_langListN - 1;
+if(_cur >= global.__ONLINE_langListN) _cur = 0;
+@lang_apply(global.__ONLINE_langList[_cur]);
+@langChanged = true;
+return 0;
 
 ///// script @stg_lerp_apply
 // Derives the live lerp state from the 4-value mode row.

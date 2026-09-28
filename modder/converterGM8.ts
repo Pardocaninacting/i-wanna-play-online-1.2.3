@@ -2287,7 +2287,11 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// T4: factory runtime defaults for the skin system ([config] section):
 	// skin= (empty = no skin selected) and skinAutoDL=1 (auto-download on).
 	// Omitted entirely when the skin system is disabled (iwpo.no_skins).
-	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1` + (skinsEnabled ? `\nskin=\nskinAutoDL=1` : ``);
+	// i18n: iwpo-settings.ini [iwpo] lang=<code> sets the shipped default UI
+	// language (the built-in default is zh-CN; a player's runtime choice in
+	// __ONLINE_config.ini still wins).
+	const langDefine: string = defines.has("iwpo.lang") ? (defines.get("iwpo.lang") as string).trim() : "";
+	const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1` + (skinsEnabled ? `\nskin=\nskinAutoDL=1` : ``) + (langDefine !== "" ? `\nlang=${langDefine}` : ``);
 	await fs.writeFile(runtimeConfigPath, configContent, "utf8");
 	if(customSlot){
 		// Write/merge the runtime `[sync]` section into `__ONLINE_config.ini` next to the produced EXE.
