@@ -712,10 +712,35 @@ if(@spectating || @specProgress > 0){
 		draw_set_valign(fa_middle);
 		draw_set_color(c_white);
 		if(@spectating){
-			@stg_text_cjk(@barX + @barW / 2, @barY + @barH / 2, @L(global.__ONLINE_LK_HUD_EXITING, "Exiting..."), 1);
+			@barTxt = @L(global.__ONLINE_LK_HUD_EXITING, "Exiting...");
 		}else{
-			@stg_text_cjk(@barX + @barW / 2, @barY + @barH / 2, @L(global.__ONLINE_LK_HUD_SPECTATING, "Spectating..."), 1);
+			@barTxt = @L(global.__ONLINE_LK_HUD_SPECTATING, "Spectating...");
 		}
+		// vertically centred in the bar: @stg_text_cjk is top-only, so this one
+		// string hand-rolls the three paths with the middle valign (chatboxDraw
+		// precedent). A top-valign draw here sat ~8px low on GM8.
+		#if GM80
+		__ONLINE_fw_use_font(@barTxt);
+		fw_draw_set_halign(fa_center);
+		fw_draw_set_valign(fa_middle);
+		fw_draw_text_ext(@barX + @barW / 2, @barY + @barH / 2, @barTxt, 9999);
+		fw_draw_set_valign(fa_top);
+		fw_draw_set_halign(fa_left);
+		#endif
+		#if CJKTEXT
+		global.__ONLINE_cjkHalign = 1;
+		global.__ONLINE_cjkValign = 1;
+		__ONLINE_cjk_draw_text(@barX + @barW / 2, @barY + @barH / 2, @barTxt, 9999);
+		global.__ONLINE_cjkHalign = 0;
+		global.__ONLINE_cjkValign = 0;
+		#endif
+		#if not GM80
+		#if not CJKTEXT
+		draw_set_halign(fa_center);
+		draw_set_valign(fa_middle);
+		draw_text(@barX + @barW / 2, @barY + @barH / 2, @barTxt);
+		#endif
+		#endif
 		draw_set_halign(fa_left);
 		draw_set_valign(fa_top);
 	}

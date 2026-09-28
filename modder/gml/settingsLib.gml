@@ -1898,10 +1898,10 @@ if(_a == 57){
 if(_a == 58){
   // same modal route as the account fields (IME-safe CJK input included)
   #if STUDIO
-  @skSearch = get_string(@L(global.__ONLINE_LK_DLG_SEARCH_FULL, "Search skins (empty = show all)"), @skinFilter);
+  @skSearch = @dlg_input_box("", @L(global.__ONLINE_LK_DLG_SEARCH_FULL, "Search skins (empty = show all)"), @skinFilter);
   #endif
   #if not STUDIO
-  @skSearch = wd_input_box(@L(global.__ONLINE_LK_DLG_SEARCH_TITLE, "Search skins"), @L(global.__ONLINE_LK_DLG_SEARCH_PROMPT, "Leave it empty to show all:"), @skinFilter);
+  @skSearch = @dlg_input_box(@L(global.__ONLINE_LK_DLG_SEARCH_TITLE, "Search skins"), @L(global.__ONLINE_LK_DLG_SEARCH_PROMPT, "Leave it empty to show all:"), @skinFilter);
   #endif
   @skinFilter = string_lower(@account_trim(@skSearch));
   return 0;
@@ -2035,6 +2035,44 @@ if(@chatHistCount > @chatHistMax){
 }
 return 0;
 
+///// script @dlg_input_box
+// Modal text input, one call form for every engine. The wd dialog's DLL is
+// ANSI-only and truncates CJK prompts on every GM8 flavour (measured: the tail
+// glyphs vanish; pure ASCII is fine), so a non-ASCII title or prompt falls back
+// to the engine's own get_string - its standard edit control renders GBK on
+// GM8.0 and UTF-8 on GM8.1+ and takes IME input either way.
+// Returns the input in the engine's native string form (GBK bytes on GM8.0,
+// UTF-8 elsewhere) - the GM8.1+ wd path converts inside, so callers must NOT
+// wrap this in __ONLINE_ansi_to_utf8 (that was the old per-site pattern).
+// args: title, prompt, default -> text
+#if STUDIO
+return get_string(argument1, argument2);
+#endif
+#if not STUDIO
+if(!@stg_is_ascii(argument0) || !@stg_is_ascii(argument1)) return get_string(argument1, argument2);
+#if GM80
+return wd_input_box(argument0, argument1, argument2);
+#endif
+#if not GM80
+return __ONLINE_ansi_to_utf8(wd_input_box(argument0, argument1, argument2));
+#endif
+#endif
+
+///// script @dlg_message
+// Modal message box, same CJK rule as @dlg_input_box.
+// args: text -> 0
+#if STUDIO
+show_message(argument0);
+#endif
+#if not STUDIO
+if(!@stg_is_ascii(argument0)){
+  show_message(argument0);
+  return 0;
+}
+wd_message_simple(argument0);
+#endif
+return 0;
+
 ///// script @stg_conn_edit
 // Edits one connection field and reconnects - the escape hatch for an
 // unreachable server, without an ini editor.
@@ -2043,22 +2081,18 @@ var _v, _old, _t;
 if(argument0 == 0) _old = @server;
 if(argument0 == 1) _old = string(@tcpPort);
 if(argument0 == 2) _old = string(@udpPort);
+// @dlg_input_box: one modal-input route for every engine, with the CJK-prompt
+// fallback inside (its comment explains why). STUDIO keeps its own prompt
+// wording (the dialog has no title there).
 #if STUDIO
-if(argument0 == 0) _v = get_string(@L(global.__ONLINE_LK_DLG_SERVER_HOST, "Server host"), _old);
-if(argument0 == 1) _v = get_string(@L(global.__ONLINE_LK_DLG_TCP_TITLE, "TCP port"), _old);
-if(argument0 == 2) _v = get_string(@L(global.__ONLINE_LK_DLG_UDP_TITLE, "UDP port"), _old);
+if(argument0 == 0) _v = @dlg_input_box("", @L(global.__ONLINE_LK_DLG_SERVER_HOST, "Server host"), _old);
+if(argument0 == 1) _v = @dlg_input_box("", @L(global.__ONLINE_LK_DLG_TCP_TITLE, "TCP port"), _old);
+if(argument0 == 2) _v = @dlg_input_box("", @L(global.__ONLINE_LK_DLG_UDP_TITLE, "UDP port"), _old);
 #endif
 #if not STUDIO
-#if CJKTEXT
-if(argument0 == 0) _v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_SERVER_TITLE, "Server"), @L(global.__ONLINE_LK_DLG_HOST_PROMPT, "host:"), _old));
-if(argument0 == 1) _v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_TCP_TITLE, "TCP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old));
-if(argument0 == 2) _v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_UDP_TITLE, "UDP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old));
-#endif
-#if not CJKTEXT
-if(argument0 == 0) _v = wd_input_box(@L(global.__ONLINE_LK_DLG_SERVER_TITLE, "Server"), @L(global.__ONLINE_LK_DLG_HOST_PROMPT, "host:"), _old);
-if(argument0 == 1) _v = wd_input_box(@L(global.__ONLINE_LK_DLG_TCP_TITLE, "TCP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old);
-if(argument0 == 2) _v = wd_input_box(@L(global.__ONLINE_LK_DLG_UDP_TITLE, "UDP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old);
-#endif
+if(argument0 == 0) _v = @dlg_input_box(@L(global.__ONLINE_LK_DLG_SERVER_TITLE, "Server"), @L(global.__ONLINE_LK_DLG_HOST_PROMPT, "host:"), _old);
+if(argument0 == 1) _v = @dlg_input_box(@L(global.__ONLINE_LK_DLG_TCP_TITLE, "TCP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old);
+if(argument0 == 2) _v = @dlg_input_box(@L(global.__ONLINE_LK_DLG_UDP_TITLE, "UDP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old);
 #endif
 _v = @account_trim(_v);
 if(_v == _old) return 0;
@@ -2105,15 +2139,10 @@ return @L(global.__ONLINE_LK_VAL_EMPTY, "(empty)");
 var _v, _old;
 _old = global.__ONLINE_accName;
 #if STUDIO
-_v = get_string(@L(global.__ONLINE_LK_ROW_NAME, "Name"), _old);
+_v = @dlg_input_box("", @L(global.__ONLINE_LK_ROW_NAME, "Name"), _old);
 #endif
 #if not STUDIO
-#if CJKTEXT
-_v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_NAME_TITLE, "Name"), @L(global.__ONLINE_LK_DLG_NAME_PROMPT, "Enter your name:"), _old));
-#endif
-#if not CJKTEXT
-_v = wd_input_box(@L(global.__ONLINE_LK_DLG_NAME_TITLE, "Name"), @L(global.__ONLINE_LK_DLG_NAME_PROMPT, "Enter your name:"), _old);
-#endif
+_v = @dlg_input_box(@L(global.__ONLINE_LK_DLG_NAME_TITLE, "Name"), @L(global.__ONLINE_LK_DLG_NAME_PROMPT, "Enter your name:"), _old);
 #endif
 _v = @account_trim(_v);
 if(_v == _old) return 0;
@@ -2132,15 +2161,10 @@ return 0;
 var _v, _old;
 _old = global.__ONLINE_accPassword;
 #if STUDIO
-_v = get_string(@L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), _old);
+_v = @dlg_input_box("", @L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), _old);
 #endif
 #if not STUDIO
-#if CJKTEXT
-_v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_PASS_TITLE, "Password"), @L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), _old));
-#endif
-#if not CJKTEXT
-_v = wd_input_box(@L(global.__ONLINE_LK_DLG_PASS_TITLE, "Password"), @L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), _old);
-#endif
+_v = @dlg_input_box(@L(global.__ONLINE_LK_DLG_PASS_TITLE, "Password"), @L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), _old);
 #endif
 _v = @account_trim(_v);
 if(_v == _old) return 0;

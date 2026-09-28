@@ -361,6 +361,7 @@ global.__ONLINE_LK_HUD_YOU = 318;
 global.__ONLINE_LK_HUD_PICK_CURRENT = 319;
 global.__ONLINE_LK_HUD_PICK_REMOVE = 320;
 global.__ONLINE_LK_HUD_PICK_NO_INSTANCE = 321;
+global.__ONLINE_LK_NOTIFY_RECONNECT_FAILED = 322;
 global.__ONLINE_LangKey[0] = "menu.tab.settings";
 global.__ONLINE_LangKey[1] = "menu.tab.saves";
 global.__ONLINE_LangKey[2] = "menu.tab.rating";
@@ -683,7 +684,8 @@ global.__ONLINE_LangKey[318] = "hud.you";
 global.__ONLINE_LangKey[319] = "hud.pick_current";
 global.__ONLINE_LangKey[320] = "hud.pick_remove";
 global.__ONLINE_LangKey[321] = "hud.pick_no_instance";
-global.__ONLINE_LangCount = 322;
+global.__ONLINE_LangKey[322] = "notify.reconnect_failed";
+global.__ONLINE_LangCount = 323;
 // every slot pre-initialised: on GMS, reading an array slot that was never
 // written aborts the event (GML_COMPAT.md section 1)
 for(_i = 0; _i < global.__ONLINE_LangCap; _i += 1) global.__ONLINE_Lang[_i] = "";

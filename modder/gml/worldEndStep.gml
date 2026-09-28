@@ -155,12 +155,7 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 			// INCOMPATIBLE VERSION
 			@lastVersion = __ONLINE_buffer_read_string(@buffer);
 			@errorMessage = @str_fmt(@L(global.__ONLINE_LK_NOTIFY_VERSION_OLD, "Your tool uses the version %1 but the oldest compatible version is %2. Please update your tool."), @version, @lastVersion, 0);
-			#if STUDIO
-				show_message(@errorMessage);
-			#endif
-			#if not STUDIO
-				wd_message_simple(@errorMessage);
-			#endif
+			@dlg_message(@errorMessage);
 			game_end();
 			exit;
 			break;
@@ -906,12 +901,7 @@ if(@reconnecting){
 		@reconnectAttempts += 1;
 		if(@reconnectAttempts > 10){
 			if(@reconnectQuitOnFail){
-				#if STUDIO
-					show_message("Failed to reconnect after multiple attempts.");
-				#endif
-				#if not STUDIO
-					wd_message_simple("Failed to reconnect after multiple attempts.");
-				#endif
+				@dlg_message(@L(global.__ONLINE_LK_NOTIFY_RECONNECT_FAILED, "Failed to reconnect after multiple attempts."));
 				@mustQuit = true;
 			}else{
 				// stay offline: stop retrying, keep the game alive as a standalone;
@@ -1374,22 +1364,7 @@ if(@exists){
 // the server even when no player object exists (spectating, custom obj,
 // between rooms); only the floating bubble needs the instance.
 if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyChat) && !@settingsOpen && !@noteNoClick){
-		#if STUDIO
-			@message = get_string(@L(global.__ONLINE_LK_DLG_CHAT_PROMPT, "Say something:"), "");
-		#endif
-		#if not STUDIO
-			#if GM80
-			@message = wd_input_box(@L(global.__ONLINE_LK_DLG_CHAT_TITLE, "Chat"), @L(global.__ONLINE_LK_DLG_CHAT_PROMPT, "Say something:"), "");
-			#endif
-			#if CJKTEXT
-			@message = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_CHAT_TITLE, "Chat"), @L(global.__ONLINE_LK_DLG_CHAT_PROMPT, "Say something:"), ""));
-			#endif
-			#if not GM80
-			#if not CJKTEXT
-			@message = wd_input_box(@L(global.__ONLINE_LK_DLG_CHAT_TITLE, "Chat"), @L(global.__ONLINE_LK_DLG_CHAT_PROMPT, "Say something:"), "");
-			#endif
-			#endif
-		#endif
+		@message = @dlg_input_box(@L(global.__ONLINE_LK_DLG_CHAT_TITLE, "Chat"), @L(global.__ONLINE_LK_DLG_CHAT_PROMPT, "Say something:"), "");
 		@message = string_replace_all(@message, "#", "\\#");
 		#if STUDIO
 		@message = strip_non_bmp(@message);
@@ -1838,20 +1813,10 @@ if(@udpState == 1){
 					// text tool: modal input at the anchor (blocking OS box)
 					@note_set_mode(0);
 					#if STUDIO
-						@ntInput = get_string(@L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Note:"), "");
+						@ntInput = @dlg_input_box("", @L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Note:"), "");
 					#endif
 					#if not STUDIO
-						#if GM80
-						@ntInput = wd_input_box(@L(global.__ONLINE_LK_DLG_NOTE_TITLE, "Note"), @L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Text:"), "");
-						#endif
-						#if CJKTEXT
-						@ntInput = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_NOTE_TITLE, "Note"), @L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Text:"), ""));
-						#endif
-						#if not GM80
-						#if not CJKTEXT
-						@ntInput = wd_input_box(@L(global.__ONLINE_LK_DLG_NOTE_TITLE, "Note"), @L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Text:"), "");
-						#endif
-						#endif
+						@ntInput = @dlg_input_box(@L(global.__ONLINE_LK_DLG_NOTE_TITLE, "Note"), @L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Text:"), "");
 					#endif
 					@ntInput = string_replace_all(@ntInput, "#", "\\#");
 					#if STUDIO

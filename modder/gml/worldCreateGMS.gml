@@ -826,20 +826,10 @@ if file_exists(@savesPath) {
 	// toggle cover it). The socket layer queues writes until the handshake
 	// completes, so NAME below can be queued right away.
 	if(!@accLoaded){
-		#if STUDIO
-			global.__ONLINE_accName = get_string(@L(global.__ONLINE_LK_DLG_NAME_PROMPT, "Enter your name:"), "");
-		#endif
-		#if not STUDIO
-			global.__ONLINE_accName = wd_input_box(@L(global.__ONLINE_LK_DLG_NAME_TITLE, "Name"), @L(global.__ONLINE_LK_DLG_NAME_PROMPT, "Enter your name:"), "");
-		#endif
+		global.__ONLINE_accName = @dlg_input_box(@L(global.__ONLINE_LK_DLG_NAME_TITLE, "Name"), @L(global.__ONLINE_LK_DLG_NAME_PROMPT, "Enter your name:"), "");
 		global.__ONLINE_accName = @account_trim(global.__ONLINE_accName);
 		if(global.__ONLINE_accName == "") global.__ONLINE_accName = "Anonymous";
-		#if STUDIO
-			global.__ONLINE_accPassword = get_string(@L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), "");
-		#endif
-		#if not STUDIO
-			global.__ONLINE_accPassword = wd_input_box(@L(global.__ONLINE_LK_DLG_PASS_TITLE, "Password"), @L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), "");
-		#endif
+		global.__ONLINE_accPassword = @dlg_input_box(@L(global.__ONLINE_LK_DLG_PASS_TITLE, "Password"), @L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), "");
 		global.__ONLINE_accPassword = @account_trim(global.__ONLINE_accPassword);
 		global.__ONLINE_accStore = 0;
 		@account_save();
