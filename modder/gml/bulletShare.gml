@@ -244,7 +244,14 @@ for(@bi = 0; @bi < @bCount; @bi += 1){
         }
     }else{
         if(ds_map_size(@bMap) < 64){
-            @bid = instance_create(@bRX[@bi], @bRY[@bi], @bullet);
+            #if GMS2
+// GMS2 removed instance_create, and object_get_depth with it, so the depth comes from
+// the converter (it reads the bullet object's depth out of the data file).
+@bid = instance_create_depth(@bRX[@bi], @bRY[@bi], global.__ONLINE_bulletDepth, @bullet);
+#endif
+#if not GMS2
+@bid = instance_create(@bRX[@bi], @bRY[@bi], @bullet);
+#endif
             if(instance_exists(@bid)){
                 with(@bid){
                     @bOwner = other.@bOwner;
