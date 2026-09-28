@@ -70,7 +70,7 @@ if(@oWorld != noone && @oWorld.@vis <= 1){
 			@xx = round(x);
 			@yy = round(y-@padding);
 			if(@spectating){
-				@specLabel = "[SPEC]";
+				@specLabel = @L(global.__ONLINE_LK_HUD_SPEC_TAG, "[SPEC]");
 				@specY = @yy - 14;
 				@specDrawX = @xx;
 				@specDrawY = @specY;

@@ -154,7 +154,7 @@ while(__ONLINE_socket_read_message(@socket, @buffer)){
 		case 2:
 			// INCOMPATIBLE VERSION
 			@lastVersion = __ONLINE_buffer_read_string(@buffer);
-			@errorMessage = "Your tool uses the version "+@version+" but the oldest compatible version is "+@lastVersion+". Please update your tool.";
+			@errorMessage = @str_fmt(@L(global.__ONLINE_LK_NOTIFY_VERSION_OLD, "Your tool uses the version %1 but the oldest compatible version is %2. Please update your tool."), @version, @lastVersion, 0);
 			#if STUDIO
 				show_message(@errorMessage);
 			#endif
@@ -897,7 +897,7 @@ if(@manualReconnect){
 	#if not GMS2
 		@a = instance_create(0, 0, @playerSaved);
 	#endif
-	@a.@name = "Reconnecting...";
+	@a.@name = @L(global.__ONLINE_LK_NOTIFY_RECONNECTING, "Reconnecting...");
 	@a.@state = -2;
 }
 if(@reconnecting){
@@ -925,7 +925,7 @@ if(@reconnecting){
 				#if not GMS2
 					@a = instance_create(0, 0, @playerSaved);
 				#endif
-				@a.@name = "Offline - open the menu to reconnect";
+				@a.@name = @L(global.__ONLINE_LK_NOTIFY_OFFLINE_MENU, "Offline - open the menu to reconnect");
 				@a.@state = -2;
 			}
 		}else{
@@ -1036,7 +1036,7 @@ switch(@socketState){
 			#if not GMS2
 				@a = instance_create(0, 0, @playerSaved);
 			#endif
-			@a.@name = "Reconnecting...";
+			@a.@name = @L(global.__ONLINE_LK_NOTIFY_RECONNECTING, "Reconnecting...");
 			@a.@state = -2;
 		}
 		break;
@@ -1375,18 +1375,18 @@ if(@exists){
 // between rooms); only the floating bubble needs the instance.
 if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyChat) && !@settingsOpen && !@noteNoClick){
 		#if STUDIO
-			@message = get_string("Say something:", "");
+			@message = get_string(@L(global.__ONLINE_LK_DLG_CHAT_PROMPT, "Say something:"), "");
 		#endif
 		#if not STUDIO
 			#if GM80
-			@message = wd_input_box("Chat", "Say something:", "");
+			@message = wd_input_box(@L(global.__ONLINE_LK_DLG_CHAT_TITLE, "Chat"), @L(global.__ONLINE_LK_DLG_CHAT_PROMPT, "Say something:"), "");
 			#endif
 			#if CJKTEXT
-			@message = __ONLINE_ansi_to_utf8(wd_input_box("Chat", "Say something:", ""));
+			@message = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_CHAT_TITLE, "Chat"), @L(global.__ONLINE_LK_DLG_CHAT_PROMPT, "Say something:"), ""));
 			#endif
 			#if not GM80
 			#if not CJKTEXT
-			@message = wd_input_box("Chat", "Say something:", "");
+			@message = wd_input_box(@L(global.__ONLINE_LK_DLG_CHAT_TITLE, "Chat"), @L(global.__ONLINE_LK_DLG_CHAT_PROMPT, "Say something:"), "");
 			#endif
 			#endif
 		#endif
@@ -1607,7 +1607,7 @@ if(@udpState == 1){
 			#if not GMS2
 				@a = instance_create(0, 0, @playerSaved);
 			#endif
-			@a.@name = "Reconnecting...";
+			@a.@name = @L(global.__ONLINE_LK_NOTIFY_RECONNECTING, "Reconnecting...");
 			@a.@state = -2;
 		}
 	}
@@ -1681,9 +1681,9 @@ if(@udpState == 1){
 	#if not GMS2
 		@a = instance_create(0, 0, @playerSaved);
 	#endif
-	if(@noteCanvasMode == 0) @a.@name = "Notes: transient";
-	if(@noteCanvasMode == 1) @a.@name = "Notes: canvas";
-	if(@noteCanvasMode == 2) @a.@name = "Notes: off";
+	if(@noteCanvasMode == 0) @a.@name = @L(global.__ONLINE_LK_NOTIFY_NOTES_TRANSIENT, "Notes: transient");
+	if(@noteCanvasMode == 1) @a.@name = @L(global.__ONLINE_LK_NOTIFY_NOTES_CANVAS, "Notes: canvas");
+	if(@noteCanvasMode == 2) @a.@name = @L(global.__ONLINE_LK_NOTIFY_NOTES_OFF, "Notes: off");
 	@a.@state = -2;
 }
 // NOTES sync + delete + persist flush (N4)
@@ -1838,18 +1838,18 @@ if(@udpState == 1){
 					// text tool: modal input at the anchor (blocking OS box)
 					@note_set_mode(0);
 					#if STUDIO
-						@ntInput = get_string("Note:", "");
+						@ntInput = get_string(@L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Note:"), "");
 					#endif
 					#if not STUDIO
 						#if GM80
-						@ntInput = wd_input_box("Note", "Text:", "");
+						@ntInput = wd_input_box(@L(global.__ONLINE_LK_DLG_NOTE_TITLE, "Note"), @L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Text:"), "");
 						#endif
 						#if CJKTEXT
-						@ntInput = __ONLINE_ansi_to_utf8(wd_input_box("Note", "Text:", ""));
+						@ntInput = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_NOTE_TITLE, "Note"), @L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Text:"), ""));
 						#endif
 						#if not GM80
 						#if not CJKTEXT
-						@ntInput = wd_input_box("Note", "Text:", "");
+						@ntInput = wd_input_box(@L(global.__ONLINE_LK_DLG_NOTE_TITLE, "Note"), @L(global.__ONLINE_LK_DLG_NOTE_PROMPT, "Text:"), "");
 						#endif
 						#endif
 					#endif

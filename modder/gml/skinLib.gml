@@ -890,7 +890,7 @@ if(@skinAutoDL){
     }
     // Queue full or already failed this session: fall through to the notice.
 }
-@skMsg = "Skin missing for " + @skP.@name + " (" + string_copy(@skHash, 1, 8) + ")";
+@skMsg = @str_fmt(@L(global.__ONLINE_LK_SKIN_MISSING, "Skin missing for %1 (%2)"), @skP.@name, string_copy(@skHash, 1, 8), 0);
 if(@chatHistCount < @chatHistMax){
     @chatHistName[@chatHistCount] = "SKIN";
     @chatHistMsg[@chatHistCount] = @skMsg;
@@ -1248,7 +1248,7 @@ return 0;
 // every remote player waiting on this hash is re-evaluated.
 @skFHash = @skin_hash_dir("iwposkins" + chr(92) + @skinDlDir + chr(92));
 if(@skFHash != @skinDlHash){
-    @skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+    @skin_dl_fail(@str_fmt(@L(global.__ONLINE_LK_SKIN_DL_FAILED, "Skin download failed (%1)"), string_copy(@skinDlHash, 1, 8), 0, 0));
     return 0;
 }
 // Verified on disk: no longer a partial, so clear the crash-cleanup marker
@@ -1305,7 +1305,7 @@ for(@dlK = 0; @dlK < instance_number(@onlinePlayer); @dlK += 1){
         }
     }
 }
-@skin_dl_notice("Skin downloaded: " + @skinName[@skFIdx]);
+@skin_dl_notice(@str_fmt(@L(global.__ONLINE_LK_SKIN_DL_DONE, "Skin downloaded: %1"), @skinName[@skFIdx], 0, 0));
 @skinDlState = 0;
 @skinDlHash = "";
 @skinDlHint = "";
@@ -1327,7 +1327,7 @@ if(@skinDlState == 0){
 @skinDlWait -= 1;
 if(@skinDlWait <= 0){
     // The server went silent (rate-limiter drop or connection trouble).
-    @skin_dl_fail("Skin download failed (" + string_copy(@skinDlHash, 1, 8) + ")");
+    @skin_dl_fail(@str_fmt(@L(global.__ONLINE_LK_SKIN_DL_FAILED, "Skin download failed (%1)"), string_copy(@skinDlHash, 1, 8), 0, 0));
     return 0;
 }
 return 1;

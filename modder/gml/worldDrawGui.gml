@@ -305,8 +305,7 @@ if(@chatLogOpen){
 	draw_set_color(c_white);
 	draw_rectangle(@clPanelX, @clPanelY, @clPanelX + @clPanelW, @clPanelY + @clPanelH, true);
 	draw_set_color(c_gray);
-	draw_set_halign(fa_center);
-	draw_text(@clPanelX + @clPanelW / 2, @clPanelY + 3, "Chat Log");
+	@stg_text_cjk(@clPanelX + @clPanelW / 2, @clPanelY + 3, @L(global.__ONLINE_LK_HUD_CHAT_LOG, "Chat Log"), 1);
 	draw_set_halign(fa_left);
 	@clDrawY = @clContentY + @clContentH - @clTotalH + @chatLogScroll;
 	draw_set_color(c_white);
@@ -337,8 +336,7 @@ if(@chatLogOpen){
 	}
 	if(@chatHistCount == 0){
 		draw_set_color(c_gray);
-		draw_set_halign(fa_center);
-		draw_text(@clPanelX + @clPanelW / 2, @clPanelY + @clPanelH / 2 - 6, "No messages yet");
+		@stg_text_cjk(@clPanelX + @clPanelW / 2, @clPanelY + @clPanelH / 2 - 6, @L(global.__ONLINE_LK_HUD_NO_MESSAGES, "No messages yet"), 1);
 		draw_set_halign(fa_left);
 	}
 	if(@clTotalH > @clContentH){
@@ -374,14 +372,15 @@ if(@showPlayerList){
 	draw_set_alpha(0.8);
 	// PLAYER LIST
 	draw_set_color(c_black);
-	draw_text(@plX+1, @plY, "Players Online:");
-	draw_text(@plX, @plY+1, "Players Online:");
-	draw_text(@plX-1, @plY, "Players Online:");
-	draw_text(@plX, @plY-1, "Players Online:");
+	@stg_text_cjk(@plX+1, @plY, @L(global.__ONLINE_LK_HUD_PLAYERS_ONLINE, "Players Online:"), 2);
+	@stg_text_cjk(@plX, @plY+1, @L(global.__ONLINE_LK_HUD_PLAYERS_ONLINE, "Players Online:"), 2);
+	@stg_text_cjk(@plX-1, @plY, @L(global.__ONLINE_LK_HUD_PLAYERS_ONLINE, "Players Online:"), 2);
+	@stg_text_cjk(@plX, @plY-1, @L(global.__ONLINE_LK_HUD_PLAYERS_ONLINE, "Players Online:"), 2);
 	draw_set_color(c_yellow);
-	draw_text(@plX, @plY, "Players Online:");
+	@stg_text_cjk(@plX, @plY, @L(global.__ONLINE_LK_HUD_PLAYERS_ONLINE, "Players Online:"), 2);
 	@plY += 18;
-	@plSelf = @name + " (YOU)";
+	@plSelf = @name + @L(global.__ONLINE_LK_HUD_YOU, " (YOU)");
+	draw_set_halign(fa_right);   // stg_text_cjk resets to fa_left; the plain-draw name path below still wants right
 	draw_set_color(c_black);
 	#if GM80
 	fw_draw_set_halign(fa_right);
@@ -713,9 +712,9 @@ if(@spectating || @specProgress > 0){
 		draw_set_valign(fa_middle);
 		draw_set_color(c_white);
 		if(@spectating){
-			draw_text(@barX + @barW / 2, @barY + @barH / 2, "Exiting...");
+			@stg_text_cjk(@barX + @barW / 2, @barY + @barH / 2, @L(global.__ONLINE_LK_HUD_EXITING, "Exiting..."), 1);
 		}else{
-			draw_text(@barX + @barW / 2, @barY + @barH / 2, "Spectating...");
+			@stg_text_cjk(@barX + @barW / 2, @barY + @barH / 2, @L(global.__ONLINE_LK_HUD_SPECTATING, "Spectating..."), 1);
 		}
 		draw_set_halign(fa_left);
 		draw_set_valign(fa_top);
@@ -731,26 +730,28 @@ if(@spectating || @specProgress > 0){
 		draw_set_valign(fa_top);
 		@specCount = instance_number(@onlinePlayer);
 		if(@specTargetID != ""){
+			// the prefix is measured but never drawn: the arrows bracket where the
+			// full "SPECTATING: name" would sit. Measure on the CJK-aware path so a
+			// Chinese target name does not scatter the arrows.
+			@specFull = @L(global.__ONLINE_LK_HUD_SPECTATING_PREFIX, "  SPECTATING: ") + @specTargetName + "  ";
 			draw_set_color(c_gray);
-			draw_text(@hudX + @hudW/2 - string_width("  SPECTATING: " + @specTargetName + "  ")/2 - 8, @hudY + 4, "<");
-			draw_text(@hudX + @hudW/2 + string_width("  SPECTATING: " + @specTargetName + "  ")/2 + 8, @hudY + 4, ">");
+			draw_text(@hudX + @hudW/2 - @stg_text_width(@specFull)/2 - 8, @hudY + 4, "<");
+			draw_text(@hudX + @hudW/2 + @stg_text_width(@specFull)/2 + 8, @hudY + 4, ">");
 			draw_set_color(make_color_rgb(255, 220, 80));
-			draw_text(@hudX + @hudW/2, @hudY + 4, @specTargetName);
-			draw_set_halign(fa_right);
+			@stg_text_cjk(@hudX + @hudW/2, @hudY + 4, @specTargetName, 1);
 			draw_set_color(c_gray);
-			draw_text(@hudX + @hudW - 6, @hudY + 4, string(@specTargetIdx + 1) + "/" + string(@specCount));
+			@stg_text_cjk(@hudX + @hudW - 6, @hudY + 4, string(@specTargetIdx + 1) + "/" + string(@specCount), 2);
 		}else{
 			draw_set_color(c_gray);
-			draw_text(@hudX + @hudW/2, @hudY + 4, "No players");
+			@stg_text_cjk(@hudX + @hudW/2, @hudY + 4, @L(global.__ONLINE_LK_HUD_NO_PLAYERS, "No players"), 1);
 		}
-		draw_set_halign(fa_right);
 		draw_set_valign(fa_bottom);
 		draw_set_alpha(0.5);
 		draw_set_color(c_white);
 		if(@specCamMode == 1){
-			draw_text(@hudX + @hudW - 6, @hudY + @hudH - 4, "[Screen]");
+			@stg_text_cjk(@hudX + @hudW - 6, @hudY + @hudH - 4, @L(global.__ONLINE_LK_HUD_SCREEN, "[Screen]"), 2);
 		}else{
-			draw_text(@hudX + @hudW - 6, @hudY + @hudH - 4, "[Follow]");
+			@stg_text_cjk(@hudX + @hudW - 6, @hudY + @hudH - 4, @L(global.__ONLINE_LK_HUD_FOLLOW, "[Follow]"), 2);
 		}
 	}
 	draw_set_halign(fa_left);
@@ -784,33 +785,33 @@ if(@debug_pick_player){
 	draw_rectangle(@pkX, @pkY, @pkX + 400, @pkY + @pkLines * 18 + 10, false);
 	draw_set_alpha(1);
 	draw_set_color(c_white);
-	draw_text(@pkX + 8, @pkY + 4, "Player objects:  L = add/remove");
-	draw_text(@pkX + 8, @pkY + 22, "R = add first,  C = clear all");
-	draw_text(@pkX + 8, @pkY + 40, "Enter = done");
+	@stg_text_cjk(@pkX + 8, @pkY + 4, @L(global.__ONLINE_LK_HUD_PICK_TITLE, "Player objects:  L = add/remove"), 0);
+	@stg_text_cjk(@pkX + 8, @pkY + 22, @L(global.__ONLINE_LK_HUD_PICK_LINE2, "R = add first,  C = clear all"), 0);
+	@stg_text_cjk(@pkX + 8, @pkY + 40, @L(global.__ONLINE_LK_HUD_PICK_DONE, "Enter = done"), 0);
 	@pkYY = @pkY + 58;
 	for(@pkI = 0; @pkI < ds_list_size(@obj_list); @pkI += 1){
 		@pkObj = ds_list_find_value(@obj_list, @pkI);
 		@pkTxt = object_get_name(@pkObj);
 		if(@pkObj == @get_active_player()){
-			@pkTxt += " (active)";
+			@pkTxt += @L(global.__ONLINE_LK_HUD_PICK_ACTIVE, " (active)");
 		}
 		if(instance_exists(@pkObj)){
 			@pkInst = instance_find(@pkObj, 0);
 			@pkTxt += "  (" + string(@pkInst.x) + ", " + string(@pkInst.y) + ")";
 		}else{
-			@pkTxt += "  [no instance]";
+			@pkTxt += @L(global.__ONLINE_LK_HUD_PICK_NO_INSTANCE, "  [no instance]");
 		}
 		draw_set_color(c_white);
-		draw_text(@pkX + 16, @pkYY, @pkTxt);
+		@stg_text_cjk(@pkX + 16, @pkYY, @pkTxt, 0);
 		@pkYY += 18;
 	}
 	@pkTgt = instance_position(mouse_x, mouse_y, all);
 	if(@pkTgt != noone){
 		draw_set_color(c_yellow);
 		if(ds_list_find_index(@obj_list, @pkTgt.object_index) >= 0){
-			draw_text(@pkX + 8, @pkYY, "> " + object_get_name(@pkTgt.object_index) + ": L = remove");
+			@stg_text_cjk(@pkX + 8, @pkYY, @str_fmt(@L(global.__ONLINE_LK_HUD_PICK_REMOVE, "> %1: L = remove"), object_get_name(@pkTgt.object_index), 0, 0), 0);
 		}else{
-			draw_text(@pkX + 8, @pkYY, "> " + object_get_name(@pkTgt.object_index) + ": L = add, R = add first");
+			@stg_text_cjk(@pkX + 8, @pkYY, @str_fmt(@L(global.__ONLINE_LK_HUD_PICK_CURRENT, "> %1: L = add, R = add first"), object_get_name(@pkTgt.object_index), 0, 0), 0);
 		}
 	}
 	draw_set_alpha(@_alpha);

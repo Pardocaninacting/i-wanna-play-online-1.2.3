@@ -1342,7 +1342,7 @@ if(@showArrows || @spectating){
 		draw_set_color(c_white);
 		draw_set_halign(fa_left);
 		draw_set_valign(fa_top);
-		draw_text(round(mouse_x + 14), round(mouse_y + 10), "LMB node / H done / RMB undo");
+		@stg_text_cjk(round(mouse_x + 14), round(mouse_y + 10), @L(global.__ONLINE_LK_HUD_NOTE_HINT_NODE, "LMB node / H done / RMB undo"), 0);
 		draw_set_halign(fa_center);
 		draw_set_valign(fa_middle);
 	}
@@ -1368,7 +1368,7 @@ if(@showArrows || @spectating){
 		draw_set_color(c_white);
 		draw_set_halign(fa_left);
 		draw_set_valign(fa_top);
-		draw_text(round(mouse_x + 14), round(mouse_y + 10), "LMB draw / H done / RMB undo");
+		@stg_text_cjk(round(mouse_x + 14), round(mouse_y + 10), @L(global.__ONLINE_LK_HUD_NOTE_HINT_DRAW, "LMB draw / H done / RMB undo"), 0);
 		draw_set_halign(fa_center);
 		draw_set_valign(fa_middle);
 	}

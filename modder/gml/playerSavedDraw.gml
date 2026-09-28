@@ -56,17 +56,14 @@ d3d_set_hidden(false);
 @xx = 20;
 @yy = 20 + @msgSlot * 20;
 @text = "";
-if(@state == 4) @text = "Online save enabled!";
-else if(@state == 3) @text = "Online save disabled!";
-else if(@state == 5) @text = "player smooth movement: on";
-else if(@state == 6) @text = "player smooth movement: off";
-else if(@state == 7) @text = "Indicator: on";
-else if(@state == 8) @text = "Indicator: off";
-else if(@state == 9) @text = "Camera: Follow";
-else if(@state == 10) @text = "Camera: Screen";
-else if(@state >= 0) @text = "player visual mode: "+string(@state);
+// live states only: -2 = custom message in @name, -1 = "<name> saved!",
+// 0-2 = player visual mode, 3/4 = online save off/on. (5-10 were smooth/
+// indicator/camera announcements whose writers were removed with the hotkeys.)
+if(@state == 4) @text = @L(global.__ONLINE_LK_NOTIFY_SAVE_ON, "Online save enabled!");
+else if(@state == 3) @text = @L(global.__ONLINE_LK_NOTIFY_SAVE_OFF, "Online save disabled!");
+else if(@state >= 0) @text = @str_fmt(@L(global.__ONLINE_LK_NOTIFY_VISUAL_MODE, "player visual mode: %1"), @state, 0, 0);
 else if(@state == -2) @text = @name;
-else @text = @name+" saved!";
+else @text = @str_fmt(@L(global.__ONLINE_LK_NOTIFY_SAVED, "%1 saved!"), @name, 0, 0);
 @_alpha = draw_get_alpha();
 @_color = draw_get_color();
 draw_set_valign(fa_top);
