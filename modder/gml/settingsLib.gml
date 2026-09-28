@@ -1095,8 +1095,15 @@ return 1;
 //   GM8.0             -> FoxWriting, the engine-agnostic CJK route this build has
 //   GMS with CJK pack -> __ONLINE_cjk_draw_text, the call chat/notes/player list use
 //   GMS without it    -> draw_text (the game font draws Chinese in that build)
+// GM8 only: everything shifts 2px up. Both GM8 renderers (the Berlin font and
+// the atlas/FoxWriting path) sit ~2px low in the row boxes; the GMS embedded
+// font is correctly centred and must NOT move (measured on fish vs needle2).
 // args: x, y, text, halign (0 left, 1 centre, 2 right) -> 0
-var _i, _n, _c, _ascii;
+var _i, _n, _c, _ascii, _ly;
+_ly = argument1;
+#if not STUDIO
+_ly -= 2;
+#endif
 _ascii = 1;
 _n = string_length(argument2);
 _i = 1;
@@ -1107,7 +1114,7 @@ while(_i <= _n){
 }
 if(_ascii){
   if(argument3 == 2){ draw_set_halign(fa_right); }else if(argument3 == 1){ draw_set_halign(fa_center); }else{ draw_set_halign(fa_left); }
-  draw_text(argument0, argument1, argument2);
+  draw_text(argument0, _ly, argument2);
   draw_set_halign(fa_left);
   return 0;
 }
@@ -1116,18 +1123,18 @@ if(_ascii){
 __ONLINE_fw_use_font(argument2);
 fw_draw_set_valign(fa_top);
 if(argument3 == 2){ fw_draw_set_halign(fa_right); }else if(argument3 == 1){ fw_draw_set_halign(fa_center); }else{ fw_draw_set_halign(fa_left); }
-fw_draw_text_ext(argument0, argument1, argument2, 9999);
+fw_draw_text_ext(argument0, _ly, argument2, 9999);
 #endif
 #if not GM80
 #if CJKTEXT
 global.__ONLINE_cjkHalign = argument3;
 global.__ONLINE_cjkValign = 0;
-__ONLINE_cjk_draw_text(argument0, argument1, argument2, 9999);
+__ONLINE_cjk_draw_text(argument0, _ly, argument2, 9999);
 global.__ONLINE_cjkHalign = 0;
 #endif
 #if not CJKTEXT
 if(argument3 == 2){ draw_set_halign(fa_right); }else if(argument3 == 1){ draw_set_halign(fa_center); }else{ draw_set_halign(fa_left); }
-draw_text(argument0, argument1, argument2);
+draw_text(argument0, _ly, argument2);
 draw_set_halign(fa_left);
 #endif
 #endif
