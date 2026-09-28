@@ -160,6 +160,9 @@ global.__ONLINE_guiAlive = false;
     @pvpAvail = 0;
 #endif
 @saveHistCount = 0;
+#if PROBE
+global.__ONLINE_probeLast = 0;
+#endif
 // Prime the save arrays exactly as the GMS template does (worldCreateGMS.gml:167).
 // GM8 tolerates indexing an unset variable, GMS aborts, so creating index 0 here
 // keeps both engines identical and makes every read safe before the first save.

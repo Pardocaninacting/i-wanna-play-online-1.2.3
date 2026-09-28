@@ -118,6 +118,33 @@ if(@hudWinH < 1) @hudWinH = window_get_height();
 if(@hudWinW < 1) @hudGuiOn = false;
 if(@hudWinH < 1) @hudGuiOn = false;
 #endif
+#if PROBE
+#if STUDIO   // needs the GUI-size API
+// iwpo.probe (see DEVNOTES.md): one line per second into iwpo_probe.txt, written
+// from before the guard so a suppressed overlay explains itself. Only variables
+// worldCreate/@stg_init own are read: anything the panel assigns later would abort
+// this event on the first frame.
+if(current_time - global.__ONLINE_probeLast >= 1000){
+  global.__ONLINE_probeLast = current_time;
+  @probeLine = "save=" + string(game_save_id);
+  @probeLine += " gui=" + string(display_get_gui_width()) + "x" + string(display_get_gui_height());
+  @probeLine += " win=" + string(window_get_width()) + "x" + string(window_get_height());
+  @probeLine += " room=" + string(room_width) + "x" + string(room_height);
+  @probeLine += " alpha=" + string(draw_get_alpha()) + " color=" + string(draw_get_color());
+  @probeLine += " hudOn=" + string(@hudGuiOn) + " hudW=" + string(@hudWinW) + " hudH=" + string(@hudWinH);
+  @probeLine += " open=" + string(@settingsOpen) + " tab=" + string(@settingsTab);
+  @probeLine += " sp=" + string(@spX) + "," + string(@spY) + "," + string(@spW) + "," + string(@spH);
+  @probeLine += " stgN=" + string(global.__ONLINE_stgN) + " first=" + string(@stgFirst);
+  @probeF = file_text_open_append("iwpo_probe.txt");
+  if(@probeF >= 0){
+    file_text_write_string(@probeF, @probeLine);
+    file_text_writeln(@probeF);
+    file_text_close(@probeF);
+  }
+}
+#endif
+#endif
+
 if(@hudGuiOn){
 #if GM8GUI
 	// N3: world-anchored notes + off-screen arrows render in this GUI pass

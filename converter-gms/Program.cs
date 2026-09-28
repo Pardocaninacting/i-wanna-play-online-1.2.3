@@ -145,6 +145,12 @@ static class Program
         // through room_goto() so temp files are unnecessary (unlike GM8 which uses game_restart()).
         var activeFlags = new HashSet<string>(StringComparer.Ordinal) { "STUDIO", "GMSND" };
 
+        // iwpo.probe: the overlay writes its runtime state to iwpo_probe.txt once a
+        // second, so a "the panel does not draw" report can be diagnosed by reading a
+        // log instead of asking someone to describe the screen.
+        if (GetDefineFlag("iwpo.probe"))
+            activeFlags.Add("PROBE");
+
         if ((Data.GeneralInfo?.Major ?? 0) >= 2)
             activeFlags.Add("GMS2");
 

@@ -112,6 +112,9 @@ set_utf8_mode(1);
     @pvpAvail = 0;
 #endif
 @saveHistCount = 0;
+#if PROBE
+global.__ONLINE_probeLast = 0;
+#endif
 @saveHistMax = 500;
 @saveHistLastTime = 0;
 @saveHistFavMax = 100;
