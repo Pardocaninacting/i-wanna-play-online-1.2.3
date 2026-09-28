@@ -7,7 +7,7 @@ instance_activate_object(@chatbox);
 instance_activate_object(@playerSaved);
 if(!instance_exists(@userInterface)){
 	#if GMS2
-		instance_create_depth(0, 0, -2147483648, @userInterface);
+		instance_create_depth(0, 0, -15998, @userInterface);
 	#endif
 	#if not GMS2
 		instance_create(0, 0, @userInterface);
