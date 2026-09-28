@@ -180,50 +180,50 @@ _ctlX = @spX + @colW - 16 - 130;   // every control hugs the content right edge
 _fw = @colW - 32 - 110;          // account field width follows the column
 if(_fw < 120) _fw = 120;
 // --- connection
-@stg_row_add(0, 0, "CONNECTION", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_CONNECTION, "CONNECTION"), _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 @stg_row_add(1, 0, "", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgRowH;
 @stg_row_add(5, 11, "", _cl, _y, _btnW, 1, _cl); _y += global.__ONLINE_stgRowH;
 @stg_row_add(5, 15, "", _cl, _y, _btnW, 1, _cl); _y += global.__ONLINE_stgRowH;
-@stg_row_add(3, 63, "On failure", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(2, 64, "Server", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
-@stg_row_add(2, 68, "TCP port", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
-@stg_row_add(2, 69, "UDP port", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
+@stg_row_add(3, 63, @L(global.__ONLINE_LK_ROW_ON_FAILURE, "On failure"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(2, 64, @L(global.__ONLINE_LK_ROW_SERVER, "Server"), _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
+@stg_row_add(2, 68, @L(global.__ONLINE_LK_ROW_TCP_PORT, "TCP port"), _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
+@stg_row_add(2, 69, @L(global.__ONLINE_LK_ROW_UDP_PORT, "UDP port"), _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
 // --- account
 _y += 6;
-@stg_row_add(0, 0, "ACCOUNT", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(2, 12, "Name", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
-@stg_row_add(2, 13, "Password", _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
-@stg_row_add(3, 14, "Store in", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_ACCOUNT, "ACCOUNT"), _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(2, 12, @L(global.__ONLINE_LK_ROW_NAME, "Name"), _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
+@stg_row_add(2, 13, @L(global.__ONLINE_LK_ROW_PASSWORD, "Password"), _cl, _y, _fw, 0, _cf); _y += global.__ONLINE_stgRowH + 2;
+@stg_row_add(3, 14, @L(global.__ONLINE_LK_ROW_STORE_IN, "Store in"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 // --- gameplay / display side by side
 _y += 6;
 // Gameplay and Display are always ONE column (maintainer decision):
 // the detail pane carries the extra breadth, and a second column only
 // made both halves harder to scan.
-@stg_row_add(0, 0, "GAMEPLAY", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(3, 1, "Team", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(3, 2, "Lerp", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 3, "Save", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 4, "Fast", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(3, 8, "PVP", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 9, "Bullets", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_GAMEPLAY, "GAMEPLAY"), _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(3, 1, @L(global.__ONLINE_LK_ROW_TEAM, "Team"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 2, @L(global.__ONLINE_LK_ROW_LERP, "Lerp"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 3, @L(global.__ONLINE_LK_ROW_SAVE, "Save"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 4, @L(global.__ONLINE_LK_ROW_FAST, "Fast"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 8, @L(global.__ONLINE_LK_ROW_PVP, "PVP"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 9, @L(global.__ONLINE_LK_ROW_BULLETS, "Bullets"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 _y += 6;
-@stg_row_add(0, 0, "DISPLAY", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(3, 5, "Visual", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 6, "Indicator", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(3, 7, "Spec Cam", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(3, 62, "Menu layout", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_DISPLAY, "DISPLAY"), _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(3, 5, @L(global.__ONLINE_LK_ROW_VISUAL, "Visual"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 6, @L(global.__ONLINE_LK_ROW_INDICATOR, "Indicator"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 7, @L(global.__ONLINE_LK_ROW_SPEC_CAM, "Spec Cam"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 62, @L(global.__ONLINE_LK_ROW_MENU_LAYOUT, "Menu layout"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 #if PLAYER_LIST
-@stg_row_add(5, 10, "Player Objects", _cl, _y, 130, 1, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(5, 10, @L(global.__ONLINE_LK_ROW_PLAYER_OBJECTS, "Player Objects"), _cl, _y, 130, 1, _ctlX); _y += global.__ONLINE_stgRowH;
 #endif
 _y += 6;
 // notes visibility (the [notes] ini keys already exist; these rows just expose them)
-@stg_row_add(0, 0, "NOTES", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(4, 60, "Hide others", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 61, "Hide all", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_NOTES, "NOTES"), _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(4, 60, @L(global.__ONLINE_LK_ROW_HIDE_OTHERS, "Hide others"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 61, @L(global.__ONLINE_LK_ROW_HIDE_ALL, "Hide all"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 _y += 6;
-@stg_row_add(0, 0, "ADVANCED", _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(3, 66, "Save history", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(3, 67, "Chat history", _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_ADVANCED, "ADVANCED"), _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(3, 66, @L(global.__ONLINE_LK_ROW_SAVE_HISTORY, "Save history"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(3, 67, @L(global.__ONLINE_LK_ROW_CHAT_HISTORY, "Chat history"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
@@ -323,7 +323,7 @@ while(_rest != "" && _cnt < argument4){
       _rest = "";
     }
   }
-  draw_text(argument0, argument1 + _h, _line);
+  @stg_text_cjk(argument0, argument1 + _h, _line, 0);
   _h += 16;
   _cnt += 1;
   if(_rest == "") break;
@@ -338,46 +338,46 @@ var _a;
 _a = argument0;
 // a pending destructive confirmation is cancelled by any other action
 if(global.__ONLINE_stgClearRow >= 0 && _a != global.__ONLINE_stgClearRow) @acc_clear_cancel();
-if(_a == 11) return "Drop the current connection and connect again.";
-if(_a == 15) return "Save the account and reconnect with the new identity. No restart needed.";
-if(_a == 12) return "Your in-game name. It is written to the account store and sent to the server when you connect.";
-if(_a == 13) return "Session key: players who use the same key meet each other. It is not an account password and may be empty.";
-if(_a == 14) return "Where name and key are saved. Global covers every game on this PC.";
-if(_a == 1) return "Team colour, used for names and the roster.";
-if(_a == 2) return "Interpolate remote players between network updates: smoother but behind. Light = 0.35, Standard = 0.5, Strong = 0.65 per frame.";
-if(_a == 63) return "When every reconnect attempt fails: stay in the game offline (you can reconnect from the menu) or quit.";
-if(_a == 64) return "Server host. Saved to the config and reconnects immediately - the escape hatch when the current server is unreachable.";
-if(_a == 68) return "TCP port for the game traffic (login, saves, chat). Saved and reconnects.";
-if(_a == 69) return "UDP port for the live player positions. Saved and reconnects.";
-if(_a == 66) return "Local shared-save history cap. Older non-favourite entries are dropped past this.";
-if(_a == 67) return "Chat log length in lines.";
-if(_a == 3) return "Shared online saves. The T key toggles this while playing.";
-if(_a == 4) return "Fast save/load path, for engines that restart the room on load.";
-if(_a == 8) return "Player versus player. Bullets stay visible while it is on.";
-if(_a == 9) return "Share your bullets with the room. Locked on while PVP is enabled.";
-if(_a == 5) return "How other players are drawn: full, names only, or hidden.";
-if(_a == 6) return "Direction indicator above remote players.";
-if(_a == 7) return "Spectator camera mode.";
-if(_a == 62) return "Auto picks the layout from the window size; Narrow is the compact 480px list-only panel; Full always shows the detail pane.";
-if(_a == 60) return "Other players' notes are not drawn and their arrival sound is muted. Your own notes still show.";
-if(_a == 61) return "No notes are drawn at all. Sending yours keeps working, and the canvas mode still collects them.";
-if(_a == 20) return "Enter applies this save. F toggles favourite, 1-8 assigns a hotkey, Del clears it.";
-if(_a == 21) return "Show only favourite saves.";
-if(_a == 22) return "Deletes non-favourite saves.";
-if(_a == 10) return "Choose which player object drives your character.";
-if(_a >= 40 && _a <= 50) return "Rebind this action. Enter starts the capture, then press the key you want; Esc cancels.";
-if(_a == 52) return "Restore every binding above to its default.";
-if(_a == 53) return "Sends the listed global variables to everyone in the room, on save and whenever their bits change.";
-if(_a == 55) return "A player skin from iwposkins. Enter applies it. Left/Right (or the < > under the preview) cycles through all seven animation states.";
-if(_a == 56) return "When another player uses a skin you do not have, fetch it automatically.";
-if(_a == 57) return "Unload the current skin and return to the game's default player sprite.";
-if(_a == 58) return "Filter the list by name, maker or source (case-insensitive). F opens this from anywhere on the tab; an empty keyword shows everything again.";
-if(_a == 54) return "Sent on save and whenever its bits change. Entries whose global is missing in this game are skipped (see Present).";
-if(_a == 30) return "Ratings are stored per game on the server; everyone on this server shares the same listing.";
-if(_a == 31) return "Your rating for this game. Left/Right steps through, digits 1-5 set directly, 0 means no rating.";
-if(_a == 32) return "Whether you have cleared this game. Sent together with the stars.";
-if(_a == 33) return "The server's response to your last submission. Two submissions need a few seconds between them.";
-if(_a == 34) return "Sends the rating to the server.";
+if(_a == 11) return @L(global.__ONLINE_LK_DESC_RECONNECT, "Drop the current connection and connect again.");
+if(_a == 15) return @L(global.__ONLINE_LK_DESC_APPLY_RECONNECT, "Save the account and reconnect with the new identity. No restart needed.");
+if(_a == 12) return @L(global.__ONLINE_LK_DESC_NAME, "Your in-game name. It is written to the account store and sent to the server when you connect.");
+if(_a == 13) return @L(global.__ONLINE_LK_DESC_PASSWORD, "Session key: players who use the same key meet each other. It is not an account password and may be empty.");
+if(_a == 14) return @L(global.__ONLINE_LK_DESC_STORE, "Where name and key are saved. Global covers every game on this PC.");
+if(_a == 1) return @L(global.__ONLINE_LK_DESC_TEAM, "Team colour, used for names and the roster.");
+if(_a == 2) return @L(global.__ONLINE_LK_DESC_LERP, "Interpolate remote players between network updates: smoother but behind. Light = 0.35, Standard = 0.5, Strong = 0.65 per frame.");
+if(_a == 63) return @L(global.__ONLINE_LK_DESC_ON_FAILURE, "When every reconnect attempt fails: stay in the game offline (you can reconnect from the menu) or quit.");
+if(_a == 64) return @L(global.__ONLINE_LK_DESC_SERVER, "Server host. Saved to the config and reconnects immediately - the escape hatch when the current server is unreachable.");
+if(_a == 68) return @L(global.__ONLINE_LK_DESC_TCP, "TCP port for the game traffic (login, saves, chat). Saved and reconnects.");
+if(_a == 69) return @L(global.__ONLINE_LK_DESC_UDP, "UDP port for the live player positions. Saved and reconnects.");
+if(_a == 66) return @L(global.__ONLINE_LK_DESC_SAVE_HISTORY, "Local shared-save history cap. Older non-favourite entries are dropped past this.");
+if(_a == 67) return @L(global.__ONLINE_LK_DESC_CHAT_HISTORY, "Chat log length in lines.");
+if(_a == 3) return @L(global.__ONLINE_LK_DESC_SAVE, "Shared online saves. The T key toggles this while playing.");
+if(_a == 4) return @L(global.__ONLINE_LK_DESC_FAST, "Fast save/load path, for engines that restart the room on load.");
+if(_a == 8) return @L(global.__ONLINE_LK_DESC_PVP, "Player versus player. Bullets stay visible while it is on.");
+if(_a == 9) return @L(global.__ONLINE_LK_DESC_BULLETS, "Share your bullets with the room. Locked on while PVP is enabled.");
+if(_a == 5) return @L(global.__ONLINE_LK_DESC_VISUAL, "How other players are drawn: full, names only, or hidden.");
+if(_a == 6) return @L(global.__ONLINE_LK_DESC_INDICATOR, "Direction indicator above remote players.");
+if(_a == 7) return @L(global.__ONLINE_LK_DESC_SPEC_CAM, "Spectator camera mode.");
+if(_a == 62) return @L(global.__ONLINE_LK_DESC_MENU_LAYOUT, "Auto picks the layout from the window size; Narrow is the compact 480px list-only panel; Full always shows the detail pane.");
+if(_a == 60) return @L(global.__ONLINE_LK_DESC_HIDE_OTHERS, "Other players' notes are not drawn and their arrival sound is muted. Your own notes still show.");
+if(_a == 61) return @L(global.__ONLINE_LK_DESC_HIDE_ALL, "No notes are drawn at all. Sending yours keeps working, and the canvas mode still collects them.");
+if(_a == 20) return @L(global.__ONLINE_LK_DESC_SAVE_ROW, "Enter applies this save. F toggles favourite, 1-8 assigns a hotkey, Del clears it.");
+if(_a == 21) return @L(global.__ONLINE_LK_DESC_FAVOURITES, "Show only favourite saves.");
+if(_a == 22) return @L(global.__ONLINE_LK_DESC_CLEAR_SAVES, "Deletes non-favourite saves.");
+if(_a == 10) return @L(global.__ONLINE_LK_DESC_PLAYER_OBJECTS, "Choose which player object drives your character.");
+if(_a >= 40 && _a <= 50) return @L(global.__ONLINE_LK_DESC_REBIND, "Rebind this action. Enter starts the capture, then press the key you want; Esc cancels.");
+if(_a == 52) return @L(global.__ONLINE_LK_DESC_RESET_KEYS, "Restore every binding above to its default.");
+if(_a == 53) return @L(global.__ONLINE_LK_DESC_SYNC, "Sends the listed global variables to everyone in the room, on save and whenever their bits change.");
+if(_a == 55) return @L(global.__ONLINE_LK_DESC_SKIN_ROW, "A player skin from iwposkins. Enter applies it. Left/Right (or the < > under the preview) cycles through all seven animation states.");
+if(_a == 56) return @L(global.__ONLINE_LK_DESC_AUTO_DOWNLOAD, "When another player uses a skin you do not have, fetch it automatically.");
+if(_a == 57) return @L(global.__ONLINE_LK_DESC_CLEAR_SKIN, "Unload the current skin and return to the game's default player sprite.");
+if(_a == 58) return @L(global.__ONLINE_LK_DESC_SEARCH, "Filter the list by name, maker or source (case-insensitive). F opens this from anywhere on the tab; an empty keyword shows everything again.");
+if(_a == 54) return @L(global.__ONLINE_LK_DESC_SYNC_ENTRY, "Sent on save and whenever its bits change. Entries whose global is missing in this game are skipped (see Present).");
+if(_a == 30) return @L(global.__ONLINE_LK_DESC_GAME, "Ratings are stored per game on the server; everyone on this server shares the same listing.");
+if(_a == 31) return @L(global.__ONLINE_LK_DESC_STARS, "Your rating for this game. Left/Right steps through, digits 1-5 set directly, 0 means no rating.");
+if(_a == 32) return @L(global.__ONLINE_LK_DESC_CLEARED, "Whether you have cleared this game. Sent together with the stars.");
+if(_a == 33) return @L(global.__ONLINE_LK_DESC_LAST_RESULT, "The server's response to your last submission. Two submissions need a few seconds between them.");
+if(_a == 34) return @L(global.__ONLINE_LK_DESC_SUBMIT, "Sends the rating to the server.");
 return "";
 
 ///// script @stg_draw_detail
@@ -400,8 +400,8 @@ draw_set_halign(fa_left);
 draw_set_color(c_white);
 _txt = global.__ONLINE_stgLabel[argument0];
 if(_txt == "") _txt = @stg_value(argument0);
-if(_k == 1) _txt = "Connection";
-if(_a == 20) _txt = @str_fmt("Save %1", global.__ONLINE_stgArg[argument0] + 1, 0, 0);
+if(_k == 1) _txt = @L(global.__ONLINE_LK_DETAIL_CONNECTION, "Connection");
+if(_a == 20) _txt = @str_fmt(@L(global.__ONLINE_LK_VAL_SAVE_N, "Save %1"), global.__ONLINE_stgArg[argument0] + 1, 0, 0);
 // titles may carry CJK (room names, skin names)
 @stg_text_cjk(_x, _y, _txt, 0);
 _y += 22;
@@ -416,7 +416,7 @@ if(_a >= 40 && _a <= 50){
   draw_set_color(make_color_rgb(225, 205, 90));
   draw_rectangle(_x, _y, _x + 24 + @stg_text_width(_val) + 24, _y + 26, true);
   draw_set_color(c_white);
-  draw_text(_x + 12, _y + 6 + @stgTextDY, _val);
+  @stg_text_cjk(_x + 12, _y + 6 + @stgTextDY, _val, 0);
   _y += 36;
 }
 if(_a == 55){
@@ -461,7 +461,7 @@ if(_k == 1){
   draw_set_color(@stg_status_color());
   draw_rectangle(_x, _y, _x + min(_w, 24 + @stg_text_width(_val) + 24), _y + 22, true);
   draw_set_color(c_white);
-  draw_text(_x + 10, _y + 4 + @stgTextDY, _val);
+  @stg_text_cjk(_x + 10, _y + 4 + @stgTextDY, _val, 0);
   _y += 32;
 }
 // section context: walk back to this row's header, then count its options
@@ -483,12 +483,11 @@ if(global.__ONLINE_stgKind[_i] == 0){
 }
 if(string_length(_head) > 0){
   draw_set_color(make_color_rgb(120, 126, 134));
-  // singular/plural stays a code branch for now; in P2 both templates get keys
-  // (a language without plural forms just maps both to the same string)
+  // singular/plural: a language without plural forms maps both keys identically
   if(_cnt == 1){
-    draw_text(_x, _y, _head + @str_fmt(" - %1 option", _cnt, 0, 0));
+    @stg_text_cjk(_x, _y, _head + @str_fmt(@L(global.__ONLINE_LK_COUNT_OPTION, " - %1 option"), _cnt, 0, 0), 0);
   }else{
-    draw_text(_x, _y, _head + @str_fmt(" - %1 options", _cnt, 0, 0));
+    @stg_text_cjk(_x, _y, _head + @str_fmt(@L(global.__ONLINE_LK_COUNT_OPTIONS, " - %1 options"), _cnt, 0, 0), 0);
   }
   _y += 18;
 }
@@ -502,16 +501,16 @@ if(string_length(_txt) > 0){
 // facts: only fields that exist in the engine (see GML_COMPAT/DESIGN section 9)
 _fn = 0;
 if(_a == 12){
-  global.__ONLINE_detFK[0] = "Store";
+  global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_STORE, "Store");
   global.__ONLINE_detFV[0] = global.__ONLINE_accGlobalPath;
   _fn = 1;
 }
 if(_a == 13){
-  global.__ONLINE_detFK[0] = "State";
+  global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_STATE, "State");
   if(string_length(global.__ONLINE_accPassword) > 0){
-    global.__ONLINE_detFV[0] = "set (masked)";
+    global.__ONLINE_detFV[0] = @L(global.__ONLINE_LK_FACTV_SET_MASKED, "set (masked)");
   }else{
-    global.__ONLINE_detFV[0] = "empty";
+    global.__ONLINE_detFV[0] = @L(global.__ONLINE_LK_FACTV_EMPTY, "empty");
   }
   _fn = 1;
 }
@@ -521,69 +520,69 @@ if(_a == 20){
   // save arrays, so clamping here guarantees the reads below cannot hit an
   // undefined array (GMS aborts on that, GM8 does not).
   if(@stgSvI < 0 || @stgSvI >= @saveHistCount) @stgSvI = 0;
-  global.__ONLINE_detFK[0] = "Room";  global.__ONLINE_detFV[0] = @stg_room_name(@stgSvI);
-  global.__ONLINE_detFK[1] = "Position"; global.__ONLINE_detFV[1] = string(round(@saveHistX[@stgSvI])) + ", " + string(round(@saveHistY[@stgSvI]));
-  global.__ONLINE_detFK[2] = "Gravity"; global.__ONLINE_detFV[2] = string(@saveHistGrav[@stgSvI]);
+  global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_ROOM, "Room");  global.__ONLINE_detFV[0] = @stg_room_name(@stgSvI);
+  global.__ONLINE_detFK[1] = @L(global.__ONLINE_LK_FACT_POSITION, "Position"); global.__ONLINE_detFV[1] = string(round(@saveHistX[@stgSvI])) + ", " + string(round(@saveHistY[@stgSvI]));
+  global.__ONLINE_detFK[2] = @L(global.__ONLINE_LK_FACT_GRAVITY, "Gravity"); global.__ONLINE_detFV[2] = string(@saveHistGrav[@stgSvI]);
   if(@saveHistGrav[@stgSvI] > 0) global.__ONLINE_detFV[2] = "+" + global.__ONLINE_detFV[2];
-  global.__ONLINE_detFK[3] = "Player";  global.__ONLINE_detFV[3] = @saveHistName[@stgSvI];
-  global.__ONLINE_detFK[4] = "Saved";   global.__ONLINE_detFV[4] = @save_age_text(@stgSvI);
-  global.__ONLINE_detFK[5] = "Hotkey";  global.__ONLINE_detFV[5] = string(@saveHistHotkey[@stgSvI]);
-  if(@saveHistHotkey[@stgSvI] <= 0) global.__ONLINE_detFV[5] = "none";
-  global.__ONLINE_detFK[6] = "Favourite"; global.__ONLINE_detFV[6] = @stg_onoff(@saveHistFav[@stgSvI]);
+  global.__ONLINE_detFK[3] = @L(global.__ONLINE_LK_FACT_PLAYER, "Player");  global.__ONLINE_detFV[3] = @saveHistName[@stgSvI];
+  global.__ONLINE_detFK[4] = @L(global.__ONLINE_LK_FACT_SAVED, "Saved");   global.__ONLINE_detFV[4] = @save_age_text(@stgSvI);
+  global.__ONLINE_detFK[5] = @L(global.__ONLINE_LK_FACT_HOTKEY, "Hotkey");  global.__ONLINE_detFV[5] = string(@saveHistHotkey[@stgSvI]);
+  if(@saveHistHotkey[@stgSvI] <= 0) global.__ONLINE_detFV[5] = @L(global.__ONLINE_LK_FACTV_NONE, "none");
+  global.__ONLINE_detFK[6] = @L(global.__ONLINE_LK_FACT_FAVOURITE, "Favourite"); global.__ONLINE_detFV[6] = @stg_onoff(@saveHistFav[@stgSvI]);
   _fn = 7;
 }
 if(_a == 11 || _a == 15){
-  global.__ONLINE_detFK[0] = "Status"; global.__ONLINE_detFV[0] = @stg_status_text();
-  global.__ONLINE_detFK[1] = "Server"; global.__ONLINE_detFV[1] = @stg_server_text();
+  global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_STATUS, "Status"); global.__ONLINE_detFV[0] = @stg_status_text();
+  global.__ONLINE_detFK[1] = @L(global.__ONLINE_LK_FACT_SERVER, "Server"); global.__ONLINE_detFV[1] = @stg_server_text();
   _fn = 2;
 }
 if(_k == 1){
-  global.__ONLINE_detFK[0] = "Server";
+  global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_SERVER, "Server");
   global.__ONLINE_detFV[0] = @stg_server_text();
   _fn = 1;
 }
 if(_a == 55){
   @stgI = global.__ONLINE_stgArg[argument0];
   @skin_parse(@stgI);   // the facts read parsed fields; cheap once parsed
-  global.__ONLINE_detFK[0] = "Maker";  global.__ONLINE_detFV[0] = @skinMaker[@stgI];
-  global.__ONLINE_detFK[1] = "Source"; global.__ONLINE_detFV[1] = @skinSource[@stgI];
+  global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_MAKER, "Maker");  global.__ONLINE_detFV[0] = @skinMaker[@stgI];
+  global.__ONLINE_detFK[1] = @L(global.__ONLINE_LK_FACT_SOURCE, "Source"); global.__ONLINE_detFV[1] = @skinSource[@stgI];
   @skFTotal = 0;
   for(@skFJ = 0; @skFJ < 7; @skFJ += 1) @skFTotal += @skinFrames[@stgI, @skFJ];
-  global.__ONLINE_detFK[2] = "Frames"; global.__ONLINE_detFV[2] = string(@skFTotal);
-  global.__ONLINE_detFK[3] = "Status";
+  global.__ONLINE_detFK[2] = @L(global.__ONLINE_LK_FACT_FRAMES, "Frames"); global.__ONLINE_detFV[2] = string(@skFTotal);
+  global.__ONLINE_detFK[3] = @L(global.__ONLINE_LK_FACT_STATUS, "Status");
   if(!@skinHas[@stgI, 0]){
-    global.__ONLINE_detFV[3] = "[!] no idle.png";
+    global.__ONLINE_detFV[3] = "[!] no idle.png";   // names a real file - not translated
   }else if(@stgI == @skinLoaded){
-    global.__ONLINE_detFV[3] = "loaded";
+    global.__ONLINE_detFV[3] = @L(global.__ONLINE_LK_VAL_LOADED, "loaded");
   }else{
-    global.__ONLINE_detFV[3] = "not loaded";
+    global.__ONLINE_detFV[3] = @L(global.__ONLINE_LK_FACTV_NOT_LOADED, "not loaded");
   }
   _fn = 4;
 }
 if(_a == 54){
   @stgI = global.__ONLINE_stgArg[argument0];
-  global.__ONLINE_detFK[0] = "Global";  global.__ONLINE_detFV[0] = "global." + @syncName[@stgI];
-  global.__ONLINE_detFK[1] = "Bits";    global.__ONLINE_detFV[1] = string(@syncCount[@stgI]);
-  global.__ONLINE_detFK[2] = "Slots";   global.__ONLINE_detFV[2] = @str_fmt("%1 x 32-bit", @syncSlotCount[@stgI], 0, 0);
-  global.__ONLINE_detFK[3] = "Present";
+  global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_GLOBAL, "Global");  global.__ONLINE_detFV[0] = "global." + @syncName[@stgI];
+  global.__ONLINE_detFK[1] = @L(global.__ONLINE_LK_FACT_BITS, "Bits");    global.__ONLINE_detFV[1] = string(@syncCount[@stgI]);
+  global.__ONLINE_detFK[2] = @L(global.__ONLINE_LK_FACT_SLOTS, "Slots");   global.__ONLINE_detFV[2] = @str_fmt(@L(global.__ONLINE_LK_FACTV_SLOTS_FMT, "%1 x 32-bit"), @syncSlotCount[@stgI], 0, 0);
+  global.__ONLINE_detFK[3] = @L(global.__ONLINE_LK_FACT_PRESENT, "Present");
   if(variable_global_exists(@syncName[@stgI])){
-    global.__ONLINE_detFV[3] = "yes";
+    global.__ONLINE_detFV[3] = @L(global.__ONLINE_LK_FACTV_YES, "yes");
   }else{
-    global.__ONLINE_detFV[3] = "no - skipped";
+    global.__ONLINE_detFV[3] = @L(global.__ONLINE_LK_FACTV_NO_SKIPPED, "no - skipped");
   }
   _fn = 4;
 }
 if(_a == 33){
-  global.__ONLINE_detFK[0] = "State";   global.__ONLINE_detFV[0] = @stg_rating_status();
-  global.__ONLINE_detFK[1] = "Stars";   global.__ONLINE_detFV[1] = @str_fmt("%1 / 5", @rStars, 0, 0);
-  global.__ONLINE_detFK[2] = "Cleared"; global.__ONLINE_detFV[2] = @stg_onoff(@rCleared);
+  global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_STATE, "State");   global.__ONLINE_detFV[0] = @stg_rating_status();
+  global.__ONLINE_detFK[1] = @L(global.__ONLINE_LK_ROW_STARS, "Stars");   global.__ONLINE_detFV[1] = @str_fmt(@L(global.__ONLINE_LK_VAL_OF_5, "%1 / 5"), @rStars, 0, 0);
+  global.__ONLINE_detFK[2] = @L(global.__ONLINE_LK_ROW_CLEARED, "Cleared"); global.__ONLINE_detFV[2] = @stg_onoff(@rCleared);
   _fn = 3;
 }
 if(_a == 14){
-  global.__ONLINE_detFK[0] = "This folder";
+  global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_THIS_FOLDER, "This folder");
   global.__ONLINE_detFV[0] = global.__ONLINE_accLocalPath;
-  global.__ONLINE_detFK[1] = "Env override";
-  global.__ONLINE_detFV[1] = "IWPO_NAME / IWPO_PASSWORD";
+  global.__ONLINE_detFK[1] = @L(global.__ONLINE_LK_FACT_ENV_OVERRIDE, "Env override");
+  global.__ONLINE_detFV[1] = "IWPO_NAME / IWPO_PASSWORD";   // env var names - not translated
   _fn = 2;
 }
 if(_fn > 0){
@@ -603,7 +602,7 @@ if(_fn > 0){
   _i = 0;
   while(_i < _fn){
     draw_set_color(make_color_rgb(120, 126, 134));
-    draw_text(_x, _y + @stgTextDY, global.__ONLINE_detFK[_i]);
+    @stg_text_cjk(_x, _y + @stgTextDY, global.__ONLINE_detFK[_i], 0);
     draw_set_color(c_white);
     if(@stg_is_ascii(global.__ONLINE_detFV[_i])){
       // wrap instead of truncating: a store path is long and the tail (the file
@@ -623,24 +622,24 @@ if(_fn > 0){
 }
 // the row's action hint, at the bottom of the column
 _acts = "";
-if(_a == 12 || _a == 13) _acts = "Enter = edit";
-if(_a == 14) _acts = "Left/Right = switch store";
-if(_a == 11 || _a == 15) _acts = "Enter = run";
-if(_a == 10) _acts = "Enter = pick";
-if(_a == 20) _acts = "Enter = apply   F = favourite   1-8 = hotkey";
-if(_a == 21) _acts = "Left/Right = toggle";
-if(_a >= 40 && _a <= 50) _acts = "Enter = rebind";
-if(_a == 52) _acts = "Enter = reset";
-if(_a == 55) _acts = "Enter = apply";
-if(_a == 57) _acts = "Enter = clear";
-if(_a == 31) _acts = "Left/Right = change   1-5 = set";
-if(_a == 34) _acts = "Enter = submit";
+if(_a == 12 || _a == 13) _acts = @L(global.__ONLINE_LK_ACT_EDIT, "Enter = edit");
+if(_a == 14) _acts = @L(global.__ONLINE_LK_ACT_SWITCH_STORE, "Left/Right = switch store");
+if(_a == 11 || _a == 15) _acts = @L(global.__ONLINE_LK_ACT_RUN, "Enter = run");
+if(_a == 10) _acts = @L(global.__ONLINE_LK_ACT_PICK, "Enter = pick");
+if(_a == 20) _acts = @L(global.__ONLINE_LK_ACT_SAVE_ROW, "Enter = apply   F = favourite   1-8 = hotkey");
+if(_a == 21) _acts = @L(global.__ONLINE_LK_ACT_TOGGLE, "Left/Right = toggle");
+if(_a >= 40 && _a <= 50) _acts = @L(global.__ONLINE_LK_ACT_REBIND, "Enter = rebind");
+if(_a == 52) _acts = @L(global.__ONLINE_LK_ACT_RESET, "Enter = reset");
+if(_a == 55) _acts = @L(global.__ONLINE_LK_ACT_APPLY, "Enter = apply");
+if(_a == 57) _acts = @L(global.__ONLINE_LK_ACT_CLEAR, "Enter = clear");
+if(_a == 31) _acts = @L(global.__ONLINE_LK_ACT_RATE, "Left/Right = change   1-5 = set");
+if(_a == 34) _acts = @L(global.__ONLINE_LK_ACT_SUBMIT, "Enter = submit");
 if(_a == 22){
-  if(global.__ONLINE_stgClearRow == 22) _acts = "Click again to confirm"; else _acts = "Click to clear";
+  if(global.__ONLINE_stgClearRow == 22) _acts = @L(global.__ONLINE_LK_ACT_CONFIRM_CLEAR, "Click again to confirm"); else _acts = @L(global.__ONLINE_LK_ACT_CLICK_CLEAR, "Click to clear");
 }
 if(string_length(_acts) > 0){
   draw_set_color(make_color_rgb(150, 190, 230));
-  draw_text(_x, @stgBottom - 18 + @stgTextDY, _acts);
+  @stg_text_cjk(_x, @stgBottom - 18 + @stgTextDY, _acts, 0);
 }
 return 0;
 ///// script @stg_fit_text
@@ -851,7 +850,7 @@ return 1;
 			if(@rowK == 0){
 				// section header: label + a thin rule running to the content edge
 				draw_set_color(make_color_rgb(150, 190, 230));
-				draw_text(@rowX, @rowY, global.__ONLINE_stgLabel[@rowI]);
+				@stg_text_cjk(@rowX, @rowY, global.__ONLINE_stgLabel[@rowI], 0);
 				draw_set_color(make_color_rgb(70, 80, 95));
 				@rowRuleX = @rowX + @stg_text_width(global.__ONLINE_stgLabel[@rowI]) + 10;
 				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
@@ -859,12 +858,12 @@ return 1;
 				// two-column header: each label gets a short rule of its own
 				@rowSplit = string_pos("|", global.__ONLINE_stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(150, 190, 230));
-				draw_text(@rowX, @rowY, string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1));
+				@stg_text_cjk(@rowX, @rowY, string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1), 0);
 				draw_set_color(make_color_rgb(70, 80, 95));
 				@rowRuleX = @rowX + @stg_text_width(string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1)) + 10;
 				if(@rowRuleX < @rowCX - 16) draw_rectangle(@rowRuleX, @rowY + 8, @rowCX - 16, @rowY + 9, false);
 				draw_set_color(make_color_rgb(150, 190, 230));
-				draw_text(@rowCX, @rowY, string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit));
+				@stg_text_cjk(@rowCX, @rowY, string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit), 0);
 				draw_set_color(make_color_rgb(70, 80, 95));
 				@rowRuleX = @rowCX + @stg_text_width(string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit)) + 10;
 				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
@@ -872,13 +871,11 @@ return 1;
 				draw_set_color(@stg_status_color());
 				draw_circle(@rowX + 8, @rowY + 9, 5, false);
 				draw_set_color(c_white);
-				draw_text(@rowX + 20, @rowY + 2 + @stgTextDY, @stg_status_text());
+				@stg_text_cjk(@rowX + 20, @rowY + 2 + @stgTextDY, @stg_status_text(), 0);
 				// the server address only fits when the content column is wide enough
-				if(@stg_text_width(@stg_status_text()) + @stg_text_width(@str_fmt("Server: %1", @stg_server_text(), 0, 0)) + 48 < @colW){
+				if(@stg_text_width(@stg_status_text()) + @stg_text_width(@str_fmt(@L(global.__ONLINE_LK_MISC_SERVER_PREFIX, "Server: %1"), @stg_server_text(), 0, 0)) + 48 < @colW){
 					draw_set_color(make_color_rgb(150, 150, 150));
-					draw_set_halign(fa_right);
-					draw_text(@spX + @colW - 16, @rowY + 2 + @stgTextDY, @str_fmt("Server: %1", @stg_server_text(), 0, 0));
-					draw_set_halign(fa_left);
+					@stg_text_cjk(@spX + @colW - 16, @rowY + 2 + @stgTextDY, @str_fmt(@L(global.__ONLINE_LK_MISC_SERVER_PREFIX, "Server: %1"), @stg_server_text(), 0, 0), 2);
 				}
 			}else{
 				if(@rowSel){
@@ -886,12 +883,8 @@ return 1;
 				}else{
 					draw_set_color(c_white);
 				}
-				if(@rowK == 6){
-					// entry label may carry a CJK room name
-					@stg_text_cjk(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI], 0);
-				}else{
-					draw_text(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI]);
-				}
+				// every label goes through the CJK path (ASCII is unaffected)
+				@stg_text_cjk(@rowX, @rowY + 4 + @stgTextDY, global.__ONLINE_stgLabel[@rowI], 0);
 				@rowV = @stg_value(@rowI);
 				@rowBY = @rowY + 2;
 				@rowBH = global.__ONLINE_stgRowH - 6;
@@ -899,8 +892,7 @@ return 1;
 					if(@rowSel){
 						// selected: the amber band is the plate (mock parity)
 						draw_set_color(make_color_rgb(16, 16, 20));
-						draw_set_halign(fa_center);
-						draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
+						@stg_text_cjk(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV, 1);
 					}else{
 						// button: flat dark plate, brighter frame on hover
 						draw_set_color(make_color_rgb(45, 45, 52));
@@ -912,8 +904,7 @@ return 1;
 						}
 						draw_rectangle(@rowCX, @rowBY, @rowCX + @rowCW, @rowBY + @rowBH, true);
 						draw_set_color(c_white);
-						draw_set_halign(fa_center);
-						draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
+						@stg_text_cjk(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV, 1);
 					}
 				}else if(@rowK == 6){
 
@@ -945,7 +936,7 @@ return 1;
 					draw_text(@rowCX + 11, @rowBY + 3 + @stgTextDY, "<");
 					draw_text(@rowCX + @rowCW - 11, @rowBY + 3 + @stgTextDY, ">");
 					draw_set_color(c_white);
-					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
+					@stg_text_cjk(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV, 1);
 				}else if(@rowK == 4){
 						// toggle: compact right-aligned pill (a full-width bar read as a wall of
 						// colour once several toggles stacked up). Green reads the LOGIC state
@@ -965,8 +956,7 @@ return 1;
 						}
 						draw_rectangle(@rowPX, @rowBY, @rowPX + @rowPW, @rowBY + @rowBH, true);
 						draw_set_color(c_white);
-						draw_set_halign(fa_center);
-						draw_text(@rowPX + floor(@rowPW / 2), @rowBY + 3 + @stgTextDY, @rowV);
+						@stg_text_cjk(@rowPX + floor(@rowPW / 2), @rowBY + 3 + @stgTextDY, @rowV, 1);
 }else{
 					// text row (name / session key): plain right-aligned value - the
 					// edit dialog is modal, so there is no inline box to draw
@@ -1039,11 +1029,11 @@ return _r;
 var _mins;
 if(@saveHistTime[argument0] <= 0) return "?";
 _mins = (date_current_datetime() - @saveHistTime[argument0]) * 1440;
-if(_mins < 1) return "now";
-if(_mins < 60) return string(round(_mins)) + "m";
-if(_mins < 1440) return string(round(_mins / 60)) + "h";
-if(_mins < 10080) return string(round(_mins / 1440)) + "d";
-return string(date_get_month(@saveHistTime[argument0])) + "/" + string(date_get_day(@saveHistTime[argument0]));
+if(_mins < 1) return @L(global.__ONLINE_LK_AGE_NOW, "now");
+if(_mins < 60) return @str_fmt(@L(global.__ONLINE_LK_AGE_MIN, "%1m"), round(_mins), 0, 0);
+if(_mins < 1440) return @str_fmt(@L(global.__ONLINE_LK_AGE_HOUR, "%1h"), round(_mins / 60), 0, 0);
+if(_mins < 10080) return @str_fmt(@L(global.__ONLINE_LK_AGE_DAY, "%1d"), round(_mins / 1440), 0, 0);
+return @str_fmt(@L(global.__ONLINE_LK_AGE_DATE, "%1/%2"), date_get_month(@saveHistTime[argument0]), date_get_day(@saveHistTime[argument0]), 0);
 
 ///// script @stg_build_saves
 // Row table for the Saves tab, using the same table the Settings tab uses (the
@@ -1053,7 +1043,7 @@ return string(date_get_month(@saveHistTime[argument0])) + "/" + string(date_get_
 var _y, _i, _n, _lbl, _tail, _pfx;
 global.__ONLINE_stgN = 0;
 _y = argument0 + 2;
-@stg_row_add(0, 0, "SAVE HISTORY", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_SAVE_HISTORY, "SAVE HISTORY"), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 // newest first, honouring the all/favourites filter
 _n = 0;
 _i = @saveHistCount - 1;
@@ -1077,12 +1067,12 @@ while(_i >= 0){
   _i -= 1;
 }
 if(_n == 0){
-  if(@saveHistFilter) _lbl = "(no favourites)"; else _lbl = "(no saves yet)";
+  if(@saveHistFilter) _lbl = @L(global.__ONLINE_LK_EMPTY_NO_FAVOURITES, "(no favourites)"); else _lbl = @L(global.__ONLINE_LK_EMPTY_NO_SAVES, "(no saves yet)");
   @stg_row_add(2, 0, _lbl, @spX + 16, _y, 200, 0, 0); _y += global.__ONLINE_stgRowH;
 }
 _y += 6;
-@stg_row_add(0, 0, "MANAGE", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(4, 21, "Favourites", @spX + 16, _y, 130, 0, @spX + @colW - 146); _y += global.__ONLINE_stgRowH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_MANAGE, "MANAGE"), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(4, 21, @L(global.__ONLINE_LK_ROW_FAVOURITES, "Favourites"), @spX + 16, _y, 130, 0, @spX + @colW - 146); _y += global.__ONLINE_stgRowH;
 @stg_row_add(5, 22, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
@@ -1164,15 +1154,15 @@ var _y, _ctlX;
 global.__ONLINE_stgN = 0;
 _y = argument0 + 2;
 _ctlX = @spX + @colW - 16 - 130;
-@stg_row_add(0, 0, "THIS GAME", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_THIS_GAME, "THIS GAME"), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 @stg_row_add(6, 30, @stg_fit_text(@gameName, @colW - 32), @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 _y += 6;
-@stg_row_add(0, 0, "RATING", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(3, 31, "Stars", @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 32, "Cleared", @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_RATING, "RATING"), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(3, 31, @L(global.__ONLINE_LK_ROW_STARS, "Stars"), @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 32, @L(global.__ONLINE_LK_ROW_CLEARED, "Cleared"), @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 _y += 6;
-@stg_row_add(0, 0, "STATUS", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(6, 33, "Last result", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_STATUS, "STATUS"), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(6, 33, @L(global.__ONLINE_LK_ROW_LAST_RESULT, "Last result"), @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 _y += 6;
 @stg_row_add(5, 34, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
@@ -1182,16 +1172,16 @@ return 0;
 // The 11 rebindable actions: labels and the world variables they write.
 // (Rebuilt per call, exactly like the old hand layout did per frame.)
 // args: none -> 0
-@kbLabels[0] = "Visibility";   @kbKeys[0] = @keyVis;
-@kbLabels[1] = "Toggle Save";  @kbKeys[1] = @keySave;
-@kbLabels[2] = "Spectate";     @kbKeys[2] = @keySpectate;
-@kbLabels[3] = "Chat Log";     @kbKeys[3] = @keyChatLog;
-@kbLabels[4] = "Options";      @kbKeys[4] = @keySettings;
-@kbLabels[5] = "Player List";  @kbKeys[5] = @keyPlayerList;
-@kbLabels[6] = "Chat";         @kbKeys[6] = @keyChat;
-@kbLabels[7] = "Here";         @kbKeys[7] = @keyPing;
-@kbLabels[8] = "Fast Load";    @kbKeys[8] = @keyFastLoad;
-@kbLabels[9] = "Canvas";       @kbKeys[9] = @keyCanvas;
+@kbLabels[0] = @L(global.__ONLINE_LK_KEYS_VISIBILITY, "Visibility");   @kbKeys[0] = @keyVis;
+@kbLabels[1] = @L(global.__ONLINE_LK_KEYS_TOGGLE_SAVE, "Toggle Save");  @kbKeys[1] = @keySave;
+@kbLabels[2] = @L(global.__ONLINE_LK_KEYS_SPECTATE, "Spectate");     @kbKeys[2] = @keySpectate;
+@kbLabels[3] = @L(global.__ONLINE_LK_KEYS_CHAT_LOG, "Chat Log");     @kbKeys[3] = @keyChatLog;
+@kbLabels[4] = @L(global.__ONLINE_LK_KEYS_OPTIONS, "Options");      @kbKeys[4] = @keySettings;
+@kbLabels[5] = @L(global.__ONLINE_LK_KEYS_PLAYER_LIST, "Player List");  @kbKeys[5] = @keyPlayerList;
+@kbLabels[6] = @L(global.__ONLINE_LK_KEYS_CHAT, "Chat");         @kbKeys[6] = @keyChat;
+@kbLabels[7] = @L(global.__ONLINE_LK_KEYS_HERE, "Here");         @kbKeys[7] = @keyPing;
+@kbLabels[8] = @L(global.__ONLINE_LK_KEYS_FAST_LOAD, "Fast Load");    @kbKeys[8] = @keyFastLoad;
+@kbLabels[9] = @L(global.__ONLINE_LK_KEYS_CANVAS, "Canvas");       @kbKeys[9] = @keyCanvas;
 return 0;
 
 ///// script @stg_key_cap
@@ -1199,9 +1189,9 @@ return 0;
 // args: keycode -> text
 var _k;
 _k = argument0;
-if(_k == 32) return "SPACE (32)";
-if(_k >= 33 && _k <= 126) return chr(_k) + " (" + string(_k) + ")";
-return "Key " + string(_k);
+if(_k == 32) return @L(global.__ONLINE_LK_KEYCAP_SPACE, "SPACE (32)");
+if(_k >= 33 && _k <= 126) return @str_fmt(@L(global.__ONLINE_LK_KEYCAP_CHAR, "%1 (%2)"), chr(_k), _k, 0);
+return @str_fmt(@L(global.__ONLINE_LK_KEYCAP_KEY_N, "Key %1"), _k, 0, 0);
 
 ///// script @stg_build_keys
 // Row table for the Keys tab: one entry per rebindable action + reset. The
@@ -1211,14 +1201,14 @@ var _y, _i;
 global.__ONLINE_stgN = 0;
 _y = argument0 + 2;
 @stg_keys_meta();
-@stg_row_add(0, 0, "KEY BINDINGS", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_KEY_BINDINGS, "KEY BINDINGS"), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 for(_i = 0; _i < 10; _i += 1){
   @stg_row_add(6, 40 + _i, @kbLabels[_i], @spX + 16, _y, @colW - 32, 0, @spX + 16);
   global.__ONLINE_stgArg[global.__ONLINE_stgN - 1] = _i;
   _y += global.__ONLINE_stgRowH;
 }
 _y += 6;
-@stg_row_add(0, 0, "RESET", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_RESET, "RESET"), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 @stg_row_add(5, 52, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
@@ -1233,12 +1223,12 @@ var _y, _i, _ctlX;
 global.__ONLINE_stgN = 0;
 _y = argument0 + 2;
 _ctlX = @spX + @colW - 16 - 130;
-@stg_row_add(0, 0, "SYNC", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
-@stg_row_add(4, 53, "Sync enabled", @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_SYNC, "SYNC"), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(4, 53, @L(global.__ONLINE_LK_ROW_SYNC_ENABLED, "Sync enabled"), @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 _y += 6;
-@stg_row_add(0, 0, @str_fmt("ENTRIES (%1 of 16)", @syncEntryCount, 0, 0), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(0, 0, @str_fmt(@L(global.__ONLINE_LK_HEAD_ENTRIES, "ENTRIES (%1 of 16)"), @syncEntryCount, 0, 0), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 if(@syncEntryCount == 0){
-  @stg_row_add(2, 0, "(no entries configured)", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+  @stg_row_add(2, 0, @L(global.__ONLINE_LK_EMPTY_NO_ENTRIES, "(no entries configured)"), @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 }
 for(_i = 0; _i < @syncEntryCount; _i += 1){
   @stg_row_add(6, 54, @stg_fit_text(@syncName[_i], @colW - 32 - 90), @spX + 16, _y, @colW - 32, 0, @spX + 16);
@@ -1263,13 +1253,13 @@ return "bullet";
 ///// script @stg_skin_state_disp
 // args: state 0..6 -> display name for the preview cycler. Kept separate from
 // the filename stem above so translating this text cannot rename any files.
-if(argument0 == 0) return "idle";
-if(argument0 == 1) return "run";
-if(argument0 == 2) return "jump";
-if(argument0 == 3) return "fall";
-if(argument0 == 4) return "slide";
-if(argument0 == 5) return "bow";
-return "bullet";
+if(argument0 == 0) return @L(global.__ONLINE_LK_SKINSTATE_IDLE, "idle");
+if(argument0 == 1) return @L(global.__ONLINE_LK_SKINSTATE_RUN, "run");
+if(argument0 == 2) return @L(global.__ONLINE_LK_SKINSTATE_JUMP, "jump");
+if(argument0 == 3) return @L(global.__ONLINE_LK_SKINSTATE_FALL, "fall");
+if(argument0 == 4) return @L(global.__ONLINE_LK_SKINSTATE_SLIDE, "slide");
+if(argument0 == 5) return @L(global.__ONLINE_LK_SKINSTATE_BOW, "bow");
+return @L(global.__ONLINE_LK_SKINSTATE_BULLET, "bullet");
 
 ///// script @stg_skin_prev_state_dir
 // args: -1/+1 -> 0 (cycles the preview's animation state)
@@ -1323,15 +1313,11 @@ if(@skinPrevLoaded == _i){
     draw_sprite_ext(@skinPrevSpr[@skinPrevState], @pvFrame, argument1 + 58, argument2 + 86, 2, 2, 0, c_white, 1);
   }else{
     draw_set_color(make_color_rgb(95, 101, 107));
-    draw_set_halign(fa_center);
-    draw_text(argument1 + 58, argument2 + 50 + @stgTextDY, "no " + @stg_skin_state_disp(@skinPrevState));
-    draw_set_halign(fa_left);
+    @stg_text_cjk(argument1 + 58, argument2 + 50 + @stgTextDY, @str_fmt(@L(global.__ONLINE_LK_MISC_NO_STATE, "no %1"), @stg_skin_state_disp(@skinPrevState), 0, 0), 1);
   }
 }else{
   draw_set_color(make_color_rgb(95, 101, 107));
-  draw_set_halign(fa_center);
-  draw_text(argument1 + 58, argument2 + 50 + @stgTextDY, "preview");
-  draw_set_halign(fa_left);
+  @stg_text_cjk(argument1 + 58, argument2 + 50 + @stgTextDY, @L(global.__ONLINE_LK_MISC_PREVIEW, "preview"), 1);
 }
 // state cycler: < idle > (fixed slot - see the header note)
 @pvCY = argument2 + 122;
@@ -1346,8 +1332,7 @@ draw_set_color(make_color_rgb(170, 170, 175));
 draw_text(argument1 + 11, @pvCY + 4 + @stgTextDY, "<");
 draw_text(argument1 + 105, @pvCY + 4 + @stgTextDY, ">");
 draw_set_color(c_white);
-draw_text(argument1 + 58, @pvCY + 4 + @stgTextDY, @stg_skin_state_disp(@skinPrevState));
-draw_set_halign(fa_left);
+@stg_text_cjk(argument1 + 58, @pvCY + 4 + @stgTextDY, @stg_skin_state_disp(@skinPrevState), 1);
 return 0;
 
 ///// script @stg_build_skins
@@ -1379,14 +1364,14 @@ for(_i = 0; _i < @skinVisCount; _i += 1){
   @skShowN += 1;
 }
 if(@skinFilter == ""){
-  @stg_row_add(0, 0, @str_fmt("INSTALLED (%1)", @skinVisCount, 0, 0), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+  @stg_row_add(0, 0, @str_fmt(@L(global.__ONLINE_LK_HEAD_INSTALLED, "INSTALLED (%1)"), @skinVisCount, 0, 0), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 }else{
-  @stg_row_add(0, 0, @str_fmt("INSTALLED (%1 of %2)", @skShowN, @skinVisCount, 0), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+  @stg_row_add(0, 0, @str_fmt(@L(global.__ONLINE_LK_HEAD_INSTALLED_OF, "INSTALLED (%1 of %2)"), @skShowN, @skinVisCount, 0), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 }
 if(@skinVisCount == 0){
-  @stg_row_add(2, 0, "(no skins found in iwposkins)", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+  @stg_row_add(2, 0, @L(global.__ONLINE_LK_EMPTY_NO_SKINS, "(no skins found in iwposkins)"), @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 }else if(@skShowN == 0){
-  @stg_row_add(2, 0, "(no matches)", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
+  @stg_row_add(2, 0, @L(global.__ONLINE_LK_EMPTY_NO_MATCHES, "(no matches)"), @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 }
 // parse only what the viewport can show (plus a small margin): parsing every
 // entry on the first visit was a visible ~1s hitch on big packs - the old
@@ -1414,9 +1399,9 @@ for(_i = 0; _i < @skinVisCount; _i += 1){
   _y += global.__ONLINE_stgRowH;
 }
 _y += 6;
-@stg_row_add(0, 0, "MANAGE", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_MANAGE, "MANAGE"), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 @stg_row_add(5, 58, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
-@stg_row_add(4, 56, "Auto-download", @spX + 16, _y, 130, 0, @spX + @colW - 146); _y += global.__ONLINE_stgRowH;
+@stg_row_add(4, 56, @L(global.__ONLINE_LK_ROW_AUTO_DOWNLOAD, "Auto-download"), @spX + 16, _y, 130, 0, @spX + @colW - 146); _y += global.__ONLINE_stgRowH;
 @stg_row_add(5, 57, "", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 global.__ONLINE_stgHeight = _y - argument0;
 return 0;
@@ -1511,13 +1496,13 @@ return argument0;
 // existing socket state machine, so the panel works while offline.
 // args: none -> text
 if(global.__ONLINE_stgStatusMsg != "") return global.__ONLINE_stgStatusMsg;
-if(@server == "") return "Server not configured";
-if(@reconnecting) return @str_fmt("Reconnecting (%1/10)...", @reconnectAttempts, 0, 0);
-if(@connected) return "Online";
-if(@tcpState == 2) return "Online";
-if(@socketConnectResult == 0) return "Cannot reach server";
-if(@socketState > 0) return "Connecting...";
-return "Offline";
+if(@server == "") return @L(global.__ONLINE_LK_STATUS_NOT_CONFIGURED, "Server not configured");
+if(@reconnecting) return @str_fmt(@L(global.__ONLINE_LK_STATUS_RECONNECTING, "Reconnecting (%1/10)..."), @reconnectAttempts, 0, 0);
+if(@connected) return @L(global.__ONLINE_LK_STATUS_ONLINE, "Online");
+if(@tcpState == 2) return @L(global.__ONLINE_LK_STATUS_ONLINE, "Online");
+if(@socketConnectResult == 0) return @L(global.__ONLINE_LK_STATUS_UNREACHABLE, "Cannot reach server");
+if(@socketState > 0) return @L(global.__ONLINE_LK_STATUS_CONNECTING, "Connecting...");
+return @L(global.__ONLINE_LK_STATUS_OFFLINE, "Offline");
 
 ///// script @stg_status_color
 // args: none -> colour matching @stg_status_text
@@ -1531,20 +1516,20 @@ return make_color_rgb(220, 200, 60);
 ///// script @stg_rating_status
 // One-line state of the rating pipeline (status row, detail facts, button).
 // args: none -> text
-if(@ratingSubmitting) return "Sending...";
-if(@ratingCooldown > current_time) return @str_fmt("Cooldown %1s", max(1, ceil((@ratingCooldown - current_time) / 1000)), 0, 0);
+if(@ratingSubmitting) return @L(global.__ONLINE_LK_VAL_SENDING, "Sending...");
+if(@ratingCooldown > current_time) return @str_fmt(@L(global.__ONLINE_LK_RATING_COOLDOWN, "Cooldown %1s"), max(1, ceil((@ratingCooldown - current_time) / 1000)), 0, 0);
 if(@ratingResultTimer > current_time){
-  if(@ratingResult == 1) return "Rating submitted!";
-  if(@ratingResult == 2) return "Submit failed (cooldown)";
+  if(@ratingResult == 1) return @L(global.__ONLINE_LK_RATING_SUBMITTED, "Rating submitted!");
+  if(@ratingResult == 2) return @L(global.__ONLINE_LK_RATING_FAILED_COOLDOWN, "Submit failed (cooldown)");
 }
-if(!@connected) return "Offline";
-return "Idle";
+if(!@connected) return @L(global.__ONLINE_LK_STATUS_OFFLINE, "Offline");
+return @L(global.__ONLINE_LK_RATING_IDLE, "Idle");
 
 ///// script @stg_server_text
 // Server address row content - what the client is actually pointed at, so an
 // offline player can see whether the ini points somewhere stale.
 // args: none -> text
-if(@server == "") return "(none)";
+if(@server == "") return @L(global.__ONLINE_LK_VAL_NONE, "(none)");
 return @server + ":" + string(@tcpPort);
 
 ///// script @stg_value
@@ -1556,17 +1541,20 @@ if(_a == 12) return @acc_label_name();
 if(_a == 13) return @acc_label_pass();
 if(_a == 14) return @account_store_label();
 if(_a == 1){
-  @teamNames[0] = "None"; @teamNames[1] = "Red"; @teamNames[2] = "Blue"; @teamNames[3] = "Yellow";
-  @teamNames[4] = "Purple"; @teamNames[5] = "Green"; @teamNames[6] = "Orange"; @teamNames[7] = "Cyan";
-  return @str_fmt("%1 %2", @team, @teamNames[@team], 0);
+  @teamNames[0] = @L(global.__ONLINE_LK_VAL_TEAM_NONE, "None"); @teamNames[1] = @L(global.__ONLINE_LK_VAL_TEAM_RED, "Red");
+  @teamNames[2] = @L(global.__ONLINE_LK_VAL_TEAM_BLUE, "Blue"); @teamNames[3] = @L(global.__ONLINE_LK_VAL_TEAM_YELLOW, "Yellow");
+  @teamNames[4] = @L(global.__ONLINE_LK_VAL_TEAM_PURPLE, "Purple"); @teamNames[5] = @L(global.__ONLINE_LK_VAL_TEAM_GREEN, "Green");
+  @teamNames[6] = @L(global.__ONLINE_LK_VAL_TEAM_ORANGE, "Orange"); @teamNames[7] = @L(global.__ONLINE_LK_VAL_TEAM_CYAN, "Cyan");
+  return @str_fmt(@L(global.__ONLINE_LK_VAL_TEAM_FMT, "%1 %2"), @team, @teamNames[@team], 0);
 }
 if(_a == 2){
-  @lerpNames[0] = "OFF"; @lerpNames[1] = "Light"; @lerpNames[2] = "Standard"; @lerpNames[3] = "Strong";
+  @lerpNames[0] = @L(global.__ONLINE_LK_VAL_OFF, "OFF"); @lerpNames[1] = @L(global.__ONLINE_LK_VAL_LERP_LIGHT, "Light");
+  @lerpNames[2] = @L(global.__ONLINE_LK_VAL_LERP_STANDARD, "Standard"); @lerpNames[3] = @L(global.__ONLINE_LK_VAL_LERP_STRONG, "Strong");
   return @lerpNames[@lerpMode];
 }
 if(_a == 63){
-  if(@reconnectQuitOnFail) return "Quit";
-  return "Stay";
+  if(@reconnectQuitOnFail) return @L(global.__ONLINE_LK_VAL_QUIT, "Quit");
+  return @L(global.__ONLINE_LK_VAL_STAY, "Stay");
 }
 if(_a == 64) return @server;
 if(_a == 68) return string(@tcpPort);
@@ -1576,77 +1564,77 @@ if(_a == 67) return string(@chatHistMax);
 if(_a == 3) return @stg_onoff(@save_enabled);
 if(_a == 4) return @stg_onoff(@fastLoadEnabled);
 if(_a == 5){
-  @visNames[0] = "All"; @visNames[1] = "No Names"; @visNames[2] = "Hidden";
+  @visNames[0] = @L(global.__ONLINE_LK_VAL_VIS_ALL, "All"); @visNames[1] = @L(global.__ONLINE_LK_VAL_VIS_NO_NAMES, "No Names"); @visNames[2] = @L(global.__ONLINE_LK_VAL_VIS_HIDDEN, "Hidden");
   return @visNames[@vis];
 }
 if(_a == 6) return @stg_onoff(@showArrows);
 if(_a == 7){
-  @specCamNames[0] = "Free"; @specCamNames[1] = "Follow";
+  @specCamNames[0] = @L(global.__ONLINE_LK_VAL_SPECCAM_FREE, "Free"); @specCamNames[1] = @L(global.__ONLINE_LK_VAL_SPECCAM_FOLLOW, "Follow");
   return @specCamNames[@specCamMode];
 }
 if(_a == 8){
-  if(!@pvpAvail) return "N/A";
-  @pvpModeNames[0] = "Off"; @pvpModeNames[1] = "Team"; @pvpModeNames[2] = "FFA";
+  if(!@pvpAvail) return @L(global.__ONLINE_LK_VAL_NA, "N/A");
+  @pvpModeNames[0] = @L(global.__ONLINE_LK_VAL_PVP_OFF, "Off"); @pvpModeNames[1] = @L(global.__ONLINE_LK_VAL_PVP_TEAM, "Team"); @pvpModeNames[2] = @L(global.__ONLINE_LK_VAL_PVP_FFA, "FFA");
   return @pvpModeNames[@pvpMode];
 }
 if(_a == 9){
-  if(@pvpMode != 0) return "locked";
+  if(@pvpMode != 0) return @L(global.__ONLINE_LK_VAL_LOCKED, "locked");
   return @stg_onoff(@bulletShow);
 }
 if(_a == 20){
   @stgSvI = global.__ONLINE_stgArg[argument0];
   // a build with no entries may not have created the array at all
   if(@stgSvI < 0 || @stgSvI >= @saveHistCount) return "";
-  if(@saveHistHotkey[@stgSvI] > 0) return @str_fmt("key %1", @saveHistHotkey[@stgSvI], 0, 0);
+  if(@saveHistHotkey[@stgSvI] > 0) return @str_fmt(@L(global.__ONLINE_LK_VAL_KEY_N, "key %1"), @saveHistHotkey[@stgSvI], 0, 0);
   return "";
 }
 if(_a == 21) return @stg_onoff(@saveHistFilter);
-if(_a == 22) return "Clear all";
+if(_a == 22) return @L(global.__ONLINE_LK_VAL_CLEAR_ALL, "Clear all");
 if(_a == 60) return @stg_onoff(@noteHideOthers);
 if(_a == 61) return @stg_onoff(@noteHideAll);
 if(_a == 62){
-  @mlNames[0] = "Auto"; @mlNames[1] = "Narrow"; @mlNames[2] = "Full";
+  @mlNames[0] = @L(global.__ONLINE_LK_VAL_LAYOUT_AUTO, "Auto"); @mlNames[1] = @L(global.__ONLINE_LK_VAL_LAYOUT_NARROW, "Narrow"); @mlNames[2] = @L(global.__ONLINE_LK_VAL_LAYOUT_FULL, "Full");
   return @mlNames[@menuModePref];
 }
-if(_a == 10) return "Pick";
-if(_a == 11) return "Reconnect now";
-if(_a == 15) return "Apply & Reconnect";
+if(_a == 10) return @L(global.__ONLINE_LK_VAL_PICK, "Pick");
+if(_a == 11) return @L(global.__ONLINE_LK_VAL_RECONNECT_NOW, "Reconnect now");
+if(_a == 15) return @L(global.__ONLINE_LK_VAL_APPLY_RECONNECT, "Apply & Reconnect");
 if(_a >= 40 && _a <= 50){
   @stgI = global.__ONLINE_stgArg[argument0];
-  if(@keybindEditing == @stgI) return "<press a key>";
+  if(@keybindEditing == @stgI) return @L(global.__ONLINE_LK_VAL_PRESS_KEY, "<press a key>");
   return @stg_key_cap(@kbKeys[@stgI]);
 }
 if(_a == 53) return @stg_onoff(@syncEnabled);
 if(_a == 55){
   @stgI = global.__ONLINE_stgArg[argument0];
-  if(@stgI == @skinLoaded) return "loaded";
+  if(@stgI == @skinLoaded) return @L(global.__ONLINE_LK_VAL_LOADED, "loaded");
   return "";
 }
 if(_a == 56) return @stg_onoff(@skinAutoDL);
-if(_a == 57) return "Clear skin";
+if(_a == 57) return @L(global.__ONLINE_LK_VAL_CLEAR_SKIN, "Clear skin");
 if(_a == 58){
-  if(@skinFilter == "") return "Search...";
-  return @str_fmt("Search: %1", @skinFilter, 0, 0);
+  if(@skinFilter == "") return @L(global.__ONLINE_LK_VAL_SEARCH_PROMPT, "Search...");
+  return @str_fmt(@L(global.__ONLINE_LK_VAL_SEARCH_ACTIVE, "Search: %1"), @skinFilter, 0, 0);
 }
 if(_a == 54){
   @stgI = global.__ONLINE_stgArg[argument0];
-  return @str_fmt("%1 bits", @syncCount[@stgI], 0, 0);
+  return @str_fmt(@L(global.__ONLINE_LK_VAL_BITS, "%1 bits"), @syncCount[@stgI], 0, 0);
 }
-if(_a == 52) return "Reset keys";
-if(_a == 31) return @str_fmt("%1 / 5", @rStars, 0, 0);
+if(_a == 52) return @L(global.__ONLINE_LK_VAL_RESET_KEYS, "Reset keys");
+if(_a == 31) return @str_fmt(@L(global.__ONLINE_LK_VAL_OF_5, "%1 / 5"), @rStars, 0, 0);
 if(_a == 32) return @stg_onoff(@rCleared);
 if(_a == 33) return @stg_rating_status();
 if(_a == 34){
-  if(@ratingSubmitting) return "Sending...";
-  if(@ratingCooldown > current_time) return @str_fmt("Wait %1s", max(1, ceil((@ratingCooldown - current_time) / 1000)), 0, 0);
-  return "Submit Rating";
+  if(@ratingSubmitting) return @L(global.__ONLINE_LK_VAL_SENDING, "Sending...");
+  if(@ratingCooldown > current_time) return @str_fmt(@L(global.__ONLINE_LK_VAL_WAIT_S, "Wait %1s"), max(1, ceil((@ratingCooldown - current_time) / 1000)), 0, 0);
+  return @L(global.__ONLINE_LK_VAL_SUBMIT_RATING, "Submit Rating");
 }
 return "";
 
 ///// script @stg_onoff
-// args: flag -> "ON"/"OFF"
-if(argument0) return "ON";
-return "OFF";
+// args: flag -> translated "ON"/"OFF"
+if(argument0) return @L(global.__ONLINE_LK_VAL_ON, "ON");
+return @L(global.__ONLINE_LK_VAL_OFF, "OFF");
 
 ///// script @stg_row_on
 // Logic ON-state of a toggle row (kind 4), read from the underlying setting -
@@ -1682,48 +1670,47 @@ return global.__ONLINE_stgStyle[argument0];
 // args: row -> text
 var _a;
 _a = global.__ONLINE_stgAct[argument0];
-if(_a == 12) return "Your in-game name - Enter to edit. Saved to the account store.";
-if(_a == 13) return "Session key: players sharing it meet each other. Not an account password.";
-if(_a == 14) return "Where name and key are saved (Global = shared by every game).";
-if(_a == 15) return "Save the account and reconnect with the new identity (no restart).";
-if(_a == 11) return "Drop the current connection and connect again.";
-if(_a == 10) return "Choose which player object drives your character.";
-if(_a == 1) return "Team colour used for names and the roster.";
-if(_a == 2) return "Remote-player smoothing strength: OFF, Light, Standard, Strong.";
-if(_a == 63) return "What happens when the server stays unreachable.";
-if(_a == 68) return "TCP port (game traffic).";
-if(_a == 69) return "UDP port (player positions).";
-if(_a == 64) return "Server host. Applies and reconnects.";
-if(_a == 66) return "How many shared saves are kept locally.";
-if(_a == 67) return "How many chat lines are kept.";
-if(_a == 3) return "Shared online saves (T key toggles this in game).";
-if(_a == 4) return "Fast save/load path for game_restart engines.";
-if(_a == 5) return "How other players are drawn: full, names only, or hidden.";
-if(_a == 6) return "Show the direction indicator above remote players.";
-if(_a == 7) return "Spectator camera mode.";
-if(_a == 62) return "Menu layout: Auto by window, Narrow, or Full (with detail).";
-if(_a == 60) return "Do not draw other players' notes (yours still show).";
-if(_a == 61) return "Do not draw any notes at all (sending keeps working).";
-if(_a == 8) return "Player versus player mode. Bullets stay visible while it is on.";
-if(_a == 9) return "Share your bullets with the room (locked on in PVP).";
-if(_a == 20) return "Enter applies this save. F favourite, 1-8 hotkey, Del clears.";
-if(_a == 21) return "Show only favourite saves.";
-if(_a == 22) return "Deletes every non-favourite save file.";
-if(_a == 10) return "Choose which player object drives your character.";
-if(_a >= 40 && _a <= 50) return "Enter or click starts capture, then press the key. Esc cancels.";
-if(_a == 52) return "Restore every binding above to its default.";
-if(_a == 53) return "Share the configured globals with the room.";
-if(_a == 54) return "A synced global variable.";
-if(_a == 55) return "Enter applies. Left/Right cycles the preview animation.";
-if(_a == 56) return "Fetch unknown skins seen in the roster automatically.";
-if(_a == 57) return "Back to the game's default player sprite.";
-if(_a == 58) return "Filter by name, maker or source (F anywhere on this tab). Empty shows all.";
-if(_a == 30) return "This game, as the server identifies it.";
-if(_a == 31) return "Your rating: Left/Right steps, digits 1-5 set directly, 0 clears.";
-if(_a == 32) return "Mark the game as cleared. Sent together with the stars.";
-if(_a == 33) return "The server's response to your last submission.";
-if(_a == 34) return "Send the rating to the server.";
-return "Up/Down rows, Left/Right change, Enter edit - F1 or O closes.";
+if(_a == 12) return @L(global.__ONLINE_LK_HINT_NAME, "Your in-game name - Enter to edit. Saved to the account store.");
+if(_a == 13) return @L(global.__ONLINE_LK_HINT_PASSWORD, "Session key: players sharing it meet each other. Not an account password.");
+if(_a == 14) return @L(global.__ONLINE_LK_HINT_STORE, "Where name and key are saved (Global = shared by every game).");
+if(_a == 15) return @L(global.__ONLINE_LK_HINT_APPLY_RECONNECT, "Save the account and reconnect with the new identity (no restart).");
+if(_a == 11) return @L(global.__ONLINE_LK_HINT_RECONNECT, "Drop the current connection and connect again.");
+if(_a == 10) return @L(global.__ONLINE_LK_HINT_PLAYER_OBJECTS, "Choose which player object drives your character.");
+if(_a == 1) return @L(global.__ONLINE_LK_HINT_TEAM, "Team colour used for names and the roster.");
+if(_a == 2) return @L(global.__ONLINE_LK_HINT_LERP, "Remote-player smoothing strength: OFF, Light, Standard, Strong.");
+if(_a == 63) return @L(global.__ONLINE_LK_HINT_ON_FAILURE, "What happens when the server stays unreachable.");
+if(_a == 68) return @L(global.__ONLINE_LK_HINT_TCP, "TCP port (game traffic).");
+if(_a == 69) return @L(global.__ONLINE_LK_HINT_UDP, "UDP port (player positions).");
+if(_a == 64) return @L(global.__ONLINE_LK_HINT_SERVER, "Server host. Applies and reconnects.");
+if(_a == 66) return @L(global.__ONLINE_LK_HINT_SAVE_HISTORY, "How many shared saves are kept locally.");
+if(_a == 67) return @L(global.__ONLINE_LK_HINT_CHAT_HISTORY, "How many chat lines are kept.");
+if(_a == 3) return @L(global.__ONLINE_LK_HINT_SAVE, "Shared online saves (T key toggles this in game).");
+if(_a == 4) return @L(global.__ONLINE_LK_HINT_FAST, "Fast save/load path for game_restart engines.");
+if(_a == 5) return @L(global.__ONLINE_LK_HINT_VISUAL, "How other players are drawn: full, names only, or hidden.");
+if(_a == 6) return @L(global.__ONLINE_LK_HINT_INDICATOR, "Show the direction indicator above remote players.");
+if(_a == 7) return @L(global.__ONLINE_LK_HINT_SPEC_CAM, "Spectator camera mode.");
+if(_a == 62) return @L(global.__ONLINE_LK_HINT_MENU_LAYOUT, "Menu layout: Auto by window, Narrow, or Full (with detail).");
+if(_a == 60) return @L(global.__ONLINE_LK_HINT_HIDE_OTHERS, "Do not draw other players' notes (yours still show).");
+if(_a == 61) return @L(global.__ONLINE_LK_HINT_HIDE_ALL, "Do not draw any notes at all (sending keeps working).");
+if(_a == 8) return @L(global.__ONLINE_LK_HINT_PVP, "Player versus player mode. Bullets stay visible while it is on.");
+if(_a == 9) return @L(global.__ONLINE_LK_HINT_BULLETS, "Share your bullets with the room (locked on in PVP).");
+if(_a == 20) return @L(global.__ONLINE_LK_HINT_SAVE_ROW, "Enter applies this save. F favourite, 1-8 hotkey, Del clears.");
+if(_a == 21) return @L(global.__ONLINE_LK_HINT_FAVOURITES, "Show only favourite saves.");
+if(_a == 22) return @L(global.__ONLINE_LK_HINT_CLEAR_SAVES, "Deletes every non-favourite save file.");
+if(_a >= 40 && _a <= 50) return @L(global.__ONLINE_LK_HINT_REBIND, "Enter or click starts capture, then press the key. Esc cancels.");
+if(_a == 52) return @L(global.__ONLINE_LK_HINT_RESET_KEYS, "Restore every binding above to its default.");
+if(_a == 53) return @L(global.__ONLINE_LK_HINT_SYNC, "Share the configured globals with the room.");
+if(_a == 54) return @L(global.__ONLINE_LK_HINT_SYNC_ENTRY, "A synced global variable.");
+if(_a == 55) return @L(global.__ONLINE_LK_HINT_SKIN_ROW, "Enter applies. Left/Right cycles the preview animation.");
+if(_a == 56) return @L(global.__ONLINE_LK_HINT_AUTO_DOWNLOAD, "Fetch unknown skins seen in the roster automatically.");
+if(_a == 57) return @L(global.__ONLINE_LK_HINT_CLEAR_SKIN, "Back to the game's default player sprite.");
+if(_a == 58) return @L(global.__ONLINE_LK_HINT_SEARCH, "Filter by name, maker or source (F anywhere on this tab). Empty shows all.");
+if(_a == 30) return @L(global.__ONLINE_LK_HINT_GAME, "This game, as the server identifies it.");
+if(_a == 31) return @L(global.__ONLINE_LK_HINT_STARS, "Your rating: Left/Right steps, digits 1-5 set directly, 0 clears.");
+if(_a == 32) return @L(global.__ONLINE_LK_HINT_CLEARED, "Mark the game as cleared. Sent together with the stars.");
+if(_a == 33) return @L(global.__ONLINE_LK_HINT_LAST_RESULT, "The server's response to your last submission.");
+if(_a == 34) return @L(global.__ONLINE_LK_HINT_SUBMIT, "Send the rating to the server.");
+return @L(global.__ONLINE_LK_HINT_FALLBACK, "Up/Down rows, Left/Right change, Enter edit - F1 or O closes.");
 
 ///// script @stg_click_row
 // Mouse click on a list row - one model for every table-driven tab:
@@ -1904,10 +1891,10 @@ if(_a == 57){
 if(_a == 58){
   // same modal route as the account fields (IME-safe CJK input included)
   #if STUDIO
-  @skSearch = get_string("Search skins (empty = show all)", @skinFilter);
+  @skSearch = get_string(@L(global.__ONLINE_LK_DLG_SEARCH_FULL, "Search skins (empty = show all)"), @skinFilter);
   #endif
   #if not STUDIO
-  @skSearch = wd_input_box("Search skins", "Leave it empty to show all:", @skinFilter);
+  @skSearch = wd_input_box(@L(global.__ONLINE_LK_DLG_SEARCH_TITLE, "Search skins"), @L(global.__ONLINE_LK_DLG_SEARCH_PROMPT, "Leave it empty to show all:"), @skinFilter);
   #endif
   @skinFilter = string_lower(@account_trim(@skSearch));
   return 0;
@@ -2050,20 +2037,20 @@ if(argument0 == 0) _old = @server;
 if(argument0 == 1) _old = string(@tcpPort);
 if(argument0 == 2) _old = string(@udpPort);
 #if STUDIO
-if(argument0 == 0) _v = get_string("Server host", _old);
-if(argument0 == 1) _v = get_string("TCP port", _old);
-if(argument0 == 2) _v = get_string("UDP port", _old);
+if(argument0 == 0) _v = get_string(@L(global.__ONLINE_LK_DLG_SERVER_HOST, "Server host"), _old);
+if(argument0 == 1) _v = get_string(@L(global.__ONLINE_LK_DLG_TCP_TITLE, "TCP port"), _old);
+if(argument0 == 2) _v = get_string(@L(global.__ONLINE_LK_DLG_UDP_TITLE, "UDP port"), _old);
 #endif
 #if not STUDIO
 #if CJKTEXT
-if(argument0 == 0) _v = __ONLINE_ansi_to_utf8(wd_input_box("Server", "host:", _old));
-if(argument0 == 1) _v = __ONLINE_ansi_to_utf8(wd_input_box("TCP port", "port:", _old));
-if(argument0 == 2) _v = __ONLINE_ansi_to_utf8(wd_input_box("UDP port", "port:", _old));
+if(argument0 == 0) _v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_SERVER_TITLE, "Server"), @L(global.__ONLINE_LK_DLG_HOST_PROMPT, "host:"), _old));
+if(argument0 == 1) _v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_TCP_TITLE, "TCP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old));
+if(argument0 == 2) _v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_UDP_TITLE, "UDP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old));
 #endif
 #if not CJKTEXT
-if(argument0 == 0) _v = wd_input_box("Server", "host:", _old);
-if(argument0 == 1) _v = wd_input_box("TCP port", "port:", _old);
-if(argument0 == 2) _v = wd_input_box("UDP port", "port:", _old);
+if(argument0 == 0) _v = wd_input_box(@L(global.__ONLINE_LK_DLG_SERVER_TITLE, "Server"), @L(global.__ONLINE_LK_DLG_HOST_PROMPT, "host:"), _old);
+if(argument0 == 1) _v = wd_input_box(@L(global.__ONLINE_LK_DLG_TCP_TITLE, "TCP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old);
+if(argument0 == 2) _v = wd_input_box(@L(global.__ONLINE_LK_DLG_UDP_TITLE, "UDP port"), @L(global.__ONLINE_LK_DLG_PORT_PROMPT, "port:"), _old);
 #endif
 #endif
 _v = @account_trim(_v);
@@ -2091,7 +2078,7 @@ return 0;
 var _n;
 _n = global.__ONLINE_accName;
 if(string_length(_n) > 22) _n = string_copy(_n, 1, 19) + "...";
-if(_n == "") return "(not set)";
+if(_n == "") return @L(global.__ONLINE_LK_VAL_NOT_SET, "(not set)");
 return _n;
 
 ///// script @acc_label_pass
@@ -2100,7 +2087,7 @@ return _n;
 // args: none -> text
 if(global.__ONLINE_accEnvManaged) return "******";
 if(string_length(global.__ONLINE_accPassword) > 0) return "******";
-return "(empty)";
+return @L(global.__ONLINE_LK_VAL_EMPTY, "(empty)");
 
 ///// script @acc_edit_name
 // Modal edit of the name (GM8 has no inline text input with IME support, so the
@@ -2111,14 +2098,14 @@ return "(empty)";
 var _v, _old;
 _old = global.__ONLINE_accName;
 #if STUDIO
-_v = get_string("Name", _old);
+_v = get_string(@L(global.__ONLINE_LK_ROW_NAME, "Name"), _old);
 #endif
 #if not STUDIO
 #if CJKTEXT
-_v = __ONLINE_ansi_to_utf8(wd_input_box("Name", "Enter your name:", _old));
+_v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_NAME_TITLE, "Name"), @L(global.__ONLINE_LK_DLG_NAME_PROMPT, "Enter your name:"), _old));
 #endif
 #if not CJKTEXT
-_v = wd_input_box("Name", "Enter your name:", _old);
+_v = wd_input_box(@L(global.__ONLINE_LK_DLG_NAME_TITLE, "Name"), @L(global.__ONLINE_LK_DLG_NAME_PROMPT, "Enter your name:"), _old);
 #endif
 #endif
 _v = @account_trim(_v);
@@ -2138,14 +2125,14 @@ return 0;
 var _v, _old;
 _old = global.__ONLINE_accPassword;
 #if STUDIO
-_v = get_string("Leave it empty for no password:", _old);
+_v = get_string(@L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), _old);
 #endif
 #if not STUDIO
 #if CJKTEXT
-_v = __ONLINE_ansi_to_utf8(wd_input_box("Password", "Leave it empty for no password:", _old));
+_v = __ONLINE_ansi_to_utf8(wd_input_box(@L(global.__ONLINE_LK_DLG_PASS_TITLE, "Password"), @L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), _old));
 #endif
 #if not CJKTEXT
-_v = wd_input_box("Password", "Leave it empty for no password:", _old);
+_v = wd_input_box(@L(global.__ONLINE_LK_DLG_PASS_TITLE, "Password"), @L(global.__ONLINE_LK_DLG_PASS_PROMPT, "Leave it empty for no password:"), _old);
 #endif
 #endif
 _v = @account_trim(_v);

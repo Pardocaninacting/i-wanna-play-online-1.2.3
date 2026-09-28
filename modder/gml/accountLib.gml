@@ -468,6 +468,6 @@ return "(not set)";
 ///// script @account_store_label
 // Menu text for the "Store in" row.
 // args: none -> "Global" / "This folder" / "Environment"
-if(global.__ONLINE_accEnvManaged) return "Environment";
-if(global.__ONLINE_accStore == 1) return "This folder";
-return "Global";
+if(global.__ONLINE_accEnvManaged) return @L(global.__ONLINE_LK_ACCOUNT_STORE_ENV, "Environment");
+if(global.__ONLINE_accStore == 1) return @L(global.__ONLINE_LK_ACCOUNT_STORE_FOLDER, "This folder");
+return @L(global.__ONLINE_LK_ACCOUNT_STORE_GLOBAL, "Global");

@@ -1167,6 +1167,11 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	if (cjkBackend === 'gm') {
 		GMLCode.addVariables("CJKTEXT");
 	}
+	// iwpo.probe=1: the overlay logs its own state once per second (iwpo_probe.txt).
+	// Register on the GM8 side too - the spike measurements live there.
+	if(defines.has("iwpo.probe")){
+		GMLCode.addVariables("PROBE");
+	}
 	// Engines known not to use the game_restart+tempfile save flow (TheBiob heritage:
 	// scrRestartGame = NANEGM8, saveByte = "I wanna enjoy a Merry Christmas!").
 	// For everything else the temp-file online save path stays enabled.

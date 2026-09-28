@@ -127,6 +127,7 @@ if(@hudWinH < 1) @hudGuiOn = false;
 if(current_time - global.__ONLINE_probeLast >= 1000){
   global.__ONLINE_probeLast = current_time;
   @probeLine = "save=" + string(game_save_id);
+  @probeLine += " fps=" + string(fps);
   @probeLine += " gui=" + string(display_get_gui_width()) + "x" + string(display_get_gui_height());
   @probeLine += " win=" + string(window_get_width()) + "x" + string(window_get_height());
   @probeLine += " room=" + string(room_width) + "x" + string(room_height);
@@ -138,6 +139,19 @@ if(current_time - global.__ONLINE_probeLast >= 1000){
   @probeF = file_text_open_append("iwpo_probe.txt");
   if(@probeF >= 0){
     file_text_write_string(@probeF, @probeLine);
+    file_text_writeln(@probeF);
+    file_text_close(@probeF);
+  }
+}
+#endif
+#if not STUDIO
+// GM8 variant: no display_get_gui_width here - the fps figure is the point of
+// the measurement (the i18n atlas spike), plus which menu page was open.
+if(current_time - global.__ONLINE_probeLast >= 1000){
+  global.__ONLINE_probeLast = current_time;
+  @probeF = file_text_open_append("iwpo_probe.txt");
+  if(@probeF >= 0){
+    file_text_write_string(@probeF, "fps=" + string(fps) + " open=" + string(@settingsOpen) + " tab=" + string(@settingsTab) + " stgN=" + string(global.__ONLINE_stgN));
     file_text_writeln(@probeF);
     file_text_close(@probeF);
   }
