@@ -1735,7 +1735,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 					skinScriptNames.add(n);
 			}
 		}
-		for(const packFile of ["md5", "skinLib", "bulletShare", "notesLib", "accountLib", "settingsLib"]){
+		for(const packFile of ["md5", "skinLib", "bulletShare", "notesLib", "accountLib", "settingsLib", "langLib"]){
 			const sections: Array<{name: string, code: Buffer}> = splitMarkedScripts(await renderSkinGml(packFile));
 			if(sections.length === 0)
 				throw new Error(`Skin system GML gml/${packFile}.gml has no "///// script <name>" sections`);
@@ -2294,4 +2294,24 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	await fs.copyFile(path.join(__dirname, "lib", HTTP_DLL_FILENAME), path.join(outputDir, HTTP_DLL_FILENAME));
 	// N3: built-in notes icon atlas ships with every converted game
 	await Utils.copyDir(path.join(__dirname, "lib", "iwponotes"), path.join(outputDir, "iwponotes"));
+	// i18n: language files ship next to the exe (lang/<code>.ini, UTF-8). GM8.0
+	// additionally gets a GBK byte copy per file - its strings are byte strings
+	// and the CJK atlas/FoxWriting are keyed by GBK bytes, so the copy is GBK on
+	// every machine, not the player's codepage (PROPOSAL_i18n.md section 3.3).
+	{
+		const langSrc: string = path.join(__dirname, "lang");
+		if(await fs.pathExists(langSrc)){
+			const langDst: string = path.join(outputDir, "lang");
+			await fs.ensureDir(langDst);
+			for(const langFile of await fs.readdir(langSrc)){
+				if(!langFile.endsWith(".ini")) continue;
+				const langText: string = await fs.readFile(path.join(langSrc, langFile), "utf8");
+				await fs.writeFile(path.join(langDst, langFile), langText, "utf8");
+				if(gameConfig.version === GameVersion.GameMaker80){
+					const gbkName: string = langFile.substring(0, langFile.length - 4) + ".gbk.ini";
+					await fs.writeFile(path.join(langDst, gbkName), iconv.encode(langText, "gbk"));
+				}
+			}
+		}
+	}
 }

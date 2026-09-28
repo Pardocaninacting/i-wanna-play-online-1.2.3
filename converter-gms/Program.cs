@@ -1700,7 +1700,7 @@ static class Program
     // Creates one script asset per marked section of the md5/skinLib templates.
     static void InjectSkinScriptAssets(CodeImportGroup importGroup, ISet<string> activeFlags)
     {
-        foreach (var templateName in new[] { "md5", "skinLib", "bulletShare", "notesLib", "accountLib", "settingsLib" })
+        foreach (var templateName in new[] { "md5", "skinLib", "bulletShare", "notesLib", "accountLib", "settingsLib", "langLib" })
         {
             var rendered = RenderSkinTemplate(activeFlags, templateName);
             foreach (var section in SplitMarkedScripts(rendered, templateName))

@@ -48,6 +48,9 @@ else{
 @protocolVersion = 5;
 // QoL: prime the settings row table / toast state (see gml/settingsLib.gml).
 @stg_init();
+// i18n: rebuild the string table (game_restart wipes globals), the config
+// loop below may override the built-in default language
+@lang_init();
 @password = "";
 @vis = 0;
 @save_enabled = 1;
@@ -665,6 +668,9 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		// shipped narrow layout, 2 = force the full layout with the detail pane.
 		@menuModePref = ini_read_real("config", "menu_mode", 0);
 		if(@menuModePref < 0 || @menuModePref > 2) @menuModePref = 0;
+		// UI language: empty/missing keeps the built-in default (zh-CN)
+		@cfgVal = ini_read_string("config", "lang", "");
+		if(@cfgVal != "") global.__ONLINE_lang = @cfgVal;
 		@syncEnabled = ini_read_real("sync", "sync_enabled", @syncEnabled);
 		@syncEntryCount = ini_read_real("sync", "entryCount", @syncEntryCount);
 		if(@syncEntryCount < 0) @syncEntryCount = 0;
@@ -681,6 +687,9 @@ for (@cfgLayer = 0; @cfgLayer < 2; @cfgLayer += 1) {
 		ini_close();
 	}
 }
+// i18n: load the language file now that the config loop has settled the code.
+// Missing file/keys are fine - @L falls back to the English at the call site.
+@lang_load(global.__ONLINE_lang);
 // SKINS: wipe a stale half-downloaded package left by a crash/game_restart
 // mid-download (the in-flight directory is recorded in the ini at download
 // start and cleared once the finished package verifies). Must run before

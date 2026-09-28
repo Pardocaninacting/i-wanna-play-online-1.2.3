@@ -501,12 +501,14 @@ if(@settingsOpen){
 	@tabCount = 6;
 	@tabW = floor(@spW / @tabCount);
 	@tabY = @spY;
-	@tabNames[0] = "Settings";
-	@tabNames[1] = "Saves(" + string(@saveHistCount) + ")";
-	@tabNames[2] = "Rating";
-	@tabNames[3] = "Keys";
-	@tabNames[4] = "Sync";
-	@tabNames[5] = "Skins";
+	// first localized slice (P1): tab names and Close go through @L and the CJK
+	// draw path; the rest of the chrome follows in P2/P3
+	@tabNames[0] = @L(global.__ONLINE_LK_TAB_SETTINGS, "Settings");
+	@tabNames[1] = @str_fmt(@L(global.__ONLINE_LK_TAB_SAVES, "Saves(%1)"), @saveHistCount, 0, 0);
+	@tabNames[2] = @L(global.__ONLINE_LK_TAB_RATING, "Rating");
+	@tabNames[3] = @L(global.__ONLINE_LK_TAB_KEYS, "Keys");
+	@tabNames[4] = @L(global.__ONLINE_LK_TAB_SYNC, "Sync");
+	@tabNames[5] = @L(global.__ONLINE_LK_TAB_SKINS, "Skins");
 	for(@tI = 0; @tI < @tabCount; @tI += 1){
 		@tX1 = @spX + @tI * @tabW;
 		@tX2 = @tX1 + @tabW;
@@ -525,7 +527,7 @@ if(@settingsOpen){
 		}else{
 			draw_set_color(make_color_rgb(150, 150, 155));
 		}
-		draw_text(floor((@tX1 + @tX2) / 2), @tabY + 6, @tabNames[@tI]);
+		@stg_text_cjk(floor((@tX1 + @tX2) / 2), @tabY + 6, @tabNames[@tI], 1);
 		if(@settingsTab == @tI){
 			draw_set_color(make_color_rgb(220, 200, 60));
 			draw_rectangle(@tX1 + 8, @tabY + @tabH - 2, @tX2 - 8, @tabY + @tabH - 1, false);
@@ -583,7 +585,7 @@ if(@settingsOpen){
 	draw_rectangle(@btnCX, @btnCY, @btnCX + @btnCW, @btnCY + @btnCH, true);
 	draw_set_color(c_white);
 	draw_set_halign(fa_center);
-	draw_text(@btnCX + @btnCW/2, @btnCY + 4, "Close");
+	@stg_text_cjk(@btnCX + @btnCW/2, @btnCY + 4, @L(global.__ONLINE_LK_CLOSE, "Close"), 1);
 	if(mouse_check_button_pressed(mb_left)){
 		@tabClicked = false;
 		if(@my >= @tabY && @my <= @tabY + @tabH){

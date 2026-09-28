@@ -1019,9 +1019,9 @@ return 1;
 		if(@rowHover >= 0 && @stgPrevRow == @rowHover) @stgHintRow = @rowHover;
 		if(@stgHintRow < 0 && @kbFocus == 1) @stgHintRow = @kbRow[0];
 		if(@stgHintRow >= 0 && @stgHintRow < global.__ONLINE_stgN){
-			draw_text(@spX + 16, @footerY + 10, @stg_fit_text(@stg_hint(@stgHintRow), @spW - 130));
+			@stg_text_cjk(@spX + 16, @footerY + 10, @stg_fit_text(@stg_hint(@stgHintRow), @spW - 130), 0);
 		}else{
-			draw_text(@spX + 16, @footerY + 10, @stg_fit_text("Up/Down rows   Left/Right tabs or values   Enter edit   F1 close", @spW - 130));
+			@stg_text_cjk(@spX + 16, @footerY + 10, @stg_fit_text(@L(global.__ONLINE_LK_HINT_FALLBACK, "Up/Down rows   Left/Right tabs or values   Enter edit   F1 close"), @spW - 130), 0);
 		}
 return 0;
 ///// script @stg_room_name
