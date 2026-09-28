@@ -37,8 +37,8 @@
 // ============================================================================
 
 ///// script @stg_init
-// One-time defaults for the row table, the toast/clear state, the panel geometry
-// and the account fallbacks.
+// One-time defaults for the row table, the pending-clear state, the panel
+// geometry and the account fallbacks.
 //
 // Called from worldCreate on EVERY create, because game_restart wipes globals:
 // the acc* values are re-read by @account_load right after, and the fallbacks
@@ -49,9 +49,6 @@ global.__ONLINE_stgN = 0;
 global.__ONLINE_stgHeight = 0;
 global.__ONLINE_stgClearRow = -1;
 global.__ONLINE_stgClearOld = "";
-global.__ONLINE_stgToastMsg = "";
-global.__ONLINE_stgToastKind = 0;
-global.__ONLINE_stgToastUntil = 0;
 global.__ONLINE_stgStatusMsg = "";
 global.__ONLINE_accName = "";
 global.__ONLINE_accPassword = "";
@@ -300,13 +297,13 @@ while(_rest != "" && _cnt < argument4){
     }else{
       _word = _rest;
     }
-    if(_line == "" && string_width(_word) > argument3 && string_length(_word) > 1){
+    if(_line == "" && @stg_text_width(_word) > argument3 && string_length(_word) > 1){
       // No space to break at and the token does not fit: take the longest prefix
       // that does, and leave the remainder for the next line. (The old version cut
       // a single character, which never brought a long path inside the column.)
       _fit = string_length(_word);
       while(_fit > 1){
-        if(string_width(string_copy(_word, 1, _fit)) <= argument3) break;
+        if(@stg_text_width(string_copy(_word, 1, _fit)) <= argument3) break;
         _fit -= 1;
       }
       _line = string_copy(_word, 1, _fit);
@@ -315,7 +312,7 @@ while(_rest != "" && _cnt < argument4){
     }
     if(_line == ""){
       _line = _word;
-    }else if(string_width(_line + " " + _word) <= argument3){
+    }else if(@stg_text_width(_line + " " + _word) <= argument3){
       _line = _line + " " + _word;
     }else{
       break;
@@ -404,7 +401,7 @@ draw_set_color(c_white);
 _txt = global.__ONLINE_stgLabel[argument0];
 if(_txt == "") _txt = @stg_value(argument0);
 if(_k == 1) _txt = "Connection";
-if(_a == 20) _txt = "Save " + string(global.__ONLINE_stgArg[argument0] + 1);
+if(_a == 20) _txt = @str_fmt("Save %1", global.__ONLINE_stgArg[argument0] + 1, 0, 0);
 // titles may carry CJK (room names, skin names)
 @stg_text_cjk(_x, _y, _txt, 0);
 _y += 22;
@@ -415,9 +412,9 @@ _val = @stg_value(argument0);
 if(_a >= 40 && _a <= 50){
   // big key cap in the detail column (mock keysRows)
   draw_set_color(make_color_rgb(35, 35, 40));
-  draw_rectangle(_x, _y, _x + 24 + string_width(_val) + 24, _y + 26, false);
+  draw_rectangle(_x, _y, _x + 24 + @stg_text_width(_val) + 24, _y + 26, false);
   draw_set_color(make_color_rgb(225, 205, 90));
-  draw_rectangle(_x, _y, _x + 24 + string_width(_val) + 24, _y + 26, true);
+  draw_rectangle(_x, _y, _x + 24 + @stg_text_width(_val) + 24, _y + 26, true);
   draw_set_color(c_white);
   draw_text(_x + 12, _y + 6 + @stgTextDY, _val);
   _y += 36;
@@ -446,12 +443,14 @@ if(_k == 3 && _a == 31){
   _y = _sy + 32;
 }
 if((_k == 4 || _k == 3 || _k == 2) && _val != "" && _a != 31){
-  if(_k == 4 && _val == "ON"){
+  // the green "on" frame reads the LOGIC state (@stg_row_on), never the display
+  // string - a translated "ON" must not change the colour logic
+  if(_k == 4 && @stg_row_on(argument0)){
     draw_set_color(make_color_rgb(50, 170, 80));
   }else{
     draw_set_color(make_color_rgb(95, 95, 100));
   }
-  draw_rectangle(_x, _y, _x + min(_w, 24 + string_width(_val) + 24), _y + 22, true);
+  draw_rectangle(_x, _y, _x + min(_w, 24 + @stg_text_width(_val) + 24), _y + 22, true);
   draw_set_color(c_white);
   @stg_text_cjk(_x + 10, _y + 4 + @stgTextDY, _val, 0);
   _y += 32;
@@ -460,7 +459,7 @@ if((_k == 4 || _k == 3 || _k == 2) && _val != "" && _a != 31){
 if(_k == 1){
   _val = @stg_status_text();
   draw_set_color(@stg_status_color());
-  draw_rectangle(_x, _y, _x + min(_w, 24 + string_width(_val) + 24), _y + 22, true);
+  draw_rectangle(_x, _y, _x + min(_w, 24 + @stg_text_width(_val) + 24), _y + 22, true);
   draw_set_color(c_white);
   draw_text(_x + 10, _y + 4 + @stgTextDY, _val);
   _y += 32;
@@ -484,10 +483,12 @@ if(global.__ONLINE_stgKind[_i] == 0){
 }
 if(string_length(_head) > 0){
   draw_set_color(make_color_rgb(120, 126, 134));
+  // singular/plural stays a code branch for now; in P2 both templates get keys
+  // (a language without plural forms just maps both to the same string)
   if(_cnt == 1){
-    draw_text(_x, _y, _head + " - 1 option");
+    draw_text(_x, _y, _head + @str_fmt(" - %1 option", _cnt, 0, 0));
   }else{
-    draw_text(_x, _y, _head + " - " + string(_cnt) + " options");
+    draw_text(_x, _y, _head + @str_fmt(" - %1 options", _cnt, 0, 0));
   }
   _y += 18;
 }
@@ -563,7 +564,7 @@ if(_a == 54){
   @stgI = global.__ONLINE_stgArg[argument0];
   global.__ONLINE_detFK[0] = "Global";  global.__ONLINE_detFV[0] = "global." + @syncName[@stgI];
   global.__ONLINE_detFK[1] = "Bits";    global.__ONLINE_detFV[1] = string(@syncCount[@stgI]);
-  global.__ONLINE_detFK[2] = "Slots";   global.__ONLINE_detFV[2] = string(@syncSlotCount[@stgI]) + " x 32-bit";
+  global.__ONLINE_detFK[2] = "Slots";   global.__ONLINE_detFV[2] = @str_fmt("%1 x 32-bit", @syncSlotCount[@stgI], 0, 0);
   global.__ONLINE_detFK[3] = "Present";
   if(variable_global_exists(@syncName[@stgI])){
     global.__ONLINE_detFV[3] = "yes";
@@ -574,7 +575,7 @@ if(_a == 54){
 }
 if(_a == 33){
   global.__ONLINE_detFK[0] = "State";   global.__ONLINE_detFV[0] = @stg_rating_status();
-  global.__ONLINE_detFK[1] = "Stars";   global.__ONLINE_detFV[1] = string(@rStars) + " / 5";
+  global.__ONLINE_detFK[1] = "Stars";   global.__ONLINE_detFV[1] = @str_fmt("%1 / 5", @rStars, 0, 0);
   global.__ONLINE_detFK[2] = "Cleared"; global.__ONLINE_detFV[2] = @stg_onoff(@rCleared);
   _fn = 3;
 }
@@ -591,7 +592,7 @@ if(_fn > 0){
   _kw = 72;
   _i = 0;
   while(_i < _fn){
-    if(string_width(global.__ONLINE_detFK[_i]) + 10 > _kw) _kw = string_width(global.__ONLINE_detFK[_i]) + 10;
+    if(@stg_text_width(global.__ONLINE_detFK[_i]) + 10 > _kw) _kw = @stg_text_width(global.__ONLINE_detFK[_i]) + 10;
     _i += 1;
   }
   if(_kw > _w - 60) _kw = _w - 60;
@@ -613,7 +614,7 @@ if(_fn > 0){
       @stg_text_cjk(_x + _kw, _y + @stgTextDY, @stg_fit_text(global.__ONLINE_detFV[_i], _w - _kw - 4), 0);
       _vh = 16;
     }
-    // @stg_wrap measures with string_width; if a font under-reports, the line could
+    // @stg_wrap measures with @stg_text_width; if a font under-reports, the line could
     // still run past the column, so the clamp below is a hard guarantee.
     if(_vh > 16) _y += (_vh - 16);
     _y += 16;
@@ -642,24 +643,56 @@ if(string_length(_acts) > 0){
   draw_text(_x, @stgBottom - 18 + @stgTextDY, _acts);
 }
 return 0;
-///// script @stg_plural
-// args: n -> "s" or ""
-if(argument0 == 1) return "";
-return "s";
-
 ///// script @stg_fit_text
 // Cuts text to argument1 px, appending "..." when it had to. GM8 has no
-// ellipsis, and the detail column is narrow.
+// ellipsis, and the detail column is narrow. Measured on the path that will
+// draw the text (@stg_text_width), or CJK strings truncate at the wrong place.
 // args: text, width -> text
 var _s, _n;
 _s = argument0;
-if(string_width(_s) <= argument1) return _s;
+if(@stg_text_width(_s) <= argument1) return _s;
 _n = string_length(_s);
 while(_n > 1){
-  if(string_width(string_copy(_s, 1, _n) + "...") <= argument1) break;
+  if(@stg_text_width(string_copy(_s, 1, _n) + "...") <= argument1) break;
   _n -= 1;
 }
 return string_copy(_s, 1, _n) + "...";
+
+///// script @str_fmt
+// Tiny positional formatter for UI text: replaces %1/%2/%3 with the arguments.
+// Exists so a translated string can reorder its numbers - a hardcoded
+// "Cooldown " + n + "s" concatenation has its word order baked in.
+// ALWAYS PASS ALL FOUR arguments (unused ones as 0): engines past GM8.0 abort
+// on a missing argument instead of defaulting it.
+// '#' in an argument is escaped (GM draws a bare one as a line break; same
+// rule as @account_clean).
+// args: template, a1, a2, a3 -> text
+var _s;
+_s = argument0;
+_s = string_replace_all(_s, "%1", string_replace_all(string(argument1), "#", "\#"));
+_s = string_replace_all(_s, "%2", string_replace_all(string(argument2), "#", "\#"));
+_s = string_replace_all(_s, "%3", string_replace_all(string(argument3), "#", "\#"));
+return _s;
+
+///// script @stg_text_width
+// Pixel width of a panel string on the SAME path @stg_text_cjk would draw it:
+// ASCII is measured in the panel font, anything else in the CJK renderer's
+// font. Every layout measurement in the menu goes through here - a bare
+// string_width on CJK text asks the Berlin font for glyphs it does not have.
+// args: text -> px
+if(@stg_is_ascii(argument0)) return string_width(argument0);
+#if GM80
+__ONLINE_fw_use_font(argument0);
+return fw_string_width_ext(argument0, -1, 999999);
+#endif
+#if not GM80
+#if CJKTEXT
+return __ONLINE_cjk_string_width(argument0);
+#endif
+#if not CJKTEXT
+return string_width(argument0);
+#endif
+#endif
 
 ///// script @kb_repeat
 // Key repeat for menu navigation: 1 on the initial press, then again after
@@ -820,7 +853,7 @@ return 1;
 				draw_set_color(make_color_rgb(150, 190, 230));
 				draw_text(@rowX, @rowY, global.__ONLINE_stgLabel[@rowI]);
 				draw_set_color(make_color_rgb(70, 80, 95));
-				@rowRuleX = @rowX + string_width(global.__ONLINE_stgLabel[@rowI]) + 10;
+				@rowRuleX = @rowX + @stg_text_width(global.__ONLINE_stgLabel[@rowI]) + 10;
 				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
 			}else if(@rowK == 7){
 				// two-column header: each label gets a short rule of its own
@@ -828,12 +861,12 @@ return 1;
 				draw_set_color(make_color_rgb(150, 190, 230));
 				draw_text(@rowX, @rowY, string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1));
 				draw_set_color(make_color_rgb(70, 80, 95));
-				@rowRuleX = @rowX + string_width(string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1)) + 10;
+				@rowRuleX = @rowX + @stg_text_width(string_copy(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit - 1)) + 10;
 				if(@rowRuleX < @rowCX - 16) draw_rectangle(@rowRuleX, @rowY + 8, @rowCX - 16, @rowY + 9, false);
 				draw_set_color(make_color_rgb(150, 190, 230));
 				draw_text(@rowCX, @rowY, string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit));
 				draw_set_color(make_color_rgb(70, 80, 95));
-				@rowRuleX = @rowCX + string_width(string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit)) + 10;
+				@rowRuleX = @rowCX + @stg_text_width(string_delete(global.__ONLINE_stgLabel[@rowI], 1, @rowSplit)) + 10;
 				if(@rowRuleX < @spX + @colW - 16) draw_rectangle(@rowRuleX, @rowY + 8, @spX + @colW - 16, @rowY + 9, false);
 			}else if(@rowK == 1){
 				draw_set_color(@stg_status_color());
@@ -841,10 +874,10 @@ return 1;
 				draw_set_color(c_white);
 				draw_text(@rowX + 20, @rowY + 2 + @stgTextDY, @stg_status_text());
 				// the server address only fits when the content column is wide enough
-				if(string_width(@stg_status_text()) + string_width("Server: " + @stg_server_text()) + 48 < @colW){
+				if(@stg_text_width(@stg_status_text()) + @stg_text_width(@str_fmt("Server: %1", @stg_server_text(), 0, 0)) + 48 < @colW){
 					draw_set_color(make_color_rgb(150, 150, 150));
 					draw_set_halign(fa_right);
-					draw_text(@spX + @colW - 16, @rowY + 2 + @stgTextDY, "Server: " + @stg_server_text());
+					draw_text(@spX + @colW - 16, @rowY + 2 + @stgTextDY, @str_fmt("Server: %1", @stg_server_text(), 0, 0));
 					draw_set_halign(fa_left);
 				}
 			}else{
@@ -915,16 +948,17 @@ return 1;
 					draw_text(@rowCX + floor(@rowCW / 2), @rowBY + 3 + @stgTextDY, @rowV);
 				}else if(@rowK == 4){
 						// toggle: compact right-aligned pill (a full-width bar read as a wall of
-						// colour once several toggles stacked up)
+						// colour once several toggles stacked up). Green reads the LOGIC state
+						// (@stg_row_on), never the display string.
 						@rowPW = 46;
 						@rowPX = @rowCX + @rowCW - @rowPW;
-						if(@rowV == "ON"){
+						if(@stg_row_on(@rowI)){
 							draw_set_color(make_color_rgb(50, 170, 80));
 						}else{
 							draw_set_color(make_color_rgb(45, 45, 50));
 						}
 						draw_rectangle(@rowPX, @rowBY, @rowPX + @rowPW, @rowBY + @rowBH, false);
-						if(@rowV == "ON"){
+						if(@stg_row_on(@rowI)){
 							draw_set_color(make_color_rgb(50, 170, 80));
 						}else{
 							draw_set_color(make_color_rgb(90, 90, 96));
@@ -965,7 +999,7 @@ return 1;
 		}
 		draw_set_halign(fa_left);
 		// footer: separator + hint + Close all live in the footer band (@footerY),
-		// below the last row; the toast floats just above it and never overlaps
+		// below the last row
 		// HOVER PREVIEWS, it does not select: the detail column and the footer
 		// follow the pointer, while the amber cursor stays where the keyboard or
 		// the last click put it. (Hover used to move the cursor itself - a parked
@@ -978,27 +1012,6 @@ return 1;
 		// detail column (full layout only): what the list row cannot express
 		if(@detW > 0) @stg_draw_detail(@stgPrevRow);
 
-		if(@stg_toast_active()){
-			// bottom-RIGHT: the footer hint owns the bottom-left
-			draw_set_halign(fa_right);
-			if(global.__ONLINE_stgToastKind == 0){
-				draw_set_color(make_color_rgb(90, 220, 120));
-			}else if(global.__ONLINE_stgToastKind == 1){
-				draw_set_color(make_color_rgb(230, 210, 90));
-			}else{
-				draw_set_color(make_color_rgb(230, 110, 110));
-			}
-			// bottom-right of the DETAIL column when there is one: the content column's
-
-			// right edge is where the last rows live, and the message collided with them
-
-			@toastX = @spX + @colW - 16;
-
-			if(@detW > 0) @toastX = @spX + @colW + @detW - 16;
-
-			draw_text(@toastX, @stgBottom - 16, global.__ONLINE_stgToastMsg);
-			draw_set_halign(fa_left);
-		}
 		draw_set_color(make_color_rgb(70, 80, 95));
 		draw_rectangle(@spX + 16, @footerY, @spX + @spW - 16, @footerY + 1, false);
 		draw_set_color(make_color_rgb(160, 160, 160));
@@ -1050,10 +1063,10 @@ while(_i >= 0){
     // number survives as the detail pane's title. The room name is fitted to
     // the space the tail leaves, so long names truncate instead of eating the
     // coordinates (rmMountainBased...)
-    _tail = " " + string(round(@saveHistX[_i])) + "," + string(round(@saveHistY[_i])) + " " + @save_age_text(_i);
+    _tail = @str_fmt(" %1,%2 %3", round(@saveHistX[_i]), round(@saveHistY[_i]), @save_age_text(_i));
     _pfx = "";
     if(@saveHistFav[_i]) _pfx = "* ";
-    _lbl = _pfx + @stg_fit_text(@stg_room_name(_i), @colW - 32 - 56 - string_width(_tail) - string_width(_pfx)) + _tail;
+    _lbl = _pfx + @stg_fit_text(@stg_room_name(_i), @colW - 32 - 56 - @stg_text_width(_tail) - @stg_text_width(_pfx)) + _tail;
     _n += 1;
     // the hit zone is stgX..stgCX+stgCW+8 - a 0-width control made only the
     // first ~90px of every save row clickable
@@ -1223,7 +1236,7 @@ _ctlX = @spX + @colW - 16 - 130;
 @stg_row_add(0, 0, "SYNC", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 @stg_row_add(4, 53, "Sync enabled", @spX + 16, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 _y += 6;
-@stg_row_add(0, 0, "ENTRIES (" + string(@syncEntryCount) + " of 16)", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+@stg_row_add(0, 0, @str_fmt("ENTRIES (%1 of 16)", @syncEntryCount, 0, 0), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 if(@syncEntryCount == 0){
   @stg_row_add(2, 0, "(no entries configured)", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 }
@@ -1236,7 +1249,20 @@ global.__ONLINE_stgHeight = _y - argument0;
 return 0;
 
 ///// script @stg_skin_state_name
-// args: state 0..6 -> display name (also the png filename stem)
+// args: state 0..6 -> png filename stem. NEVER translated: it is a file name on
+// disk (iwposkins/<skin>/<state>.png), not UI text. UI text uses
+// @stg_skin_state_disp.
+if(argument0 == 0) return "idle";
+if(argument0 == 1) return "run";
+if(argument0 == 2) return "jump";
+if(argument0 == 3) return "fall";
+if(argument0 == 4) return "slide";
+if(argument0 == 5) return "bow";
+return "bullet";
+
+///// script @stg_skin_state_disp
+// args: state 0..6 -> display name for the preview cycler. Kept separate from
+// the filename stem above so translating this text cannot rename any files.
 if(argument0 == 0) return "idle";
 if(argument0 == 1) return "run";
 if(argument0 == 2) return "jump";
@@ -1298,7 +1324,7 @@ if(@skinPrevLoaded == _i){
   }else{
     draw_set_color(make_color_rgb(95, 101, 107));
     draw_set_halign(fa_center);
-    draw_text(argument1 + 58, argument2 + 50 + @stgTextDY, "no " + @stg_skin_state_name(@skinPrevState));
+    draw_text(argument1 + 58, argument2 + 50 + @stgTextDY, "no " + @stg_skin_state_disp(@skinPrevState));
     draw_set_halign(fa_left);
   }
 }else{
@@ -1320,7 +1346,7 @@ draw_set_color(make_color_rgb(170, 170, 175));
 draw_text(argument1 + 11, @pvCY + 4 + @stgTextDY, "<");
 draw_text(argument1 + 105, @pvCY + 4 + @stgTextDY, ">");
 draw_set_color(c_white);
-draw_text(argument1 + 58, @pvCY + 4 + @stgTextDY, @stg_skin_state_name(@skinPrevState));
+draw_text(argument1 + 58, @pvCY + 4 + @stgTextDY, @stg_skin_state_disp(@skinPrevState));
 draw_set_halign(fa_left);
 return 0;
 
@@ -1353,9 +1379,9 @@ for(_i = 0; _i < @skinVisCount; _i += 1){
   @skShowN += 1;
 }
 if(@skinFilter == ""){
-  @stg_row_add(0, 0, "INSTALLED (" + string(@skinVisCount) + ")", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+  @stg_row_add(0, 0, @str_fmt("INSTALLED (%1)", @skinVisCount, 0, 0), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 }else{
-  @stg_row_add(0, 0, "INSTALLED (" + string(@skShowN) + " of " + string(@skinVisCount) + ")", @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
+  @stg_row_add(0, 0, @str_fmt("INSTALLED (%1 of %2)", @skShowN, @skinVisCount, 0), @spX + 16, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 }
 if(@skinVisCount == 0){
   @stg_row_add(2, 0, "(no skins found in iwposkins)", @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
@@ -1486,7 +1512,7 @@ return argument0;
 // args: none -> text
 if(global.__ONLINE_stgStatusMsg != "") return global.__ONLINE_stgStatusMsg;
 if(@server == "") return "Server not configured";
-if(@reconnecting) return "Reconnecting (" + string(@reconnectAttempts) + "/10)...";
+if(@reconnecting) return @str_fmt("Reconnecting (%1/10)...", @reconnectAttempts, 0, 0);
 if(@connected) return "Online";
 if(@tcpState == 2) return "Online";
 if(@socketConnectResult == 0) return "Cannot reach server";
@@ -1506,7 +1532,7 @@ return make_color_rgb(220, 200, 60);
 // One-line state of the rating pipeline (status row, detail facts, button).
 // args: none -> text
 if(@ratingSubmitting) return "Sending...";
-if(@ratingCooldown > current_time) return "Cooldown " + string(max(1, ceil((@ratingCooldown - current_time) / 1000))) + "s";
+if(@ratingCooldown > current_time) return @str_fmt("Cooldown %1s", max(1, ceil((@ratingCooldown - current_time) / 1000)), 0, 0);
 if(@ratingResultTimer > current_time){
   if(@ratingResult == 1) return "Rating submitted!";
   if(@ratingResult == 2) return "Submit failed (cooldown)";
@@ -1521,14 +1547,6 @@ return "Idle";
 if(@server == "") return "(none)";
 return @server + ":" + string(@tcpPort);
 
-///// script @stg_source_text
-// Where the account values came from (shown next to the name row).
-// args: none -> text
-if(global.__ONLINE_accEnvManaged) return "env";
-if(global.__ONLINE_accSource == 2) return "folder";
-if(global.__ONLINE_accSource == 3) return "global";
-return "";
-
 ///// script @stg_value
 // Display string for a row (the panel never shows the raw session key).
 // args: row -> text
@@ -1540,7 +1558,7 @@ if(_a == 14) return @account_store_label();
 if(_a == 1){
   @teamNames[0] = "None"; @teamNames[1] = "Red"; @teamNames[2] = "Blue"; @teamNames[3] = "Yellow";
   @teamNames[4] = "Purple"; @teamNames[5] = "Green"; @teamNames[6] = "Orange"; @teamNames[7] = "Cyan";
-  return string(@team) + " " + @teamNames[@team];
+  return @str_fmt("%1 %2", @team, @teamNames[@team], 0);
 }
 if(_a == 2){
   @lerpNames[0] = "OFF"; @lerpNames[1] = "Light"; @lerpNames[2] = "Standard"; @lerpNames[3] = "Strong";
@@ -1579,7 +1597,7 @@ if(_a == 20){
   @stgSvI = global.__ONLINE_stgArg[argument0];
   // a build with no entries may not have created the array at all
   if(@stgSvI < 0 || @stgSvI >= @saveHistCount) return "";
-  if(@saveHistHotkey[@stgSvI] > 0) return "key " + string(@saveHistHotkey[@stgSvI]);
+  if(@saveHistHotkey[@stgSvI] > 0) return @str_fmt("key %1", @saveHistHotkey[@stgSvI], 0, 0);
   return "";
 }
 if(_a == 21) return @stg_onoff(@saveHistFilter);
@@ -1608,19 +1626,19 @@ if(_a == 56) return @stg_onoff(@skinAutoDL);
 if(_a == 57) return "Clear skin";
 if(_a == 58){
   if(@skinFilter == "") return "Search...";
-  return "Search: " + @skinFilter;
+  return @str_fmt("Search: %1", @skinFilter, 0, 0);
 }
 if(_a == 54){
   @stgI = global.__ONLINE_stgArg[argument0];
-  return string(@syncCount[@stgI]) + " bits";
+  return @str_fmt("%1 bits", @syncCount[@stgI], 0, 0);
 }
 if(_a == 52) return "Reset keys";
-if(_a == 31) return string(@rStars) + " / 5";
+if(_a == 31) return @str_fmt("%1 / 5", @rStars, 0, 0);
 if(_a == 32) return @stg_onoff(@rCleared);
 if(_a == 33) return @stg_rating_status();
 if(_a == 34){
   if(@ratingSubmitting) return "Sending...";
-  if(@ratingCooldown > current_time) return "Wait " + string(max(1, ceil((@ratingCooldown - current_time) / 1000))) + "s";
+  if(@ratingCooldown > current_time) return @str_fmt("Wait %1s", max(1, ceil((@ratingCooldown - current_time) / 1000)), 0, 0);
   return "Submit Rating";
 }
 return "";
@@ -1629,6 +1647,27 @@ return "";
 // args: flag -> "ON"/"OFF"
 if(argument0) return "ON";
 return "OFF";
+
+///// script @stg_row_on
+// Logic ON-state of a toggle row (kind 4), read from the underlying setting -
+// never from the display string: the pill/card colours used to compare the
+// displayed text against "ON", which breaks the moment the text is translated.
+// Covers every kind-4 row the builders register (acts 3,4,6,9,21,32,53,56,60,61).
+// args: row -> 1/0
+var _a;
+_a = global.__ONLINE_stgAct[argument0];
+if(_a == 3) return @save_enabled;
+if(_a == 4) return @fastLoadEnabled;
+if(_a == 6) return @showArrows;
+// bullets show "locked" (grey) while PVP owns the switch - that is the OFF colour
+if(_a == 9) return (@pvpMode == 0 && @bulletShow);
+if(_a == 21) return @saveHistFilter;
+if(_a == 32) return @rCleared;
+if(_a == 53) return @syncEnabled;
+if(_a == 56) return @skinAutoDL;
+if(_a == 60) return @noteHideOthers;
+if(_a == 61) return @noteHideAll;
+return 0;
 
 ///// script @stg_kind_of
 // args: row -> kind
@@ -1777,16 +1816,13 @@ if(_a == 3){
 }
 if(_a == 4){ @fastLoadEnabled = !@fastLoadEnabled; @fastLoadChanged = true; return 0; }
 if(_a == 5){ @vis += 1; if(@vis > 2) @vis = 0; @visChanged = true; return 0; }
-if(_a == 6){ @showArrows = !@showArrows; @showArrowsChanged = true; @stg_toast("Indicator: " + @stg_onoff(@showArrows), 1); return 0; }
-if(_a == 7){ @specCamMode = 1 - @specCamMode; @specCamChanged = true; @stg_toast("Spec Cam: " + @stg_value(argument0), 1); return 0; }
+if(_a == 6){ @showArrows = !@showArrows; @showArrowsChanged = true; return 0; }
+if(_a == 7){ @specCamMode = 1 - @specCamMode; @specCamChanged = true; return 0; }
 if(_a == 8){
   if(@pvpAvail){
     @pvpMode += 1;
     if(@pvpMode > 2) @pvpMode = 0;
     @pvpChanged = true;
-    @stg_toast("PVP: " + @stg_value(argument0), 1);
-  }else{
-    @stg_toast("PVP is not available for this game", 1);
   }
   return 0;
 }
@@ -1794,8 +1830,6 @@ if(_a == 9){
   if(@pvpMode == 0){
     @bulletShow = !@bulletShow;
     @bulletShowChanged = true;
-  }else{
-    @stg_toast("Bullets are locked on in PVP", 1);
   }
   return 0;
 }
@@ -1821,12 +1855,11 @@ if(_a == 22){
     @acc_clear_commit();
   }else{
     global.__ONLINE_stgClearRow = 22;
-    @stg_toast("Click again to clear every non-favourite save", 1);
   }
   return 0;
 }
 if(_a == 10){ @settingsOpen = false; @debug_pick_player = true; return 1; }
-if(_a == 11){ @manualReconnect = true; @stg_toast("Reconnecting...", 1); return 0; }
+if(_a == 11){ @manualReconnect = true; return 0; }
 if(_a == 12){ @acc_edit_name(); return 0; }
 if(_a == 13){ @acc_edit_pass(); return 0; }
 if(_a == 14){ @acc_toggle_store(); return 0; }
@@ -1866,7 +1899,6 @@ if(_a == 56){
 }
 if(_a == 57){
   @skin_clear();
-  @stg_toast("Skin cleared", 1);
   return 0;
 }
 if(_a == 58){
@@ -1878,11 +1910,6 @@ if(_a == 58){
   @skSearch = wd_input_box("Search skins", "Leave it empty to show all:", @skinFilter);
   #endif
   @skinFilter = string_lower(@account_trim(@skSearch));
-  if(@skinFilter == ""){
-    @stg_toast("Showing all skins", 1);
-  }else{
-    @stg_toast("Filtering by '" + @skinFilter + "'", 1);
-  }
   return 0;
 }
 if(_a == 54) return 0;   // view-only entry
@@ -1892,14 +1919,13 @@ if(_a == 52){
   @keyPlayerList = 76; @keyChat = 32; @keyPing = 72; @keyFastLoad = 70; @keyCanvas = 78;
   @keybindEditing = -1;
   @keybindSave = true;
-  @stg_toast("Keys reset to defaults", 1);
   return 0;
 }
 if(_a == 34){
-  if(!@connected){ @stg_toast("Not connected", 1); return 0; }
+  if(!@connected) return 0;
   if(@ratingSubmitting) return 0;
-  if(@ratingCooldown > current_time){ @stg_toast("Cooldown - wait " + string(max(1, ceil((@ratingCooldown - current_time) / 1000))) + "s", 1); return 0; }
-  if(@rStars < 1){ @stg_toast("Pick 1-5 stars first", 1); return 0; }
+  if(@ratingCooldown > current_time) return 0;
+  if(@rStars < 1) return 0;
   @ratingSubmit = true;
   return 0;
 }
@@ -1977,7 +2003,6 @@ if(_a == 5){
 if(_a == 7){
   @specCamMode = 1 - @specCamMode;
   @specCamChanged = true;
-  @stg_toast("Spec Cam: " + @stg_value(argument0), 1);
   return 0;
 }
 if(_a == 8){
@@ -1986,9 +2011,6 @@ if(_a == 8){
     if(@pvpMode < 0) @pvpMode = 2;
     if(@pvpMode > 2) @pvpMode = 0;
     @pvpChanged = true;
-    @stg_toast("PVP: " + @stg_value(argument0), 1);
-  }else{
-    @stg_toast("PVP is not available for this game", 1);
   }
   return 0;
 }
@@ -2047,30 +2069,17 @@ if(argument0 == 2) _v = wd_input_box("UDP port", "port:", _old);
 _v = @account_trim(_v);
 if(_v == _old) return 0;
 if(argument0 == 0){
-  if(_v == ""){ @stg_toast("Invalid server", 2); return 0; }
+  if(_v == "") return 0;
   @server = _v;
 }else{
   _t = floor(real(_v));
-  if(_t < 1 || _t > 65535){ @stg_toast("Invalid port", 2); return 0; }
+  if(_t < 1 || _t > 65535) return 0;
   if(argument0 == 1) @tcpPort = _t;
   if(argument0 == 2) @udpPort = _t;
 }
 @serverChanged = true;
 @manualReconnect = true;
-@stg_toast("Reconnecting to " + @server + "...", 1);
 return 0;
-
-///// script @stg_toast
-// call site valid while nothing is ever stored, so @stg_toast_active() stays false
-// and no box is drawn anywhere.
-// args: text, kind -> 0
-return 0;
-
-///// script @stg_toast_active
-// args: none -> 1 while a toast is on screen
-if(global.__ONLINE_stgToastMsg == "") return 0;
-if(current_time > global.__ONLINE_stgToastUntil){ global.__ONLINE_stgToastMsg = ""; return 0; }
-return 1;
 
 // ---------------------------------------------------------------------------
 // Account rows
@@ -2117,11 +2126,10 @@ if(_v == _old) return 0;
 if(_v == ""){
   global.__ONLINE_stgClearRow = 12;
   global.__ONLINE_stgClearOld = _old;
-  @stg_toast("Clear the name? Enter=Yes Esc=No", 1);
   return 0;
 }
 global.__ONLINE_accName = _v;
-if(@account_save()) @stg_toast("Name saved", 0); else @stg_toast("Cannot write " + global.__ONLINE_accWritePath, 2);
+@account_save();
 return 0;
 
 ///// script @acc_edit_pass
@@ -2145,28 +2153,26 @@ if(_v == _old) return 0;
 if(_v == "" && _old != ""){
   global.__ONLINE_stgClearRow = 13;
   global.__ONLINE_stgClearOld = _old;
-  @stg_toast("Clear the session key? Enter=Yes Esc=No", 1);
   return 0;
 }
 global.__ONLINE_accPassword = _v;
-if(@account_save()) @stg_toast("Session key saved", 0); else @stg_toast("Cannot write " + global.__ONLINE_accWritePath, 2);
+@account_save();
 return 0;
 
 ///// script @acc_clear_commit
 // Applies a confirmed clear. args: none -> 0
 if(global.__ONLINE_stgClearRow == 22){
   @saveHistClearFiles = true;
-  @stg_toast("Cleared every non-favourite save", 1);
   global.__ONLINE_stgClearRow = -1;
   return 0;
 }
 if(global.__ONLINE_stgClearRow == 12){
   global.__ONLINE_accName = "";
-  if(@account_save()) @stg_toast("Name cleared", 1); else @stg_toast("Cannot write " + global.__ONLINE_accWritePath, 2);
+  @account_save();
 }
 if(global.__ONLINE_stgClearRow == 13){
   global.__ONLINE_accPassword = "";
-  if(@account_save()) @stg_toast("Session key cleared", 1); else @stg_toast("Cannot write " + global.__ONLINE_accWritePath, 2);
+  @account_save();
 }
 global.__ONLINE_stgClearRow = -1;
 return 0;
@@ -2174,26 +2180,18 @@ return 0;
 ///// script @acc_clear_cancel
 // Abandons a pending clear. args: none -> 0
 global.__ONLINE_stgClearRow = -1;
-@stg_toast("Kept the previous value", 1);
 return 0;
 
 ///// script @acc_toggle_store
 // Switches "Store in" between the global file and this game folder. The values
 // are copied to the new target first, so switching can never lose them.
 // args: none -> 0
-var _ok, _to;
+var _to;
 if(global.__ONLINE_accEnvManaged){
-  @stg_toast("Managed by the environment (IWPO_NAME)", 1);
   return 0;
 }
 if(global.__ONLINE_accStore == 0) _to = 1; else _to = 0;
-_ok = @account_set_store(_to);
-if(_ok){
-  if(_to == 1) @stg_toast("Saved to the game folder", 0);
-  else @stg_toast("Saved globally", 0);
-}else{
-  @stg_toast("Cannot write " + global.__ONLINE_accWritePath, 2);
-}
+@account_set_store(_to);
 return 0;
 
 ///// script @acc_apply_reconnect
@@ -2201,10 +2199,7 @@ return 0;
 // @account_apply writes the caller's variables and the panel runs inside
 // with(world) (see worldDrawGui), so the world instance owns the identity.
 // args: none -> 0
-var _ok;
-_ok = @account_save();
+@account_save();
 @account_apply();
 @manualReconnect = true;
-if(_ok) @stg_toast("Applied - reconnecting", 0);
-else @stg_toast("Applied locally (cannot write " + global.__ONLINE_accWritePath + ")", 2);
 return 0;
