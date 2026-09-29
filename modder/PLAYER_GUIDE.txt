@@ -5,8 +5,7 @@ I Wanna Play Online - 玩家指南
 1. 开始前
 - 首次启动会询问名字和房间密码。名字为空时会自动变成 Anonymous；名字和密码最长 20 个字符。
 - 密码留空表示公共房间。想一起玩的人需要使用同一个联机包、同一个服务器、同一个密码。
-- 游戏会额外询问是否启用 RACE 模式；启用后共享存档会被关闭。
-- 请保持以下文件在同一目录：联机版 EXE 或 data.win、http_dll_2_3.dll、__ONLINE_config.ini。
+- 请保持以下内容在同一目录：联机版 EXE 或 data.win、http_dll_2_3.dll、__ONLINE_config.ini、lang 文件夹、iwposkins 文件夹；GMS 游戏另有 DBGHELP.dll。
 - 个人设置、队伍、按键和同步开关都会写回 __ONLINE_config.ini。
 
 2. 默认按键
@@ -16,7 +15,6 @@ I Wanna Play Online - 玩家指南
 - L: 玩家列表
 - O: 设置面板
 - U: 聊天记录
-- I: 画面外指示箭头开/关
 - Y: 长按约 1 秒进入/退出观战
 - H: 长按打开标记轮盘，松开发送，右键取消
 - F: 读取最新一条历史存档
@@ -59,7 +57,7 @@ sync1_count = 8
 - 名字和长度必须与发布者提供的配置一致，写错不会自动推断。
 
 5. 设置面板
-- 标签页依次是 Settings、Saves、Rating、Keys、Sync。
+- 标签页依次是 Settings、Saves、Rating、Keys、Sync、Skins。Settings 页的 Language 行可切换界面语言（默认简体中文）。
 - 鼠标和键盘都可以操作。
 - 键盘规则: Left/Right 切换标签，Down 或 Enter 进入当前标签，Up 返回标签栏，Enter 执行当前操作。
 - Settings 页可以关闭 Fast Load；Keys 页可以修改 Fast Load 的键位。
@@ -79,7 +77,6 @@ I Wanna Play Online - Player Guide
 1. Before You Start
 - On first launch the game asks for a name and a room password. An empty name becomes Anonymous. Both fields are capped at 20 characters.
 - An empty password means a public room. Players who want to meet each other must use the same online build, the same server, and the same password.
-- Games also ask whether to enable RACE mode. If you enable it, shared saves are disabled.
 - Keep these files together in one folder: the online EXE or data.win, http_dll_2_3.dll, and __ONLINE_config.ini.
 - Personal settings, team choice, hotkeys, and the sync toggle are stored in __ONLINE_config.ini.
 
@@ -90,7 +87,6 @@ I Wanna Play Online - Player Guide
 - L: Player list
 - O: Settings panel
 - U: Chat log
-- I: Toggle off-screen indicators
 - Y: Hold for about 1 second to enter or leave spectate
 - H: Hold to open the ping wheel, release to send, RMB to cancel
 - F: Load the latest save-history entry
@@ -133,7 +129,7 @@ sync1_count = 8
 - Names and counts must match the values provided by the pack author.
 
 5. Settings Panel
-- The tabs are Settings, Saves, Rating, Keys, and Sync.
+- The tabs are Settings, Saves, Rating, Keys, Sync, and Skins. The Settings tab has a Language row for the UI language (Simplified Chinese by default).
 - Both mouse and keyboard controls are supported.
 - Keyboard rules: Left/Right changes tabs, Down or Enter enters the current tab, Up returns to the tab bar, and Enter confirms the focused action.
 - The Settings tab can disable Fast Load; the Keys tab can rebind it.

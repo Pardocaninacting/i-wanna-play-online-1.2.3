@@ -101,6 +101,19 @@ Thank you so much for downloading, I really hope you will have a lot of fun!
 
 CHANGE LOGS:
 
+1.2.3 beta 6:
+ - New settings menu: six tabs (Settings / Saves / Rating / Keys / Sync / Skins) with a detail pane, scrolling, and full mouse + keyboard control
+ - UI localization system: Simplified Chinese by default, English one row away (Settings -> Language); drop-in lang/<code>.ini files add more languages
+ - Player skins: installable skin packages (iwposkins/), per-state animation preview, auto-download of missing skins over the game connection
+ - Notes system: ping wheel, polyline arrows, freehand strokes, text notes, canvas view
+ - PVP: bullet sharing with team/FFA modes and kill detection
+ - Multiple player objects: games with more than one player object can pick which one to drive
+ - GM8.2-native Draw GUI HUD, early-GMS1 (bytecode 15) support, GM8.1/GMS2.3 compatibility hardening
+ - The converter ships lang/, iwposkins/ and (for GMS games) DBGHELP.dll next to the game
+ - GM8.0 renders Chinese with the built-in bitmap atlas by default (FoxWriting is unmaintained and crashes on current GPU drivers)
+ - iwpo-settings.ini no longer accepts the extension-packages bisection switches globally; they moved to per-game games/<game>.ini
+ - Various bug fixes and stability work
+
 1.2.3 beta 5:
  - Default F Fast Load for the latest save-history entry; Fast Load can now be rebound or disabled in Settings
  - GM8 save hooks now run before successful early returns in custom save wrappers
