@@ -38,10 +38,10 @@ if(view_enabled){
 	}
 }
 if(@hudFirst < 0 || view_current == @hudFirst){
-	// QoL fix: with views enabled but none visible (menu / title rooms) the old
-	// guard (@hudFirst == -1) never matched view_current, so the whole HUD -
-	// chat, notes and the O settings panel - silently vanished in those rooms.
-	// Draw the single HUD pass in the current view instead.
+	// QoL: with views enabled but none visible (menu / title rooms) @hudFirst
+	// stays -1 and never matches view_current; draw the single HUD pass in the
+	// current view instead, or the whole HUD (chat, notes, settings panel)
+	// silently vanishes in those rooms.
 	// Draw in view-port space (not window space): the D3D viewport follows the
 	// port, so this stays correct under window scaling / letterboxed
 	// fullscreen, and the HUD scales together with the game image. The
@@ -108,11 +108,11 @@ if(@hudFirst < 0 || view_current == @hudFirst){
 @hudGuiOn = true;
 @hudWinW = display_get_gui_width();
 @hudWinH = display_get_gui_height();
-// A Studio 2 game with no GUI layer configured reports 0 here. The guard used to switch
-// the whole overlay off, so the panel stayed invisible while its Step logic kept
-// working ("the menu works but nothing is drawn"). Fall back to the window size: with
-// no GUI layer the Draw GUI surface is the window. The GM8 branch above falls back the
-// same way (view_wport -> room_width).
+// A Studio 2 game with no GUI layer configured reports 0 here; switching the
+// overlay off then hides the panel while its Step logic keeps working. Fall
+// back to the window size: with no GUI layer the Draw GUI surface is the
+// window. The GM8 branch above falls back the same way (view_wport ->
+// room_width).
 if(@hudWinW < 1) @hudWinW = window_get_width();
 if(@hudWinH < 1) @hudWinH = window_get_height();
 if(@hudWinW < 1) @hudGuiOn = false;
@@ -478,8 +478,8 @@ if(@settingsOpen){
 	@_alpha = draw_get_alpha();
 	@_color = draw_get_color();
 	// Geometry (@spX/@spY/@spW/@spH/@tabH) is owned by @stg_init (worldCreate).
-	// It must never be re-derived here: a hardcoded size once forked the two,
-	// and the row table painted outside the panel.
+	// Never re-derive it here: a forked hardcoded size paints the row table
+	// outside the panel.
 	#if STUDIO
 		if(global.@ftOnline >= 0){
 			draw_set_font(global.@ftOnline);
@@ -514,8 +514,7 @@ if(@settingsOpen){
 	@tabCount = 6;
 	@tabW = floor(@spW / @tabCount);
 	@tabY = @spY;
-	// first localized slice (P1): tab names and Close go through @L and the CJK
-	// draw path; the rest of the chrome follows in P2/P3
+	// tab names and Close are localized: they go through @L and the CJK draw path
 	@tabNames[0] = @L(global.__ONLINE_LK_TAB_SETTINGS, "Settings");
 	@tabNames[1] = @str_fmt(@L(global.__ONLINE_LK_TAB_SAVES, "Saves(%1)"), @saveHistCount, 0, 0);
 	@tabNames[2] = @L(global.__ONLINE_LK_TAB_RATING, "Rating");
@@ -632,8 +631,8 @@ if(@settingsOpen){
 			}
 		}
 		// rating stars: the detail pane's star boxes are directly clickable
-		// (fixed slot @stgTop + 24, see @stg_draw_detail); same toggle-off as the
-		// old per-star click
+		// (fixed slot @stgTop + 24, see @stg_draw_detail); clicking the active
+		// star toggles it off
 		if(!@tabClicked && @settingsTab == 2 && @detW > 0 && global.__ONLINE_stgAct[@stgPrevRow] == 31){
 			for(@rI = 1; @rI <= 5; @rI += 1){
 				@rSX = @spX + @colW + 12 + (@rI - 1) * 30;
@@ -658,9 +657,9 @@ if(@settingsOpen){
 		if(!@tabClicked){
 			@stg_build_tab(@settingsTab);
 			// (the wheel is handled in worldEndStep, once per frame - inside this
-			// click branch it only worked while the button was held)
-			// same coordinate space as the draw (@stgYOff) - using the table-space
-			// hit test here is what made clicks land on the wrong row once scrolled
+			// click branch it only fires while the button is held)
+			// same coordinate space as the draw (@stgYOff) - the table-space hit
+			// test lands clicks on the wrong row once scrolled
 			@rowHit = @stg_hit_row_view(@mx, @my, @stgYOff);
 			if(@rowHit >= 0) @stg_click_row(@rowHit);
 		}

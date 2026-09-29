@@ -445,8 +445,8 @@ export const insertGMLScript = function(source: Buffer, code: Buffer): Buffer {
 	// GM8 quirk: if a script starts with `{`, only code inside that matching
 	// `{}` block executes. We insert our code before the closing `}` so it
 	// runs within the block. Depth-aware matching avoids nested brace mismatches
-	// (the old v1.1.9 code used lastIndexOf+regex with /m flag, which could
-	// pick a non-root `}` on scripts that didn't truly start with `{`).
+	// (a lastIndexOf+regex scan can pick a non-root `}` on scripts that do not
+	// truly start with `{`).
 	const str: string = source.toString('ascii');
 	const openIdx: number = str.indexOf('{');
 	if(openIdx === -1 || str.substring(0, openIdx).trim().length > 0)
@@ -572,14 +572,12 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	const isUpxPacked: boolean = head.includes(Buffer.from("UPX0")) || head.includes(Buffer.from("UPX1"));
 	// The FoxWriting (fw) host hazard is STRUCTURAL, not name-based: a UPX-packed +
 	// Antidec-protected GM8.0 exe cannot host the native CJK plugin - the plugin's
-	// GMAPI/GDI+ init fails against that runner image. Historically only the game
-	// whose name matched "i wanna be the fish" was gated, so other members of the
-	// same structural class (e.g. "I wanna go the Frontline ver1.01", verified
-	// UPX+Antidec) got fw injected and died at startup: the rebuild shipped since
-	// be9d306 turns that into a hard GM8 "unexpected error occured when running the
-	// game" (the pre-rebuild DLL only produced a recoverable "Error defining an
-	// external function"). Detect the class by structure so any such game falls
-	// back to the stub CJK path instead.
+	// GMAPI/GDI+ init fails against that runner image, and with the rebuilt DLL
+	// that is a hard GM8 "unexpected error occured when running the game" (the
+	// pre-rebuild DLL only produced a recoverable "Error defining an external
+	// function"). A name-based gate missed other members of the class (e.g.
+	// "I wanna go the Frontline ver1.01", verified UPX+Antidec), so detect the
+	// class by structure: any such game falls back to the stub CJK path.
 	if(isUpxPacked){
 		const antidec: boolean = await isAntidecProtected(input);
 		if(antidec){
@@ -1239,7 +1237,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// C1 multi-player object list (TheBiob converterGM8.ts:563-589 heritage, adapted).
 	// Default on; iwpo.no_player_list=true restores the legacy player/player2-only path.
 	// iwpo.alt_player_objects appends comma-separated object names after player/player2.
-	// Unlike TheBiob we validate alt names against the object list: GM8 compiles the
+	// Unlike TheBiob, alt names are validated against the object list: GM8 compiles the
 	// baked names as constants, so an unknown name would be a hard compile error.
 	// Objects receiving the skin Draw injection (T2): exactly the object set the
 	// player list covers (player/player2 plus validated iwpo.alt_player_objects
@@ -1486,10 +1484,10 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		// fw_* stubs are needed whenever the GML emits the fw_* branch (cjkBackend === 'fw'
 		// with no real FoxWriting). gm_* stubs are needed when the GML emits the gm_* branch
 		// (cjkBackend === 'gm' with no real GaseousMarble — rare; mostly defensive).
-		// With FoxWriting unavailable we no longer emit no-op stubs: gml/cjkAtlas.gml is a
-		// pure-GML bitmap-atlas pack that implements the same fw_* API surface on top of
+		// With FoxWriting unavailable, no no-op stubs: gml/cjkAtlas.gml is a pure-GML
+		// bitmap-atlas pack that implements the same fw_* API surface on top of
 		// __ONLINE_font.png + __ONLINE_font.gbk, so CJK text still renders with no DLL.
-		// (UPX + Antidec GM8.0 runners cannot host FoxWriting at all - see 945b287.)
+		// (UPX + Antidec GM8.0 runners cannot host FoxWriting at all.)
 		if(cjkBackend === 'fw' && !loadedFW){
 			atlasCjkActive = true;
 			// Optical baseline shift for the bitmap atlas (iwpo.cjk.yoffset).
@@ -1623,7 +1621,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 			includedfiles.push(asciiFont);
 		}
 		// GaseousMarble font files — deployed whenever the GM backend is selected
-		// (works on both GM 8.0 and GM 8.1; the legacy version gate was overly restrictive).
+		// (works on both GM 8.0 and GM 8.1; no version gate).
 		if (cjkBackend === 'gm') {
 			const fontPng: IncludedFile = newIncludedfile("__ONLINE_font.png");
 			fontPng.exportSettings = 2; // Export to game directory (working_directory)

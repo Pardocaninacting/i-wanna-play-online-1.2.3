@@ -5,10 +5,9 @@
 //
 // Why: on UPX-packed + Antidec-protected GM8.0 runners the native FoxWriting
 // DLL cannot initialize (its GMAPI layer is version-locked and fails against
-// that runner image), which used to abort the game. The converter therefore
-// blocks the fw extension for that structural class - and this pack replaces
-// the old do-nothing stubs so those games still render CJK text, without any
-// DLL, loader or GMAPI dependency.
+// that runner image), so the converter blocks the fw extension for that
+// structural class. This pack renders CJK text for those games with no DLL,
+// loader or GMAPI dependency.
 //
 // Assets (deployed next to the exe by the converter when this pack is active):
 //   __ONLINE_font.png  - the glyph atlas (white glyphs on transparent, RGBA)
@@ -321,7 +320,7 @@ return 0;
 ///// script fw_draw_set_font
 // fw_draw_set_font(handle) -> 0
 // The atlas is a bitmap: scaling it DOWN (the templates ask for 9pt against a
-// 16pt-authored atlas) turns 12 px CJK glyphs into unreadable 6-7 px mush, so
+// 16pt-authored atlas) turns 12 px CJK glyphs into unreadable 6-7 px output, so
 // the draw scale never drops below 1. Larger requests still scale up.
 globalvar @cjkAtlasCurFont, @cjkAtlasScale, @cjkAtlasFontSize, @cjkAtlasFontN;
 var _idx, _size;

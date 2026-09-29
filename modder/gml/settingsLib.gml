@@ -2,11 +2,8 @@
 // ============================================================================
 // Settings menu: declarative row table, tab-0 layout and the account rows.
 //
-// The Settings tab used to be hand-laid-out with per-button coordinates and row
-// indices that drifted with the PLAYER_LIST compile flag (row 7 meant "pick a
-// player" in one build and "reconnect" in the other, with the vk_enter branch
-// duplicated). Draw, keyboard, mouse and the action handlers all read one table
-// now, and the geometry lives in one place:
+// One declarative row table drives Draw, keyboard, mouse and the action
+// handlers, and the geometry lives in one place:
 //
 //   global.__ONLINE_stgKind[i]  0 header, 1 status, 2 text, 3 select, 4 toggle, 5 button, 7 double header
 //   global.__ONLINE_stgAct[i]   action id (@stg_act / @stg_act_dir dispatch it)
@@ -60,8 +57,8 @@ global.__ONLINE_accWritePath = "";
 global.__ONLINE_stgRowH = 22;
 global.__ONLINE_stgHeadH = 15;
 // Panel geometry is derived by @stg_layout (worldCreate primes it via @stg_init,
-// worldDrawGui re-derives it per frame) - a hardcoded size in the draw path once
-// forked the two and the row table overflowed the panel.
+// worldDrawGui re-derives it per frame) - never hardcode a size in the draw
+// path (a forked size lets the row table overflow the panel).
 // panel geometry + layout mode (see @stg_layout - narrow is the shipped layout)
 @stgScroll = 0;
 @stgFirst = 0;
@@ -107,9 +104,9 @@ return 0;
 var _w, _h, _full;
 // Never READ @hudWinW/@hudWinH here. They are set by the Draw GUI event, and
 // @stg_init runs from Create - on GMS2.3 reading an instance variable that was
-// never assigned is a fatal error ("not set before reading it"), which is exactly
-// how this crashed on the GMS side. Seed from the engine's own metrics instead,
-// then fall back, then publish the result for the draw pass.
+// never assigned is a fatal error ("not set before reading it"). Seed from the
+// engine's own metrics instead, then fall back, then publish the result for the
+// draw pass.
 #if STUDIO
 _w = display_get_gui_width();
 _h = display_get_gui_height();
@@ -137,9 +134,7 @@ if(_full){
   @detW = 372;
   @spH = 460;
 }else{
-  // narrow really narrows: the mock's 480x420 list-only panel (the 600px
-  // "narrow" was only 40px slimmer than full and hid the detail column for no
-  // visible gain)
+  // narrow really narrows: the mock's 480x420 list-only panel
   @colW = 480;
   @detW = 0;
   @spH = 420;
@@ -163,7 +158,7 @@ if(@spY < 0) @spY = 0;
 @menuMode = 0;
 if(@detW > 0) @menuMode = 1;
 // the footer rides along: a game that swaps view ports between rooms moves
-// spY/spH every frame, and the init-time footer floated at the stale height
+// spY/spH every frame; an init-time footer would sit at the stale height
 @footerY = @spY + @spH - 34;
 return 0;
 
@@ -196,9 +191,8 @@ _y += 6;
 @stg_row_add(3, 14, @L(global.__ONLINE_LK_ROW_STORE_IN, "Store in"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 // --- gameplay / display side by side
 _y += 6;
-// Gameplay and Display are always ONE column (maintainer decision):
-// the detail pane carries the extra breadth, and a second column only
-// made both halves harder to scan.
+// Gameplay and Display are always ONE column: the detail pane carries the
+// extra breadth; a second column only makes both halves harder to scan.
 @stg_row_add(0, 0, @L(global.__ONLINE_LK_HEAD_GAMEPLAY, "GAMEPLAY"), _cl, _y, 0, 0, 0); _y += global.__ONLINE_stgHeadH;
 @stg_row_add(3, 1, @L(global.__ONLINE_LK_ROW_TEAM, "Team"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
 @stg_row_add(3, 2, @L(global.__ONLINE_LK_ROW_LERP, "Lerp"), _cl, _y, 130, 0, _ctlX); _y += global.__ONLINE_stgRowH;
@@ -254,9 +248,8 @@ return _n;
 // pointer is mapped through the same values (one grid, no drift).
 // args: mx, my, yOffset -> row index / -1
 var _i, _y, _h;
-// outside the visible band there is nothing to hit: hovering the dead space
-// above/below the list used to select a scrolled-out row (the detail pane
-// betrayed it), and clicking there acted on it blindly
+// outside the visible band there is nothing to hit: hovering or clicking the
+// dead space above/below the list must not select a scrolled-out row
 if(argument1 < @stgTop || argument1 >= @stgBottom) return -1;
 _i = 0;
 while(_i < global.__ONLINE_stgN){
@@ -272,8 +265,8 @@ while(_i < global.__ONLINE_stgN){
 
   }
   if(argument1 >= _y - 2 && argument1 < _y + _h - 2){
-    // the row ends at its control's right edge - a fixed "+200" used to extend
-    // the hover/click area well past the visible widget
+    // the row ends at its control's right edge (a fixed +200 would extend the
+    // hit area past the visible widget)
     if(argument0 >= global.__ONLINE_stgX[_i] - 6 && argument0 < global.__ONLINE_stgCX[_i] + global.__ONLINE_stgCW[_i] + 8) return _i;
   }
   _i += 1;
@@ -300,8 +293,7 @@ while(_rest != "" && _cnt < argument4){
     }
     if(_line == "" && @stg_text_width(_word) > argument3 && string_length(_word) > 1){
       // No space to break at and the token does not fit: take the longest prefix
-      // that does, and leave the remainder for the next line. (The old version cut
-      // a single character, which never brought a long path inside the column.)
+      // that does, and leave the remainder for the next line.
       _fit = string_length(_word);
       while(_fit > 1){
         if(@stg_text_width(string_copy(_word, 1, _fit)) <= argument3) break;
@@ -384,9 +376,9 @@ return "";
 
 ///// script @stg_draw_detail
 // Draws the detail column for one row (full layout only: @detW > 0).
-// Everything here is local - the previous version kept scratch state in
-// @-prefixed instance variables and one of them could be read unset, which GM8
-// treats as a fatal "Cannot compare arguments".
+// Everything here is local (var) - scratch state in @-prefixed instance
+// variables can be read unset, which GM8 treats as a fatal "Cannot compare
+// arguments".
 // args: row -> 0
 var _a, _k, _x, _w, _y, _val, _i, _n, _head, _cnt, _txt, _fn, _acts, _vh;
 _a = global.__ONLINE_stgAct[argument0];
@@ -588,8 +580,8 @@ if(_a == 14){
   _fn = 2;
 }
 if(_fn > 0){
-  // key column measured from the longest key: a fixed 80px let "This folder"
-  // and "Env override" run into their values
+  // key column measured from the longest key (a fixed width lets long keys
+  // run into their values)
   _kw = 72;
   _i = 0;
   while(_i < _fn){
@@ -608,7 +600,7 @@ if(_fn > 0){
     draw_set_color(c_white);
     if(@stg_is_ascii(global.__ONLINE_detFV[_i])){
       // wrap instead of truncating: a store path is long and the tail (the file
-      // name) is the informative part, so cutting it off hid what the row was for.
+      // name) is the informative part, so cutting it off hides what the row is for.
       _vh = @stg_wrap(_x + _kw, _y + @stgTextDY, global.__ONLINE_detFV[_i], _w - _kw - 4, 2);
     }else{
       // user text (save player names, CJK skin metadata) goes the CJK route
@@ -740,8 +732,8 @@ return 1;
 // args: none -> 0
 		// QoL: one declarative table drives the layout (see gml/settingsLib.gml).
 		// NOTE: the caller builds the row table (@stg_build_rows for Settings,
-		// @stg_build_saves for Saves). Building it here silently replaced the
-		// Saves table with the settings rows - which is exactly what happened.
+		// @stg_build_saves for Saves); building it here silently replaces the
+		// Saves table with the settings rows.
 		// The focused row must be a real option: a frame that starts with a header
 		// or the status row would show that in the detail pane and highlight it.
 		if(@kbRow[0] < 0) @kbRow[0] = @stg_first_row();
@@ -751,7 +743,7 @@ return 1;
 		}
 		// Scrollable viewport. It scrolls by ROW INDEX, not by pixels: the table is
 		// drawn on its own grid below @stgTop, so a row can never be half visible and
-		// the pointer/focus mapping can never drift by a row (that was the bug).
+		// the pointer/focus mapping can never drift by a row.
 		@stgTop = @contentY;
 		@stgBottom = @footerY - 6;
 		@stgViewH = @stgBottom - @stgTop;
@@ -760,8 +752,8 @@ return 1;
 		if(@stgFirst < 0) @stgFirst = 0;
 		// Largest allowed first row: walk BACKWARDS from the last row accumulating
 		// real heights until a screenful fits - that is the point past which the
-		// band would show empty space. (The old "N - fit" moved with the current
-		// first row, so late in the list it stopped limiting anything.)
+		// band would show empty space. (A plain "N - fit" moves with the current
+		// first row and stops limiting anything late in the list.)
 		@stgMaxFirst = global.__ONLINE_stgN - 1;
 		@stgAccum = 0;
 		@stgBI = global.__ONLINE_stgN - 1;
@@ -776,8 +768,8 @@ return 1;
 			@stgBI -= 1;
 		}
 		if(@stgMaxFirst < 0) @stgMaxFirst = 0;
-		// CLAMP FIRST, then fit: the previous order fitted against an out-of-range
-		// first row and drew a single row for one frame (the flicker at the bottom).
+		// CLAMP FIRST, then fit: fitting against an out-of-range first row draws
+		// a single row for one frame (the flicker at the bottom).
 		if(@stgFirst > @stgMaxFirst) @stgFirst = @stgMaxFirst;
 		if(@stgFirst < 0) @stgFirst = 0;
 		if(@kbFocus == 1 && @stgNavKey == 1){
@@ -812,10 +804,10 @@ return 1;
 				@stgSbDrag = false;
 			}
 		}
-		// ONE grid: the table stores a y per row (headers 18px, rows 24px), so both
-		// drawing and hit testing shift those values by this single offset. The
-		// previous version accumulated its own uniform grid and drifted from it -
-		// that is what made clicks and the highlight land on the wrong row.
+		// ONE grid: the table stores a y per row (headers are shorter), so both
+		// drawing and hit testing shift those values by this single offset - a
+		// second accumulated grid drifts and lands clicks/highlight on the wrong
+		// row.
 		@stgYOff = global.__ONLINE_stgY[@stgFirst] - (@stgTop + 2);
 		@rowHover = @stg_hit_row_view(@mx, @my, @stgYOff);
 		@rowI = 0;
@@ -823,8 +815,8 @@ return 1;
 			@rowY = global.__ONLINE_stgY[@rowI] - @stgYOff;
 			@rowVis = true;
 			if(@rowI < @stgFirst || @rowI >= @stgFirst + @stgFit) @rowVis = false;
-			// real height (headers are shorter): the uniform stgRowH check used to
-			// clip a header that actually fit the band
+			// real height (headers are shorter): a uniform stgRowH check would
+			// clip a header that actually fits the band
 			@rowH = global.__ONLINE_stgRowH;
 			if(@rowI + 1 < global.__ONLINE_stgN) @rowH = global.__ONLINE_stgY[@rowI + 1] - global.__ONLINE_stgY[@rowI];
 			if(@rowY + @rowH > @stgBottom) @rowVis = false;
@@ -975,9 +967,8 @@ return 1;
 			}
 			@rowI += 1;
 		}
-		// side scrollbar (track + thumb) instead of the old "more" markers.
-		// Geometry was computed above the row loop (a drag moves @stgFirst there);
-		// the thumb brightens while dragged.
+		// side scrollbar (track + thumb). Geometry was computed above the row
+		// loop (a drag moves @stgFirst there); the thumb brightens while dragged.
 		if(@sbShow){
 			draw_set_color(make_color_rgb(50, 50, 58));
 			draw_rectangle(@sbX, @stgTop + 2, @sbX + 5, @stgBottom, false);
@@ -994,8 +985,8 @@ return 1;
 		// below the last row
 		// HOVER PREVIEWS, it does not select: the detail column and the footer
 		// follow the pointer, while the amber cursor stays where the keyboard or
-		// the last click put it. (Hover used to move the cursor itself - a parked
-		// mouse then fought the arrow keys every frame.)
+		// the last click put it (hover-driven cursor moves make a parked mouse
+		// fight the arrow keys every frame).
 		@stgPrevRow = @kbRow[0];
 		if(@rowHover >= 0){
 			@stgPrevK = global.__ONLINE_stgKind[@rowHover];
@@ -1026,7 +1017,7 @@ if(_r == "" || _r == "<undefined>") return "?";
 return _r;
 
 ///// script @save_age_text
-// Relative age of a save, exactly as the old panel computed it.
+// Relative age of a save (the classic panel's thresholds).
 // args: index -> text
 var _mins;
 if(@saveHistTime[argument0] <= 0) return "?";
@@ -1038,9 +1029,9 @@ if(_mins < 10080) return @str_fmt(@L(global.__ONLINE_LK_AGE_DAY, "%1d"), round(_
 return @str_fmt(@L(global.__ONLINE_LK_AGE_DATE, "%1/%2"), date_get_month(@saveHistTime[argument0]), date_get_day(@saveHistTime[argument0]), 0);
 
 ///// script @stg_build_saves
-// Row table for the Saves tab, using the same table the Settings tab uses (the
-// list scrolls, so the old paging buttons are gone). Save rows carry their index
-// in @stgArg so the dispatcher and the detail pane can read the real fields.
+// Row table for the Saves tab, using the same table the Settings tab uses.
+// Save rows carry their index in @stgArg so the dispatcher and the detail pane
+// can read the real fields.
 // args: contentY -> 0
 var _y, _i, _n, _lbl, _tail, _pfx;
 global.__ONLINE_stgN = 0;
@@ -1060,8 +1051,8 @@ while(_i >= 0){
     if(@saveHistFav[_i]) _pfx = "* ";
     _lbl = _pfx + @stg_fit_text(@stg_room_name(_i), @colW - 32 - 56 - @stg_text_width(_tail) - @stg_text_width(_pfx)) + _tail;
     _n += 1;
-    // the hit zone is stgX..stgCX+stgCW+8 - a 0-width control made only the
-    // first ~90px of every save row clickable
+    // the hit zone is stgX..stgCX+stgCW+8: a 0-width control would make only
+    // the first ~90px of every save row clickable
     @stg_row_add(6, 20, _lbl, @spX + 16, _y, @colW - 32, 0, @spX + 16);
     global.__ONLINE_stgArg[global.__ONLINE_stgN - 1] = _i;
     _y += global.__ONLINE_stgRowH;
@@ -1179,7 +1170,7 @@ return 0;
 
 ///// script @stg_keys_meta
 // The 11 rebindable actions: labels and the world variables they write.
-// (Rebuilt per call, exactly like the old hand layout did per frame.)
+// (Rebuilt per call.)
 // args: none -> 0
 @kbLabels[0] = @L(global.__ONLINE_LK_KEYS_VISIBILITY, "Visibility");   @kbKeys[0] = @keyVis;
 @kbLabels[1] = @L(global.__ONLINE_LK_KEYS_TOGGLE_SAVE, "Toggle Save");  @kbKeys[1] = @keySave;
@@ -1194,7 +1185,7 @@ return 0;
 return 0;
 
 ///// script @stg_key_cap
-// Display text for a key code (the old panel's exact rules).
+// Display text for a key code (the classic panel's rules).
 // args: keycode -> text
 var _k;
 _k = argument0;
@@ -1226,7 +1217,7 @@ return 0;
 // Row table for the Sync tab: the enable toggle + one entry per configured
 // global. Fields verified at worldCreate (syncEnabled / syncEntryCount /
 // syncName / syncCount; syncSlotCount computed at ini load). The list scrolls,
-// so all 16 entries show - the old hand layout hard-capped at 10.
+// so all 16 entries show.
 // args: contentY -> 0
 var _y, _i, _ctlX;
 global.__ONLINE_stgN = 0;
@@ -1345,8 +1336,8 @@ draw_set_color(c_white);
 return 0;
 
 ///// script @stg_build_skins
-// Row table for the Skins tab: one entry per installed skin (the list scrolls,
-// so the old 12-per-page pager is gone), then the manage rows. Fields come from
+// Row table for the Skins tab: one entry per installed skin (the list
+// scrolls), then the manage rows. Fields come from
 // skinLib's scan (skinName/skinMaker/skinSource/skinHas/skinFrames; see DESIGN
 // 9.4). The preview lives in the detail pane.
 // args: contentY -> 0
@@ -1383,8 +1374,7 @@ if(@skinVisCount == 0){
   @stg_row_add(2, 0, @L(global.__ONLINE_LK_EMPTY_NO_MATCHES, "(no matches)"), @spX + 16, _y, @colW - 32, 0, @spX + 16); _y += global.__ONLINE_stgRowH;
 }
 // parse only what the viewport can show (plus a small margin): parsing every
-// entry on the first visit was a visible ~1s hitch on big packs - the old
-// pager parsed just its page per frame, this is the same amortisation
+// entry on the first visit is a visible ~1s hitch on big packs
 @skParseTo = @stgFirst + @stgFit + 2;
 if(@skParseTo > @skinVisCount) @skParseTo = @skinVisCount;
 for(@skPI = max(0, @stgFirst - 2); @skPI < @skParseTo; @skPI += 1) @skin_parse(@skPI);
@@ -1652,8 +1642,8 @@ return @L(global.__ONLINE_LK_VAL_OFF, "OFF");
 
 ///// script @stg_row_on
 // Logic ON-state of a toggle row (kind 4), read from the underlying setting -
-// never from the display string: the pill/card colours used to compare the
-// displayed text against "ON", which breaks the moment the text is translated.
+// never from the display string: a translated "ON" must not change the colour
+// logic.
 // Covers every kind-4 row the builders register (acts 3,4,6,9,21,32,53,56,60,61).
 // args: row -> 1/0
 var _a;
@@ -1917,7 +1907,7 @@ if(_a == 58){
 }
 if(_a == 54) return 0;   // view-only entry
 if(_a == 52){
-  // the default set (the old Reset Keys button's exact values)
+  // the default set (the classic Reset Keys values)
   @keyVis = 86; @keySave = 84; @keySpectate = 89; @keyChatLog = 85; @keySettings = 79;
   @keyPlayerList = 76; @keyChat = 32; @keyPing = 72; @keyFastLoad = 70; @keyCanvas = 78;
   @keybindEditing = -1;
@@ -2074,7 +2064,7 @@ return 0;
 // cannot fix a wrong encoding).
 // Returns the input in the engine's native string form (GBK bytes on GM8.0,
 // UTF-8 elsewhere) - the GM8.1+ wd path converts inside, so callers must NOT
-// wrap this in __ONLINE_ansi_to_utf8 (that was the old per-site pattern).
+// wrap this in __ONLINE_ansi_to_utf8.
 // args: title, prompt, default -> text
 #if STUDIO
 return get_string(argument1, argument2);

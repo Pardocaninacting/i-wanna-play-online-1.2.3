@@ -862,8 +862,8 @@ return 0;
 ///// script @note_atlas_load
 // Loads the built-in icon atlas (iwponotes/icons.png, one 256x128 frame as an
 // 8x4 grid of 32x32 cells = iconId 16-47). The sprite id is registered with
-// the skin bookkeeper so a game_restart frees it exactly (S1 lesson: no blind
-// range sweeps). Cells draw via draw_sprite_part_ext. A missing/invalid atlas
+// the skin bookkeeper so a game_restart frees it exactly (S1: no blind range
+// sweeps). Cells draw via draw_sprite_part_ext. A missing/invalid atlas
 // falls back to the vector glyphs. Returns the sprite id (or -1).
 // args: none
 if(@noteAtlasSpr >= 0){
@@ -1058,8 +1058,8 @@ if(@showArrows || @spectating){
 		if(@noteHideOthers && @noteSenderArr[@i] != @selfID) continue;
 		@pAge = current_time - @noteT[@i];
 		if(@pAge < 0) @pAge = 0;
-		// every kind shares the emoji's appear-stay-disappear timing (maintainer
-		// decision: the per-kind 15s/20s variants were inconsistent, not richer)
+		// every kind shares the emoji's appear-stay-disappear timing (per-kind
+		// 15s/20s variants were dropped: inconsistent, not richer)
 		@pToastMs = @noteToastMs;
 		@pOuterAlpha = 0;
 		@pOuterR = 0;
@@ -1217,7 +1217,7 @@ if(@showArrows || @spectating){
 				@cx = round(@wcx + (@col - 1) * @wstep);
 				@cy = round(@wcy + (@row - 1) * @wstep);
 				// corners/center carry icons; W edge = more icons (active);
-				// N/E/S edges = tools that land in N2/N3 (drawn disabled)
+				// N/E/S edges = tools (drawn disabled)
 				@cellIcon = -1;
 				if(@cellIdx == 0) @cellIcon = 8;
 				if(@cellIdx == 2) @cellIcon = 0;
@@ -1553,8 +1553,8 @@ return @nplN;
 ///// script @note_dup
 // Content-based duplicate check for incoming notes (sync replays can collide
 // with locally persisted notes; sender ids are per-connection and useless
-// across sessions, so we match content: kind + room + anchor + icon/count +
-// sender name). Returns 1 when a live slot already holds an equal note.
+// across sessions, so the match is on content: kind + room + anchor + icon/count
+// + sender name). Returns 1 when a live slot already holds an equal note.
 // args: 0 kind, 1 room, 2 x, 3 y, 4 aux (iconId / point count), 5 sender name
 for(@ndI = 0; @ndI < @noteMax; @ndI += 1){
     if(@noteSeqArr[@ndI] < 0) continue;

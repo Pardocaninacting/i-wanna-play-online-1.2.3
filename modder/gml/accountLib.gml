@@ -2,10 +2,9 @@
 // ============================================================================
 // Account store: name + session key persistence.
 //
-// Why this exists: the startup dialogs (name / password / RACE) used to run on
-// every launch, and nothing was ever written to disk - tempOnline only carries
-// state across room changes and game_restart within one process. Players type
-// the same two values forever; testers have to retype them per client.
+// Why this exists: without a disk store the startup dialogs (name / password)
+// run on every launch - tempOnline only carries state across room changes and
+// game_restart within one process.
 //
 // Tiers (highest first):
 //   P1 environment  IWPO_NAME / IWPO_PASSWORD   (read-only; probes + parallel tests)
@@ -27,7 +26,7 @@
 // so a '#' inside a name is harmless, and the GM8/GMS2.3 backslash-escape
 // semantics stay out of the file format entirely. The '#' -> '\#' escaping is
 // applied where it belongs - when the name is handed to the game (see
-// @account_apply), matching the previous behaviour.
+// @account_apply).
 //
 // The session key is NOT a credential: the client appends it to the game id and
 // the server uses that as the session/save partition (players sharing a key meet
@@ -60,11 +59,10 @@ return _d;
 // Resolves the two file locations into globals. Safe to call repeatedly.
 //
 // The global (P3) root is engine dependent. GMS2 sandboxes file access: a store
-// under %APPDATA% is outside the sandbox, so file_exists() returns false there and
-// the account silently looked "missing" on every launch (the game asked for a name
-// again even though %APPDATA%\iwpo\account.ini existed). On those engines the
-// global store lives in the game's own save area (game_save_id), which is inside
-// the sandbox. GM8.0/8.1/GMS1 have no sandbox, so they keep %APPDATA%.
+// under %APPDATA% is outside the sandbox, so file_exists() returns false there.
+// On those engines the global store lives in the game's own save area
+// (game_save_id), which is inside the sandbox. GM8.0/8.1/GMS1 have no sandbox,
+// so they keep %APPDATA%.
 // args: none -> 0
 var _appdata, _save;
 global.__ONLINE_accGlobalDir = "";
@@ -239,7 +237,7 @@ return @account_ini_parse(_txt, argument1);
 // offer "Store in: This folder" as a fallback)
 var _path, _f, _store, _tag, _out;
 // self-sufficient: never depend on @account_load having run (a tempOnline
-// restore skips it, and an undefined path global used to abort the save).
+// restore skips it, and an undefined path global aborts the save).
 @account_paths();
 if(global.__ONLINE_accStore == 1) _path = global.__ONLINE_accLocalPath; else _path = global.__ONLINE_accGlobalPath;
 // Compose the file text once; the writer differs per engine.
@@ -249,10 +247,8 @@ if(global.__ONLINE_accStore == 1) _path = global.__ONLINE_accLocalPath; else _pa
 // understands #if / #if not / #endif, so an #else would survive into the game
 // code and fail to compile.
 // Both engines write this file in the system ANSI codepage (GM8.0 natively, GMS
-// through the native API), so there is one tag for both. Historically it was
-// chosen per engine (name_gbk on GM8.0, name_utf8 elsewhere), which described the
-// byte encoding - that is now uniform, and old files with name_utf8 still read
-// because the parser accepts either tag.
+// through the native API), so there is one tag for both; old files tagged
+// name_utf8 still read because the parser accepts either tag.
 _tag = "_gbk";
 if(global.__ONLINE_accStore == 1) _store = "local"; else _store = "global";
 _out = "[account]" + chr(10);
@@ -370,7 +366,7 @@ return 0;
 // IMPORTANT: @name/@password/@selfGameID/@hasPassword/@accBaseGameID are NOT
 // declared globalvar here. In GameMaker 8 globalvar is a game-wide binding, not
 // a script-local one: declaring them would hijack the world instance's own
-// variables for the rest of the game (the NAME packet then went out with an
+// variables for the rest of the game (the NAME packet then goes out with an
 // empty game id). A script without the declaration writes the CALLER's
 // variables, which is exactly the intent.
 // args: none -> 0
@@ -385,7 +381,7 @@ if(string_length(string(@password)) > 0) @hasPassword = 1;
 return 0;
 
 ///// script @account_clean
-// Trims, escapes and truncates a name exactly like the old startup dialog did.
+// Trims, escapes and truncates a name to the startup dialog's rules.
 // args: raw name -> cleaned name (<= 20 chars, '#' escaped)
 var _n;
 _n = @account_trim(argument0);

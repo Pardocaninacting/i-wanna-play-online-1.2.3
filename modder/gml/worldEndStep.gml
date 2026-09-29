@@ -1040,11 +1040,11 @@ if(@mustQuit){
 	game_end();
 	exit;
 }
-// NOTE: there used to be an `if(@reconnecting) exit;` here that froze every UI
-// hotkey while the link was down - offline players could not even open the
-// settings menu to see WHY nothing worked. Removed: every send below is gated
-// on @connected or queued-and-flushed by the socket layer, and the local UI
-// (menu, notes, canvas, keybinds) must stay usable while offline.
+// NOTE: no `if(@reconnecting) exit;` here - it froze every UI hotkey while
+// the link was down (offline players could not even open the settings menu).
+// Every send below is gated on @connected or queued-and-flushed by the socket
+// layer, and the local UI (menu, notes, canvas, keybinds) must stay usable
+// while offline.
 // SKINS: (re)announce the local selection once connected - the dirty flag is
 // set by skin select/clear, the boot-time restore and the reconnect path.
 if(@skinNetDirty){
@@ -1254,7 +1254,7 @@ if(@exists){
 	@X = @p.x;
 	@Y = @p.y;
 #if CUSTOM_WORLD_OBJ
-	// With a custom world object we move it to the player's position to hopefully avoid most cases where certain camera code would disable this instance (TheBiob heritage).
+	// With a custom world object, move it to the player's position: some camera code would otherwise disable this instance (TheBiob heritage).
 	x = @X;
 	y = @Y;
 #endif
@@ -1360,7 +1360,7 @@ if(@exists){
 		}
 	}
 }
-// Chat was hoisted out of if(@exists): the message must reach the log and
+// Chat lives outside if(@exists): the message must reach the log and
 // the server even when no player object exists (spectating, custom obj,
 // between rooms); only the floating bubble needs the instance.
 if(!@loadHotkeyConsumed && keyboard_check_pressed(@keyChat) && !@settingsOpen && !@noteNoClick){
@@ -2390,7 +2390,7 @@ if(@visChanged){
 	ini_write_real("config", "vis", @vis);
 	ini_close();
 	// V/T/N are hotkey toggles: their state changes still broadcast through
-	// playerSaved (menu-only options no longer do)
+	// playerSaved (menu-only options do not)
 	#if GMS2
 		@a = instance_create_depth(0, 0, @playerSavedDepth, @playerSaved);
 	#endif
@@ -2548,7 +2548,6 @@ if(@saveHistApply >= 0){
 	// longer exists, must not walk into the save arrays - a build without saves never
 	// created them on some engines, and GMS aborts on indexing a non-array.
 	if(@shIdx < 0 || @shIdx >= @saveHistCount) @shIdx = -1;
-	// The index alone is not enough: a stale value (or a save row that no longer
 	@saveHistPendingGrav = @saveHistGrav[@shIdx];
 	@saveHistPendingX = @saveHistX[@shIdx];
 	@saveHistPendingY = @saveHistY[@shIdx];
@@ -2625,13 +2624,12 @@ if(@saveHistClearFiles){
 		}
 	}
 }
-// DEFERRED SAVE WRITE (frame-sliced). A large history used to be thinned and
-// fully serialized in ONE frame when the dirty timer expired: with up to 500
-// entries that is thousands of GML/DLL calls in a single step - the
-// ~half-second stall that followed every received "xxx saved!" once the
-// history grew. The work now advances a few entries per frame: thinning
-// first (only when over the cap, one excess shift per frame), then
-// serialization into the dedicated @savesBuffer, then one file write.
+// DEFERRED SAVE WRITE (frame-sliced). The work advances a few entries per
+// frame: thinning first (only when over the cap, one excess shift per frame),
+// then serialization into the dedicated @savesBuffer, then one file write.
+// A single-frame pass over up to 500 entries is thousands of GML/DLL calls in
+// one step - a ~half-second stall after every received "xxx saved!" once the
+// history grows.
 // The thin scan is NON-destructive: it only records kept positions into
 // @shKeepIdx[] and the in-place compaction happens once when the scan
 // completes, so a game_restart/Game End takeover or the history UI never
@@ -2973,9 +2971,8 @@ if(@settingsOpen && @keybindEditing < 0){
 			@kbAct = 1;
 		}
 	}
-	// skins: F = find (the Ctrl+F gesture - saves already uses F for favourite,
-	// so the same key feels at home on the other list tab). Works from any focus
-	// position: the dialog does not need the list cursor.
+	// skins: F = find (the Ctrl+F gesture; saves already uses F for favourite).
+	// Works from any focus position: the dialog does not need the list cursor.
 	if(@kbDelay <= 0 && @kbAct == 0 && @settingsTab == 5 && keyboard_check_pressed(70)){
 		for(@skFI = 0; @skFI < global.__ONLINE_stgN; @skFI += 1){
 			if(global.__ONLINE_stgAct[@skFI] == 58) break;
@@ -2992,12 +2989,12 @@ if(@settingsOpen && @keybindEditing < 0){
 		// hold-to-accelerate counters for the nav blocks below (reset on release)
 		if(keyboard_check(vk_up)) @kbHoldUp += 1; else @kbHoldUp = 0;
 		if(keyboard_check(vk_down)) @kbHoldDn += 1; else @kbHoldDn = 0;
-		// hover no longer moves the cursor from here: it previews in the draw
+		// hover does not move the cursor from here: it previews in the draw
 		// (detail + footer follow the pointer), selection happens on click
-		// (@stg_click_row). A parked mouse used to re-pin @kbRow every frame
-		// and fight the arrow keys.
+		// (@stg_click_row) - a parked mouse would otherwise re-pin @kbRow
+		// every frame and fight the arrow keys.
 	}
-	// One nav block for every tab (they are all table-driven now): the shared
+	// One nav block for every tab (they are all table-driven): the shared
 	// row table, auto-repeat with acceleration, and the per-tab extra keys below.
 	if(@kbDelay <= 0 && @kbAct == 0 && @kbFocus == 1){
 		@stg_build_tab(@settingsTab);
@@ -3032,8 +3029,7 @@ if(@settingsOpen && @keybindEditing < 0){
 		}
 		if(keyboard_check_pressed(vk_left) || keyboard_check_pressed(vk_right)){
 			// only value rows react to Left/Right (toggle/select); on anything else
-			// an arrow key must not fire the row's action (stg_act would). This
-			// branch lived in the old tab-0 block and was lost in the nav collapse.
+			// an arrow key must not fire the row's action (stg_act would).
 			if(keyboard_check_pressed(vk_right)) @kbDir = 1; else @kbDir = -1;
 			// skins rows are entries (kind 6) but Left/Right cycles their preview
 			if(global.__ONLINE_stgKind[@kbRow[0]] == 3 || global.__ONLINE_stgKind[@kbRow[0]] == 4 || global.__ONLINE_stgAct[@kbRow[0]] == 55){
@@ -3097,8 +3093,8 @@ if(@settingsOpen && @keybindEditing < 0){
 	}
 
 	// The 6-frame lockout debounces one-shot actions. Nav repeat ticks are
-	// exempt: their cadence is kb_repeat's own (that lockout is what made
-	// long lists crawl at ~7 rows/s).
+	// exempt: their cadence is kb_repeat's own (applying the lockout to them
+	// caps nav at ~7 rows/s).
 	if(@kbAct && @kbNavTick == 0){
 		@kbDelay = 6;
 	}

@@ -818,10 +818,8 @@ if file_exists(@savesPath) {
 }
 // QoL: read the account store UNCONDITIONALLY, before the #if TEMPFILE
 // region: engines without tempOnline strip that whole region, and a
-// tempOnline restore (game_restart) takes the "if(!@restoredFromTemp)"
-// branch below - placing this call after the region's #endif still left it
-// inside that runtime block, so every restart wiped the menu back to
-// "(not set)" while the file on disk kept the values.
+// tempOnline restore (game_restart) skips everything after the region's
+// #endif (it sits inside the "if(!@restoredFromTemp)" runtime block).
 @accLoaded = @account_load();
 
 #if TEMPFILE

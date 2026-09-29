@@ -63,7 +63,7 @@ const readToolSettings = async function(): Promise<ToolSettings> {
 				case "tcp_port": result.tcpPort = Number(val); break;
 				case "udp_port": result.udpPort = Number(val); break;
 				// dead parameter (only logged, never changed behaviour); kept out of the
-				// config like the extension_packages bisection switches above.
+				// config like the extension_packages bisection switches below.
 				case "force_external_dll":
 					console.log(`iwpo-settings.ini: [settings] ${key} is retired and ignored (no effect)`);
 					break;
@@ -174,7 +174,7 @@ const main = async function(): Promise<string> {
 	}
 	// Unity games are not supported: their architecture differs fundamentally from
 	// GameMaker, and conversion would silently produce a broken result (TheBiob b22
-	// implemented full Unity support; we deliberately only detect and refuse).
+	// implemented full Unity support; IWPO deliberately only detects and refuses).
 	if(await fs.exists(path.join(path.dirname(input), "UnityPlayer.dll"))){
 		throw new Error("Unity engine detected (UnityPlayer.dll found next to the game). Unity games are not supported by IWPO.");
 	}

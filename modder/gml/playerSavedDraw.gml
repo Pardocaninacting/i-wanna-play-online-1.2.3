@@ -58,7 +58,7 @@ d3d_set_hidden(false);
 @text = "";
 // live states only: -2 = custom message in @name, -1 = "<name> saved!",
 // 0-2 = player visual mode, 3/4 = online save off/on. (5-10 were smooth/
-// indicator/camera announcements whose writers were removed with the hotkeys.)
+// indicator/camera announcements, retired with the hotkeys.)
 if(@state == 4) @text = @L(global.__ONLINE_LK_NOTIFY_SAVE_ON, "Online save enabled!");
 else if(@state == 3) @text = @L(global.__ONLINE_LK_NOTIFY_SAVE_OFF, "Online save disabled!");
 else if(@state >= 0) @text = @str_fmt(@L(global.__ONLINE_LK_NOTIFY_VISUAL_MODE, "player visual mode: %1"), @state, 0, 0);
