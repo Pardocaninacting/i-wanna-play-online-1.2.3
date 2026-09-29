@@ -17,3 +17,6 @@
 # UndertaleModTool (git submodule)
 !.gitmodules
 !UndertaleModTool
+
+# Local dev workspace (never shipped)
+_workspace/

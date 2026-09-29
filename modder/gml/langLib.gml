@@ -1,6 +1,6 @@
 /// ONLINE
 // ============================================================================
-// langLib.gml - UI localization (PROPOSAL_i18n.md v3).
+// langLib.gml - UI localization (design note lives in the dev workspace).
 //
 //   global.__ONLINE_Lang[i]     string table; "" means "no translation" and @L
 //                               falls back to the English literal at the call

@@ -97,7 +97,7 @@ const build = async function(): Promise<string> {
 	await fs.writeFile(readmeFilename, readme.join("\r\n"), "utf8");
 	await fs.writeFile(path.join(unpackedDir, "iwpo-settings.ini"), [
 		"[settings]",
-		"server=212.64.24.80",
+		"server=123.iwannaplay.online",
 		"; inject_into_step=1",
 		"",
 		"[iwpo]",

@@ -1703,6 +1703,7 @@ static class Program
         foreach (var templateName in new[] { "md5", "skinLib", "bulletShare", "notesLib", "accountLib", "settingsLib", "langLib" })
         {
             var rendered = RenderSkinTemplate(activeFlags, templateName);
+            var count = 0;
             foreach (var section in SplitMarkedScripts(rendered, templateName))
             {
                 var name = section.Key;
@@ -1722,8 +1723,9 @@ static class Program
                 if (Data.IsVersionAtLeast(2, 3))
                     body = $"function {name}() {{\r\n{body}\r\n}}";
                 importGroup.QueueReplace(code, body);
-                Console.WriteLine($"Skin script: {name}");
+                count++;
             }
+            Console.WriteLine($"Skin scripts: {templateName}.gml -> {count}");
         }
     }
 

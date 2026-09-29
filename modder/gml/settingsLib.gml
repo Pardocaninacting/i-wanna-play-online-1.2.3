@@ -14,7 +14,7 @@
 //   global.__ONLINE_stgX[i]     label x, global.__ONLINE_stgCX[i]/global.__ONLINE_stgCW[i] control x + width
 //   global.__ONLINE_stgY[i]     row y (top)
 //
-// Layout (master-detail; menu_mock/DESIGN.md is the design source):
+// Layout (master-detail; the HTML design mock lives in the dev workspace):
 //
 //   +------------------------------------------------------------+
 //   | [Settings][Saves][Rating][Keys][Sync][Skins]               |

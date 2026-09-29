@@ -209,4 +209,6 @@ const main = async function(): Promise<string> {
 main()
 .then(console.log)
 .catch(err => console.error(err.toString()))
+// update notice after the outcome line, before the pause; it never fails the run
+.then(() => Utils.checkForUpdate())
 .then(() => Utils.getString("Press enter to quit\n"))

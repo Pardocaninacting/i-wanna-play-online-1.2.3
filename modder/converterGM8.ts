@@ -1770,7 +1770,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 				skinScript.source = section.code;
 				scripts.push(skinScript);
 			}
-			console.log(`[skins] ${packFile}.gml -> ${sections.length} script(s): ${sections.map(section => section.name).join(", ")}`);
+			console.log(`[skins] ${packFile}.gml -> ${sections.length} script(s)`);
 		}
 	}
 	if(skinsEnabled){
@@ -2321,7 +2321,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	// i18n: language files ship next to the exe (lang/<code>.ini, UTF-8). GM8.0
 	// additionally gets a GBK byte copy per file - its strings are byte strings
 	// and the CJK atlas/FoxWriting are keyed by GBK bytes, so the copy is GBK on
-	// every machine, not the player's codepage (PROPOSAL_i18n.md section 3.3).
+	// every machine, not the player's codepage (i18n design, encoding section).
 	{
 		const langSrc: string = path.join(__dirname, "lang");
 		if(await fs.pathExists(langSrc)){

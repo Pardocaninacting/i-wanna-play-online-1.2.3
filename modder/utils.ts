@@ -5,6 +5,7 @@ import rimraf from "rimraf"
 import process from "process"
 import fs from "fs"
 import path from "path"
+import https from "https"
 
 export interface Ports {
 	tcp: number,
@@ -119,5 +120,33 @@ export class Utils {
 	}
 	public static getVersion(): string {
 		return require("./package.json").version;
+	}
+	// Update check, run between "Success!" and the enter prompt: fetch the
+	// version marker hosted on the site and say so when it differs from the
+	// local build. Any failure (offline, DNS, timeout) is silent - converting
+	// the game is the point, the notice is a courtesy.
+	public static checkForUpdate(): Promise<void> {
+		return new Promise(function(resolve): void {
+			try {
+				const req = https.get("https://iwannaplay.online/version.txt", { timeout: 4000 }, function(res) {
+					if(res.statusCode !== 200){ res.resume(); resolve(); return; }
+					let body = "";
+					res.setEncoding("utf8");
+					res.on("data", function(chunk: string){ body += chunk; });
+					res.on("end", function(){
+						const latest = body.trim();
+						const local = Utils.getVersion();
+						if(latest !== "" && latest.length < 40 && latest !== local)
+							console.log(`A newer version is available: ${latest} (you have ${local}) - https://iwannaplay.online`);
+						resolve();
+					});
+					res.on("error", function(){ resolve(); });
+				});
+				req.on("timeout", function(){ req.destroy(); resolve(); });
+				req.on("error", function(){ resolve(); });
+			} catch {
+				resolve();
+			}
+		});
 	}
 }
