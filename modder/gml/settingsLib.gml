@@ -1606,7 +1606,6 @@ if(_a == 62){
   return @mlNames[@menuModePref];
 }
 if(_a == 70){
-  // the active file's [meta] name when there is one ("简体中文"), else the code
   if(global.__ONLINE_lang == "en") return "English";
   if(global.__ONLINE_LangName != "") return global.__ONLINE_LangName;
   return global.__ONLINE_lang;
@@ -2065,10 +2064,14 @@ return 0;
 
 ///// script @dlg_input_box
 // Modal text input, one call form for every engine. The wd dialog's DLL is
-// ANSI-only and truncates CJK prompts on every GM8 flavour (measured: the tail
-// glyphs vanish; pure ASCII is fine), so a non-ASCII title or prompt falls back
-// to the engine's own get_string - its standard edit control renders GBK on
-// GM8.0 and UTF-8 on GM8.1+ and takes IME input either way.
+// ANSI-only and mangles the tail of CJK prompt text on GM8.0 (measured on
+// fish: it trims trailing ASCII spaces, strips a trailing fullwidth colon and
+// one more glyph besides). Padding with ASCII spaces can never work - they are
+// trimmed first - so the prompt is padded with two FULLWIDTH spaces (GBK A1A1,
+// via chr(161)): they survive the trim, absorb the loss, and render blank.
+// On GM8.1+ the strings are UTF-8 while the DLL is ANSI, so a non-ASCII title
+// or prompt there falls back to the engine's own get_string instead (padding
+// cannot fix a wrong encoding).
 // Returns the input in the engine's native string form (GBK bytes on GM8.0,
 // UTF-8 elsewhere) - the GM8.1+ wd path converts inside, so callers must NOT
 // wrap this in __ONLINE_ansi_to_utf8 (that was the old per-site pattern).
@@ -2077,27 +2080,37 @@ return 0;
 return get_string(argument1, argument2);
 #endif
 #if not STUDIO
-if(!@stg_is_ascii(argument0) || !@stg_is_ascii(argument1)) return get_string(argument1, argument2);
 #if GM80
-return wd_input_box(argument0, argument1, argument2);
+// The wd DLL trims trailing ASCII spaces and then eats the prompt's tail
+// (glyphs, fullwidth colon included), so SPACE padding can never work - it is
+// trimmed first. Two fullwidth spaces (GBK A1A1) survive the trim, get eaten
+// instead, and render as blank either way. Title is not mangled - do not pad it.
+return wd_input_box(argument0, argument1 + chr(161) + chr(161), argument2);
 #endif
 #if not GM80
+if(!@stg_is_ascii(argument0) || !@stg_is_ascii(argument1)) return get_string(argument1, argument2);
 return __ONLINE_ansi_to_utf8(wd_input_box(argument0, argument1, argument2));
 #endif
 #endif
 
 ///// script @dlg_message
-// Modal message box, same CJK rule as @dlg_input_box.
+// Modal message box, same CJK rule as @dlg_input_box (GM8.0: two trailing
+// spaces absorb the DLL's tail-glyph loss; GM8.1+: get_string for non-ASCII).
 // args: text -> 0
 #if STUDIO
 show_message(argument0);
 #endif
 #if not STUDIO
+#if GM80
+wd_message_simple(argument0 + chr(161) + chr(161));   // see @dlg_input_box
+#endif
+#if not GM80
 if(!@stg_is_ascii(argument0)){
   show_message(argument0);
   return 0;
 }
 wd_message_simple(argument0);
+#endif
 #endif
 return 0;
 
