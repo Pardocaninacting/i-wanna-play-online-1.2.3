@@ -84,6 +84,10 @@ const build = async function(): Promise<string> {
 		await fs.mkdir(path.join(dataDir, "gml")),
 		await Utils.copyDir(path.join(__dirname, "gml"), path.join(dataDir, "gml")),
 		await Utils.copyDir(path.join(__dirname, "lib"), path.join(dataDir, "lib")),
+		// i18n language files ride next to gml/ inside data/ (the converter deploys
+		// them beside the game); the skin library is top-level so players can find it
+		await Utils.copyDir(path.join(__dirname, "lang"), path.join(dataDir, "lang")),
+		await Utils.copyDir(path.join(__dirname, "iwposkins"), path.join(unpackedDir, "iwposkins")),
 		// Per-game define overrides (readGameDefines reads ../games/<gameName>.ini).
 		await fs.copy(path.join(__dirname, "games"), path.join(unpackedDir, "games")),
 	]);
@@ -95,7 +99,11 @@ const build = async function(): Promise<string> {
 		"[settings]",
 		"server=212.64.24.80",
 		"; inject_into_step=1",
-		"; no_extension_packages=1",
+		"",
+		"[iwpo]",
+		"; GM8.0 CJK rendering via the built-in bitmap atlas (FoxWriting is",
+		"; unmaintained and crashes on current GPU drivers). Delete to re-enable fw.",
+		"cjk_atlas=1",
 	].join("\n") + "\n", "utf8");
 	console.log("Packing release archive...");
 	await zip(unpackedDir, path.join(buildDir, `iwpo ${Utils.getVersion()}.zip`));

@@ -352,10 +352,10 @@ if(_a == 68) return @L(global.__ONLINE_LK_DESC_TCP, "TCP port for the game traff
 if(_a == 69) return @L(global.__ONLINE_LK_DESC_UDP, "UDP port for the live player positions. Saved and reconnects.");
 if(_a == 66) return @L(global.__ONLINE_LK_DESC_SAVE_HISTORY, "Local shared-save history cap. Older non-favourite entries are dropped past this.");
 if(_a == 67) return @L(global.__ONLINE_LK_DESC_CHAT_HISTORY, "Chat log length in lines.");
-if(_a == 3) return @L(global.__ONLINE_LK_DESC_SAVE, "Shared online saves. The T key toggles this while playing.");
+if(_a == 3) return @L(global.__ONLINE_LK_DESC_SAVE, "Receive shared saves from other players. The T key toggles this while playing.");
 if(_a == 4) return @L(global.__ONLINE_LK_DESC_FAST, "Fast save/load path, for engines that restart the room on load.");
 if(_a == 8) return @L(global.__ONLINE_LK_DESC_PVP, "Player versus player. Bullets stay visible while it is on.");
-if(_a == 9) return @L(global.__ONLINE_LK_DESC_BULLETS, "Share your bullets with the room. Locked on while PVP is enabled.");
+if(_a == 9) return @L(global.__ONLINE_LK_DESC_BULLETS, "Show other players' bullets. Locked on while PVP is enabled.");
 if(_a == 5) return @L(global.__ONLINE_LK_DESC_VISUAL, "How other players are drawn: full, names only, or hidden.");
 if(_a == 6) return @L(global.__ONLINE_LK_DESC_INDICATOR, "Direction indicator above remote players.");
 if(_a == 7) return @L(global.__ONLINE_LK_DESC_SPEC_CAM, "Spectator camera mode.");
@@ -1698,7 +1698,7 @@ if(_a == 69) return @L(global.__ONLINE_LK_HINT_UDP, "UDP port (player positions)
 if(_a == 64) return @L(global.__ONLINE_LK_HINT_SERVER, "Server host. Applies and reconnects.");
 if(_a == 66) return @L(global.__ONLINE_LK_HINT_SAVE_HISTORY, "How many shared saves are kept locally.");
 if(_a == 67) return @L(global.__ONLINE_LK_HINT_CHAT_HISTORY, "How many chat lines are kept.");
-if(_a == 3) return @L(global.__ONLINE_LK_HINT_SAVE, "Shared online saves (T key toggles this in game).");
+if(_a == 3) return @L(global.__ONLINE_LK_HINT_SAVE, "Receive shared saves (T key toggles this in game).");
 if(_a == 4) return @L(global.__ONLINE_LK_HINT_FAST, "Fast save/load path for game_restart engines.");
 if(_a == 5) return @L(global.__ONLINE_LK_HINT_VISUAL, "How other players are drawn: full, names only, or hidden.");
 if(_a == 6) return @L(global.__ONLINE_LK_HINT_INDICATOR, "Show the direction indicator above remote players.");
@@ -1708,7 +1708,7 @@ if(_a == 70) return @L(global.__ONLINE_LK_HINT_LANGUAGE, "UI language. Left/Righ
 if(_a == 60) return @L(global.__ONLINE_LK_HINT_HIDE_OTHERS, "Do not draw other players' notes (yours still show).");
 if(_a == 61) return @L(global.__ONLINE_LK_HINT_HIDE_ALL, "Do not draw any notes at all (sending keeps working).");
 if(_a == 8) return @L(global.__ONLINE_LK_HINT_PVP, "Player versus player mode. Bullets stay visible while it is on.");
-if(_a == 9) return @L(global.__ONLINE_LK_HINT_BULLETS, "Share your bullets with the room (locked on in PVP).");
+if(_a == 9) return @L(global.__ONLINE_LK_HINT_BULLETS, "Show other players' bullets (locked on in PVP).");
 if(_a == 20) return @L(global.__ONLINE_LK_HINT_SAVE_ROW, "Enter applies this save. F favourite, 1-8 hotkey, Del clears.");
 if(_a == 21) return @L(global.__ONLINE_LK_HINT_FAVOURITES, "Show only favourite saves.");
 if(_a == 22) return @L(global.__ONLINE_LK_HINT_CLEAR_SAVES, "Deletes every non-favourite save file.");

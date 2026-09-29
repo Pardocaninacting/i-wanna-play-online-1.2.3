@@ -247,6 +247,12 @@ export const ConverterGMS = async function(input: string, gameName: string, serv
 		// a GM8.0-only concern (converterGM8 writes them there).
 		if(await fs.pathExists(path.join(__dirname, "lang")))
 			await Utils.copyDir(path.join(__dirname, "lang"), path.join(onlineDir, "lang"));
+		// tool-side skin library ships with the game (merge; existing skins kept)
+		const skinsSrc: string = Utils.resolveToolSubdir("iwposkins");
+		if(skinsSrc !== "") await Utils.copyDir(skinsSrc, path.join(onlineDir, "iwposkins"));
+		// DBGHELP.dll: works around the GMS runner frame pacing stalls
+		if(await fs.pathExists(path.join(__dirname, "lib", "DBGHELP.dll")))
+			await fs.copyFile(path.join(__dirname, "lib", "DBGHELP.dll"), path.join(onlineDir, "DBGHELP.dll"));
 		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1\nskin=\nskinAutoDL=1` + langSuffix;
 		await fs.writeFile(path.join(onlineDir, CONFIG_FILENAME), configContent, "utf8");
 		if(customSlot) await WriteRuntimeSyncDefaults(onlineDir, customSlot);
@@ -259,6 +265,10 @@ export const ConverterGMS = async function(input: string, gameName: string, serv
 		// i18n: see the packed branch above
 		if(await fs.pathExists(path.join(__dirname, "lang")))
 			await Utils.copyDir(path.join(__dirname, "lang"), path.join(path.dirname(input), "lang"));
+		const skinsSrc2: string = Utils.resolveToolSubdir("iwposkins");
+		if(skinsSrc2 !== "") await Utils.copyDir(skinsSrc2, path.join(path.dirname(input), "iwposkins"));
+		if(await fs.pathExists(path.join(__dirname, "lib", "DBGHELP.dll")))
+			await fs.copyFile(path.join(__dirname, "lib", "DBGHELP.dll"), path.join(path.dirname(input), "DBGHELP.dll"));
 		const configContent: string = `[config]\nserver=${server}\nkey_chat=32\nkey_visibility=86\nkey_save=84\nkey_playerlist=76\nkey_settings=79\nkey_fastload=70\nteam=0\nlerp=1\nfast_load=1\nskin=\nskinAutoDL=1` + langSuffix;
 		await fs.writeFile(path.join(path.dirname(input), CONFIG_FILENAME), configContent, "utf8");
 		if(customSlot) await WriteRuntimeSyncDefaults(path.dirname(input), customSlot);

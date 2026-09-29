@@ -62,9 +62,19 @@ const readToolSettings = async function(): Promise<ToolSettings> {
 				case "server": result.server = val; break;
 				case "tcp_port": result.tcpPort = Number(val); break;
 				case "udp_port": result.udpPort = Number(val); break;
-				case "force_external_dll": result.forceExternalDll = val === "1" || val.toLowerCase() === "true"; break;
-				case "no_extension_packages": result.noExtensionPackages = val === "1" || val.toLowerCase() === "true"; break;
-				case "extension_packages": result.extensionPackages = val.toLowerCase(); break;
+				// dead parameter (only logged, never changed behaviour); kept out of the
+				// config like the extension_packages bisection switches above.
+				case "force_external_dll":
+					console.log(`iwpo-settings.ini: [settings] ${key} is retired and ignored (no effect)`);
+					break;
+				// extension_packages / no_extension_packages are deliberately NOT accepted
+				// here any more: they are bisection switches, and a persisted global wd_only
+				// once silently killed all CJK rendering for a player. Use the per-game ini
+				// (games/<game>.ini [iwpo] extension_packages=...) or the env var.
+				case "no_extension_packages":
+				case "extension_packages":
+					console.log(`iwpo-settings.ini: [settings] ${key} is ignored (bisection switch; set it per-game in games/<game>.ini [iwpo] instead)`);
+					break;
 				case "inject_into_step": result.injectIntoStep = val === "1" || val.toLowerCase() === "true"; break;
 			}
 		}else if(currentSection === "mod"){

@@ -893,6 +893,10 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		else if(__diag === "none") __extMode = "none";
 	}
 	if(__extLegacyNo) __extMode = "none";
+	// per-game only: games/<name>.ini [iwpo] extension_packages=<mode>. The global
+	// iwpo-settings.ini no longer accepts it (a persisted wd_only once silently
+	// killed CJK rendering everywhere - see DEVNOTES 2026-09-08).
+	if(!__extMode && defines.has("iwpo.extension_packages")) __extMode = (defines.get("iwpo.extension_packages") as string).trim().toLowerCase();
 	if(!__extMode) __extMode = "auto";
 	const __extAll = __extMode === "auto" || __extMode === "all";
 	const wantWD = __extMode !== "none" && (__extAll || __extMode === "wd_only");
@@ -901,6 +905,17 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	if(fishCjkRuntimeBlocked && gameConfig.version === GameVersion.GameMaker80 && wantFW){
 		console.log("Fish-class host detected; using safe GM8.0 stub path.");
 		wantFW = false;
+	}
+	// iwpo.cjk_atlas=1: on GM8.0 skip the FoxWriting extension and render CJK with
+	// the built-in bitmap atlas instead. FoxWriting is unmaintained and now
+	// crashes on current GPU drivers (and on UPX+Antidec hosts), so the packaged
+	// iwpo-settings.ini ships this on by default.
+	if(gameConfig.version === GameVersion.GameMaker80 && wantFW && defines.has("iwpo.cjk_atlas")){
+		const __cjkAtlasDefine: string = (defines.get("iwpo.cjk_atlas") as string).trim().toLowerCase();
+		if(__cjkAtlasDefine === "1" || __cjkAtlasDefine === "true"){
+			console.log("iwpo.cjk_atlas: GM8.0 CJK via the built-in atlas (FoxWriting not injected).");
+			wantFW = false;
+		}
 	}
 	if(!hasWindowsDialogs && wantWD)
 		await addExtension(exe, extensions, "gm_windows_dialog8");
@@ -2322,5 +2337,12 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 				}
 			}
 		}
+	}
+	// Skins: the tool-side library ships with the game (players drop prepared
+	// skins into the packaged tool's iwposkins/ first). Merge semantics (ncp) -
+	// skins already sitting next to the game are kept.
+	{
+		const skinsSrc: string = Utils.resolveToolSubdir("iwposkins");
+		if(skinsSrc !== "") await Utils.copyDir(skinsSrc, path.join(outputDir, "iwposkins"));
 	}
 }

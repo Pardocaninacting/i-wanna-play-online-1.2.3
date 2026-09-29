@@ -3,6 +3,8 @@ import { ncp } from "ncp"
 import readline from "readline"
 import rimraf from "rimraf"
 import process from "process"
+import fs from "fs"
+import path from "path"
 
 export interface Ports {
 	tcp: number,
@@ -91,6 +93,17 @@ export class Utils {
 					resolve();
 			});
 		});
+	}
+	// Resolves a tool-data subdir across the two layouts the converter runs in:
+	// dev (modder/<name>, __dirname = modder/) and packaged (build/iwpo/<name>
+	// at the top level next to iwpo.exe, __dirname = data/). Returns "" when the
+	// subdir exists in neither (the caller then skips the deployment).
+	public static resolveToolSubdir(name: string): string {
+		const dev: string = path.join(__dirname, name);
+		if(fs.existsSync(dev)) return dev;
+		const packaged: string = path.join(__dirname, "..", name);
+		if(fs.existsSync(packaged)) return packaged;
+		return "";
 	}
 	public static getString(message: string): Promise<string> {
 		const rl = readline.createInterface({
