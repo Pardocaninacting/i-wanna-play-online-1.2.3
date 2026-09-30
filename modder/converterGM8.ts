@@ -2,6 +2,7 @@ import fs from "fs-extra"
 import path from "path"
 import zlib from "zlib"
 import { SmartBuffer } from "smart-buffer"
+import crypto from "crypto"
 import { PESection, WindowsIcon, Icon } from "./icon"
 import { GameConfig, GameData, GameVersion } from "./gamedata"
 import { GM80 } from "./gamedata/gm80"
@@ -655,7 +656,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 	exe.readOffset += dllNameLength;
 	const dxDll: Buffer = exe.readBuffer(exe.readUInt32LE());
 	const encryptionStartGM80: number = exe.readOffset;
-	const uniqueKey: string = GM80.decrypt(exe);
+	let uniqueKey: string = GM80.decrypt(exe);
 	const garbageDWords = exe.readUInt32LE();
 	exe.readOffset += garbageDWords*4;
 	exe.writeOffset = exe.readOffset;
@@ -668,6 +669,19 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		exe.readUInt32LE(),
 		exe.readUInt32LE(),
 	];
+	// Games without the anti-decompile garbage block (GM8.1/8.2 builds, some
+	// recompiled GM8.0 exes) all hash it as md5("") - they then SHARE one game
+	// id on the server, mixing rooms and ratings. Fall back to the exe's own
+	// game GUID, which is stable per game and across reconversions.
+	if(uniqueKey === "d41d8cd98f00b204e9800998ecf8427e"){
+		const guidBuf: Buffer = Buffer.alloc(16);
+		guidBuf.writeUInt32LE(guid[0], 0);
+		guidBuf.writeUInt32LE(guid[1], 4);
+		guidBuf.writeUInt32LE(guid[2], 8);
+		guidBuf.writeUInt32LE(guid[3], 12);
+		uniqueKey = crypto.createHash("md5").update(guidBuf).digest("hex");
+		console.log("Game key: empty garbage block, using the exe GUID instead");
+	}
 	const getAssetRefs = function(src: SmartBuffer): Array<Buffer> {
 		const count: number = src.readUInt32LE();
 		const refs: Array<Buffer> = new Array(count);

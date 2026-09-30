@@ -2055,13 +2055,11 @@ return 0;
 ///// script @dlg_input_box
 // Modal text input, one call form for every engine. The wd dialog's DLL is
 // ANSI-only and mangles the tail of CJK prompt text on GM8.0 (measured on
-// fish: it trims trailing ASCII spaces, strips a trailing fullwidth colon and
-// one more glyph besides). Padding with ASCII spaces can never work - they are
-// trimmed first - so the prompt is padded with two FULLWIDTH spaces (GBK A1A1,
-// via chr(161)): they survive the trim, absorb the loss, and render blank.
-// On GM8.1+ the strings are UTF-8 while the DLL is ANSI, so a non-ASCII title
-// or prompt there falls back to the engine's own get_string instead (padding
-// cannot fix a wrong encoding).
+// fish: it trims trailing ASCII whitespace, strips a trailing fullwidth colon
+// and eats a glyph, and longer prompts lose MORE than any padding absorbs).
+// CJK prompts therefore fall back to the engine's own get_string, which
+// displays GBK fully. GM8.1+ strings are UTF-8 while the DLL is ANSI, so a
+// non-ASCII title or prompt there falls back the same way.
 // Returns the input in the engine's native string form (GBK bytes on GM8.0,
 // UTF-8 elsewhere) - the GM8.1+ wd path converts inside, so callers must NOT
 // wrap this in __ONLINE_ansi_to_utf8.
@@ -2071,11 +2069,13 @@ return get_string(argument1, argument2);
 #endif
 #if not STUDIO
 #if GM80
-// The wd DLL trims trailing ASCII spaces and then eats the prompt's tail
-// (glyphs, fullwidth colon included), so SPACE padding can never work - it is
-// trimmed first. Two fullwidth spaces (GBK A1A1) survive the trim, get eaten
-// instead, and render as blank either way. Title is not mangled - do not pad it.
-return wd_input_box(argument0, argument1 + chr(161) + chr(161), argument2);
+// The wd DLL mangles CJK prompts, and not by a fixed rule: measured on fish it
+// trims trailing ASCII whitespace, strips a trailing fullwidth colon and eats a
+// glyph - and longer prompts lose MORE than any padding absorbs (the 8-glyph
+// account prompts still came out truncated after a 2-glyph pad). CJK prompts
+// therefore use the engine's own get_string, which displays GBK fully.
+if(!@stg_is_ascii(argument0) || !@stg_is_ascii(argument1)) return get_string(argument1, argument2);
+return wd_input_box(argument0, argument1, argument2);
 #endif
 #if not GM80
 if(!@stg_is_ascii(argument0) || !@stg_is_ascii(argument1)) return get_string(argument1, argument2);
@@ -2092,7 +2092,8 @@ show_message(argument0);
 #endif
 #if not STUDIO
 #if GM80
-wd_message_simple(argument0 + chr(161) + chr(161));   // see @dlg_input_box
+if(!@stg_is_ascii(argument0)){ show_message(argument0); return 0; }
+wd_message_simple(argument0);
 #endif
 #if not GM80
 if(!@stg_is_ascii(argument0)){
