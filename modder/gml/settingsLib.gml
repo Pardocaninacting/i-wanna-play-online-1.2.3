@@ -492,7 +492,7 @@ if(string_length(_txt) > 0){
   _y += 4;
   _y += @stg_wrap(_x, _y, _txt, _w, 6);
 }
-// facts: only fields that exist in the engine (see GML_COMPAT/DESIGN section 9)
+// facts: only fields that exist in the engine (compat/DESIGN note 9)
 _fn = 0;
 if(_a == 12){
   global.__ONLINE_detFK[0] = @L(global.__ONLINE_LK_FACT_STORE, "Store");

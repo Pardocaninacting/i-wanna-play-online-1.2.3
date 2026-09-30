@@ -693,7 +693,7 @@ global.__ONLINE_LangKey[324] = "menu.desc.language";
 global.__ONLINE_LangKey[325] = "menu.hint.language";
 global.__ONLINE_LangCount = 326;
 // every slot pre-initialised: on GMS, reading an array slot that was never
-// written aborts the event (GML_COMPAT.md section 1)
+// written aborts the event (engine compat note 1, kept in the dev workspace)
 for(_i = 0; _i < global.__ONLINE_LangCap; _i += 1) global.__ONLINE_Lang[_i] = "";
 global.__ONLINE_lang = "zh-CN";   // built-in default; [config] lang= overrides
 global.__ONLINE_LangName = "";    // display name from the file's [meta] section
