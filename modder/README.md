@@ -148,7 +148,7 @@ If you want to edit these files to contribute, first there are 3 things you shou
 - **GM8 / GM8.2 coverage**: expands wrapper and extension handling for GM8.2 buffer/network paths and keeps the GM8 plugin-less path aligned with beta4 protocol behavior.
 - **Config persistence**: stores team, visibility, save toggle, lerp, sync enabled state, and all current hotkeys in `__ONLINE_config.ini`.
 
-### 1.2.3
+### 1.2.3 beta 1
 - **Team system**: 8 selectable teams with color-coded names, chat and arrows; team notifications on join/switch; team-scoped save broadcasting
 - **Save history**: local binary save log up to 500 entries with favorites, text filtering, pagination, relative timestamps and one-click position rollback; V2 format with deferred writes and time-density thinning
 - **Spectator mode**: hold-to-enter observer camera that follows online players across rooms; smooth-follow and screen-snap camera modes; auto-exit when the room is empty

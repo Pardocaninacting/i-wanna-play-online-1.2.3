@@ -10,7 +10,7 @@
   
 
   const STATES = ["idle", "run", "jump", "fall", "slide", "bow", "bullet"];
-  const STATE_LABEL = { idle: "待机", run: "奔跑", jump: "跳跃", fall: "下落", slide: "滑铲", bow: "鞠躬", bullet: "子弹" };
+  const STATE_LABEL = { idle: "待机", run: "奔跑", jump: "跳跃", fall: "下落", slide: "滑铲", bow: "蝴蝶结", bullet: "子弹" };
   const MAX_SCALE = 3;    // sprite magnification
   const FRAME_MS = 90;    // per animation frame
 
