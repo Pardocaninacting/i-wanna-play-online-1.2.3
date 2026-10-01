@@ -247,12 +247,20 @@ internal static class InputDialog
     private static extern IntPtr CreateFontW(int h, int w, int esc, int orient, int weight, uint italic, uint ul, uint strike, uint charset, uint outPrec, uint clipPrec, uint quality, uint pitch, string face);
     [DllImport("gdi32.dll")]
     private static extern bool DeleteObject(IntPtr obj);
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr SelectObject(IntPtr dc, IntPtr obj);
     [DllImport("user32.dll")]
     private static extern IntPtr GetDC(IntPtr hWnd);
     [DllImport("user32.dll")]
     private static extern int ReleaseDC(IntPtr hWnd, IntPtr dc);
     [DllImport("gdi32.dll")]
     private static extern int GetDeviceCaps(IntPtr dc, int index);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int DrawTextW(IntPtr dc, string text, int count, ref RECT rect, uint format);
+    [DllImport("user32.dll")]
+    private static extern bool AdjustWindowRectEx(ref RECT rect, uint style, bool menu, uint exStyle);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int MessageBoxW(IntPtr owner, string text, string caption, uint type);
 
     private const uint CS_HREDRAW = 2, CS_VREDRAW = 1;
     private const uint WS_OVERLAPPED = 0, WS_CAPTION = 0xC00000, WS_SYSMENU = 0x80000;
@@ -263,14 +271,22 @@ internal static class InputDialog
     private const uint WM_COMMAND = 0x111, WM_SETFONT = 0x30, EM_SETSEL = 0xB1;
     private const int LOGPIXELSY = 90, SW_SHOW = 5, IDC_ARROW = 32512;
     private const int IDC_EDIT = 101, IDC_OK = 1, IDC_CANCEL = 2;
+    private const uint DT_LEFT = 0, DT_WORDBREAK = 0x10, DT_NOPREFIX = 0x800, DT_CALCRECT = 0x400;
+    private const uint MB_OK = 0, MB_ICONINFORMATION = 0x40, MB_SETFOREGROUND = 0x10000, MB_TOPMOST = 0x40000;
+    // Layout: the prompt wraps at MaxTextW, everything else follows from the measured height.
+    private const int Margin = 12, Gap = 10, EditH = 24, BtnH = 28, BtnW = 80, MaxTextW = 520, MinClientW = 368;
 
     private static IntPtr s_editHwnd, s_dlgHwnd, s_parentHwnd, s_font;
+    // Computed in Show from the measured prompt, consumed by WM_CREATE.
+    private static int s_clientW, s_textH, s_editY, s_btnY;
     private static IntPtr s_gameHwnd, s_enumFound; // cached game window handle
     private static string s_result = "", s_prompt = "", s_default = "";
     private static bool s_registered;
     private static WndProcDelegate? s_wndProc;
     private static EnumThreadWndProc? s_enumProc;
     private const string CLS = "HttpDll23Input";
+
+    internal static IntPtr GameWindow() => FindGameWindow();
 
     private static IntPtr FindGameWindow()
     {
@@ -300,29 +316,28 @@ internal static class InputDialog
         {
             case WM_CREATE:
             {
-                var dc = GetDC(hWnd);
-                int dpi = GetDeviceCaps(dc, LOGPIXELSY);
-                ReleaseDC(hWnd, dc);
-                s_font = CreateFontW(-(9 * dpi / 72), 0, 0, 0, 400, 0, 0, 0,
-                    1 /* DEFAULT_CHARSET */, 0, 0, 0, 0, "MS Shell Dlg 2");
-
+                // The font and the layout are prepared in Show: the window size depends on
+                // the measured prompt, so nothing here can be hard-coded any more.
+                var editW = s_clientW - Margin * 2;
                 var lbl = CreateWindowExW(0, "STATIC", s_prompt,
-                    WS_CHILD | WS_VISIBLE | SS_LEFT, 12, 10, 356, 20,
+                    WS_CHILD | WS_VISIBLE | SS_LEFT, Margin, Margin, editW, s_textH,
                     hWnd, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero);
                 SendMessageW(lbl, WM_SETFONT, s_font, (IntPtr)1);
 
                 s_editHwnd = CreateWindowExW(WS_EX_CLIENTEDGE, "EDIT", s_default,
-                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, 12, 35, 356, 24,
+                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL, Margin, s_editY, editW, EditH,
                     hWnd, (IntPtr)IDC_EDIT, IntPtr.Zero, IntPtr.Zero);
                 SendMessageW(s_editHwnd, WM_SETFONT, s_font, (IntPtr)1);
 
+                var cancelX = s_clientW - Margin - BtnW;
+                var okX = cancelX - Gap - BtnW;
                 var ok = CreateWindowExW(0, "BUTTON", "OK",
-                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 208, 70, 75, 28,
+                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, okX, s_btnY, BtnW, BtnH,
                     hWnd, (IntPtr)IDC_OK, IntPtr.Zero, IntPtr.Zero);
                 SendMessageW(ok, WM_SETFONT, s_font, (IntPtr)1);
 
                 var cancel = CreateWindowExW(0, "BUTTON", "Cancel",
-                    WS_CHILD | WS_VISIBLE | WS_TABSTOP, 293, 70, 75, 28,
+                    WS_CHILD | WS_VISIBLE | WS_TABSTOP, cancelX, s_btnY, BtnW, BtnH,
                     hWnd, (IntPtr)IDC_CANCEL, IntPtr.Zero, IntPtr.Zero);
                 SendMessageW(cancel, WM_SETFONT, s_font, (IntPtr)1);
 
@@ -372,6 +387,15 @@ internal static class InputDialog
         return DefWindowProcW(hWnd, msg, wParam, lParam);
     }
 
+    internal static void ShowMessage(string text, string title)
+    {
+        var owner = FindGameWindow();
+        if (owner != IntPtr.Zero) EnableWindow(owner, false);
+        MessageBoxW(owner, text ?? "", string.IsNullOrEmpty(title) ? "IWPO" : title,
+            MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND | MB_TOPMOST);
+        if (owner != IntPtr.Zero) { EnableWindow(owner, true); SetForegroundWindow(owner); }
+    }
+
     internal static string Show(string title, string prompt, string defaultText)
     {
         s_prompt = prompt;
@@ -397,7 +421,32 @@ internal static class InputDialog
         }
 
         s_parentHwnd = FindGameWindow();
-        int dlgW = 392, dlgH = 145;
+
+        // One DC for the dialog font and the prompt measurement. MS Shell Dlg 2 at 9pt
+        // matches what the controls use, so the measurement matches what is drawn.
+        var screen = GetDC(IntPtr.Zero);
+        int dpi = GetDeviceCaps(screen, LOGPIXELSY);
+        if (s_font != IntPtr.Zero) { DeleteObject(s_font); s_font = IntPtr.Zero; }
+        s_font = CreateFontW(-(9 * dpi / 72), 0, 0, 0, 400, 0, 0, 0,
+            1 /* DEFAULT_CHARSET */, 0, 0, 0, 0, "MS Shell Dlg 2");
+
+        var textRect = new RECT { left = 0, top = 0, right = MaxTextW, bottom = 0 };
+        var prevFont = SelectObject(screen, s_font);
+        DrawTextW(screen, prompt ?? "", -1, ref textRect, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX | DT_LEFT);
+        SelectObject(screen, prevFont);
+        ReleaseDC(IntPtr.Zero, screen);
+
+        int textW = textRect.right - textRect.left;
+        s_textH = Math.Max(textRect.bottom - textRect.top, EditH);
+        s_clientW = Math.Max(MinClientW, textW + Margin * 2);
+        s_editY = Margin + s_textH + Gap;
+        s_btnY = s_editY + EditH + Gap + 6;
+        int clientH = s_btnY + BtnH + Margin;
+
+        // The child coordinates above are client-relative; the window needs the chrome on top.
+        var frame = new RECT { left = 0, top = 0, right = s_clientW, bottom = clientH };
+        AdjustWindowRectEx(ref frame, WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU, false, WS_EX_DLGMODALFRAME);
+        int dlgW = frame.right - frame.left, dlgH = frame.bottom - frame.top;
         int posX = unchecked((int)0x80000000); // CW_USEDEFAULT
         int posY = unchecked((int)0x80000000);
         if (s_parentHwnd != IntPtr.Zero && GetWindowRect(s_parentHwnd, out var rc))
@@ -1587,6 +1636,17 @@ public static class Exports
         {
             return NativeStrings.Write(string.Empty);
         }
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "message_box", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static double MessageBoxExport(IntPtr textPtr, IntPtr titlePtr)
+    {
+        // Unicode box owned by the game window: used on GM8 for the two notices that
+        // would otherwise go through the engine's own dialog.
+        var text = NativeStrings.Read(textPtr);
+        var title = NativeStrings.Read(titlePtr);
+        InputDialog.ShowMessage(text, title);
+        return 0;
     }
 
     [UnmanagedCallersOnly(EntryPoint = "input_box", CallConvs = new[] { typeof(CallConvCdecl) })]
