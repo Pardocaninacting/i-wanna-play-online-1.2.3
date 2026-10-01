@@ -1,134 +1,133 @@
 # I wanna play online 1.2.3
 
-A tool that converts "I wanna be the guy" fangames into online multiplayer versions.
+Turns "I wanna be the guy" fangames made with GameMaker into online multiplayer games: players in the
+same room see each other move, share saves, chat, place markers on the screen, wear skins and more.
 
-This is a major rewrite of [I wanna play online](https://gitlab.com/i-wanna-play-online) (1.1.9). See the [changelog](#whats-new-in-123) for a summary of changes.
+This is a rewrite of [I wanna play online](https://gitlab.com/i-wanna-play-online) 1.1.9 by DapperMink.
+Downloads, the online lobby, the skin library and game ratings are at **[iwannaplay.online](https://iwannaplay.online)**.
 
-## Components
+## Repository
 
-| Directory | Description | Language |
-|-----------|-------------|----------|
-| `modder/` | Main converter — patches GM8/GM8.1/GM8.2 executables in-place | TypeScript (Node.js) |
-| `converter-gms/` | GMS converter — patches GameMaker Studio data.win files | C# (.NET 10) |
-| `server/` | Game server — TCP/UDP relay + HTTP API | TypeScript (Node.js) |
+| Directory | What it is | Stack |
+|-----------|------------|-------|
+| [`modder/`](modder/) | The converter (`iwpo.exe`): patches GM8 / 8.1 / 8.2 executables, drives the GMS converter, builds the release package | TypeScript (Node.js) |
+| [`converter-gms/`](converter-gms/) | GameMaker Studio converter: patches `data.win` (GMS 1.x / 2.x, x86 / x64) | C# (.NET 10) |
+| [`server/`](server/) | Game server: TCP/UDP relay, ratings, skin library, HTTP API | TypeScript (Node.js) |
+| [`iwpo-website/`](iwpo-website/) | The iwannaplay.online website | Static HTML / CSS / JS |
+| `UndertaleModTool/` | Git submodule used by `converter-gms` | C# |
 
-### Not included in this repository
+The launcher that becomes `iwpo.exe` is unchanged from the original project:
+[gitlab.com/i-wanna-play-online/launcher](https://gitlab.com/i-wanna-play-online/launcher).
 
-- **Launcher** — unchanged from the original, see [gitlab.com/i-wanna-play-online/launcher](https://gitlab.com/i-wanna-play-online/launcher)
-- **Website** — left for other developers to implement; see [Server HTTP API](#server-http-api) for the endpoints it depends on
+## Supported games
 
-## Quick Start
+| Engine | Support |
+|--------|---------|
+| GameMaker 8.0 / 8.1 | ✅ |
+| GameMaker 8.2 (community runtime) | ✅ |
+| GameMaker Studio 1.x (x86, including early bytecode 14/15 runners) | ✅ |
+| GameMaker Studio 2.x (x86 / x64) | ✅ |
 
-### 1. Server
+Not every game converts: heavily protected executables can still fail, and Unity games are detected and
+refused. Bug reports with the game's name are welcome.
+
+## Building from source
+
+Prerequisites: Node.js 18+, .NET SDK 10, and the submodule:
+
+```bash
+git clone --recurse-submodules https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3.git
+# or, in an existing clone:
+git submodule update --init --recursive
+```
+
+### Server
 
 ```bash
 cd server
-cp .env.template .env   # edit ports if needed
+cp .env.template .env   # ports: HTTP 8001, TCP 8002, UDP 8003
 npm install
 npm run build
 npm start
 ```
 
-The server listens on three ports (configurable in `.env`):
-- **8001** — HTTP API
-- **8002** — TCP game protocol
-- **8003** — UDP game protocol
+Or with Docker: `docker compose up --build -d` in `server/`.
 
-Or use Docker:
+HTTP API, used by the website and other tools:
 
-```bash
-cd server
-docker compose up --build -d
-```
+| Endpoint | Returns |
+|----------|---------|
+| `GET /` or `GET /api/games` | Active rooms: `{ games: [{ name, players, hasPassword }] }` (password rooms carry no name) |
+| `GET /api/ratings` | All ratings |
+| `GET /api/ratings/:id` | Ratings of one game, matched by the 32-character hash prefix |
 
-### 2. Modder (GM8 converter)
-
-**Prerequisites**: Node.js 18+, npm
+### Converter
 
 ```bash
 cd modder
 npm install
 ```
 
-**Configure the server** — create `iwpo-settings.ini` next to `modder/`:
+Point it at a server with `iwpo-settings.ini` in the repository root (next to `modder/`):
 
 ```ini
 [settings]
-server=YOUR_SERVER_IP
+server=127.0.0.1
 tcp_port=8002
 udp_port=8003
 ```
 
-**Convert a game** (development mode):
+Convert a game:
 
 ```bash
 npx tsc -p .
 node index.js "path/to/game.exe"
 ```
 
-**Build distributable** (produces `build/iwpo 1.2.3.zip`):
+Build the release package `modder/build/iwpo <version>.zip`:
 
 ```bash
 npm run build
 ```
 
-The NativeAOT DLLs (`http_dll_2_3.dll`, `http_dll_2_3_x64.dll`) are built automatically during the build process from `native/` source. Requires .NET SDK 10+.
+The build also compiles the GMS converter into `modder/lib/converterGMS2/` and the NativeAOT DLLs
+(`http_dll_2_3.dll`, `http_dll_2_3_x64.dll`) from `modder/native/`. The packaged `iwpo-settings.ini`
+points at the public server `123.iwannaplay.online`.
 
-### 3. Converter GMS
+Converter options (shared-progress defaults, GM8 extension packages, GM8.2 tick injection) and the GML
+template conventions are documented in [`modder/README.md`](modder/README.md). The manual bundled with
+the release is [`modder/README.txt`](modder/README.txt); players get
+[`modder/PLAYER_GUIDE.txt`](modder/PLAYER_GUIDE.txt).
 
-**Prerequisites**: .NET SDK 10
+### GMS converter
 
-The GMS converter is built as part of the modder build process and placed in `modder/lib/converterGMS2/`. To build it standalone:
+Built by the converter's `npm run build`. To build it alone:
 
 ```bash
 cd converter-gms
 dotnet publish -c Release
 ```
 
-This project depends on [UndertaleModTool](https://github.com/UnderMiners-Mods/UndertaleModTool) which is included as a git submodule:
+### Website
 
 ```bash
-git submodule update --init --recursive
+node iwpo-website/_dev/dev-server.cjs   # http://127.0.0.1:8199/
 ```
 
-## Supported Games
+Static files, no build step. See [`iwpo-website/README.md`](iwpo-website/README.md) (in Chinese).
 
-| Engine | Support |
-|--------|---------|
-| GameMaker 8.0 | ✅ Full |
-| GameMaker 8.1 | ✅ Full |
-| GameMaker 8.2 (gm82) | ✅ Full (gm82net/gm82buf path) |
-| GameMaker Studio 1.x (x86) | ✅ Full |
-| GameMaker Studio 2.x (x86) | ✅ Full |
-| GameMaker Studio (x64) | ✅ Full |
+## Release notes
 
-Different games may encounter different issues. Bug reports with specific game names are welcome.
+The current version is **1.2.3 beta 6**: a six-tab settings menu, UI localization (Simplified Chinese by
+default), player skins with automatic download, a notes system, PVP bullet sharing and broader engine
+coverage. The full changelog is in [`modder/README.md`](modder/README.md#changelog).
 
-## Server HTTP API
+## Credits
 
-The server exposes an HTTP API that can be consumed by a website or other tools:
+Maker: Engel. Former maker: DapperMink (QuentinJanuel).
 
-| Endpoint | Description |
-|----------|-------------|
-| `GET /` | Active game list (`{games: [...]}`) |
-| `GET /api/ratings` | All ratings data |
-| `GET /api/ratings/:id` | Ratings for a specific game (by 32-char hash prefix) |
-
-## What's New in 1.2.3 beta 4
-
-Compared with beta 3, beta 4 adds or substantially rewrites:
-
-- **Shared progress sync** with a dedicated Sync tab and protocol v2 `CUSTOM_DATA`
-- **Ping / marker wheel** with 9 marker types, room-aware filtering, and team-colored labels
-- **Expanded settings UI** with 5 tabs, keyboard navigation, save-history actions, rating flow, and key rebinding
-- **Roster / reconnect hardening** with LIST reconcile, periodic heartbeat, spectator-state recovery, and stricter same-team save routing
-- **GMS text and runtime updates** including the bundled CJK atlas path and x64 NativeAOT DLL support
-- **Server-side protocol updates** while preserving beta3 basic interop for chat and movement
-
-See `modder/README.md` for the full beta4 changelog.
+Special thanks: Adam, viri, Maarten Baert, krzys-h, Nikaple, hirtown, Samiboule, TheBiob, 大部队.
 
 ## License
 
-[MIT](LICENSE)
-
-Based on [I wanna play online](https://gitlab.com/i-wanna-play-online) by DapperMink.
+[MIT](LICENSE). Based on [I wanna play online](https://gitlab.com/i-wanna-play-online) by DapperMink.
