@@ -5,6 +5,7 @@ import rimraf from "rimraf"
 import process from "process"
 import fs from "fs"
 import path from "path"
+import http from "http"
 import https from "https"
 
 export interface Ports {
@@ -126,27 +127,37 @@ export class Utils {
 	// local build. Any failure (offline, DNS, timeout) is silent - converting
 	// the game is the point, the notice is a courtesy.
 	public static checkForUpdate(): Promise<void> {
-		return new Promise(function(resolve): void {
-			try {
-				const req = https.get("https://iwannaplay.online/version.txt", { timeout: 4000 }, function(res) {
-					if(res.statusCode !== 200){ res.resume(); resolve(); return; }
-					let body = "";
-					res.setEncoding("utf8");
-					res.on("data", function(chunk: string){ body += chunk; });
-					res.on("end", function(){
-						const latest = body.trim();
-						const local = Utils.getVersion();
-						if(latest !== "" && latest.length < 40 && latest !== local)
-							console.log(`A newer version is available: ${latest} (you have ${local}) - https://iwannaplay.online`);
-						resolve();
-					});
-					res.on("error", function(){ resolve(); });
-				});
-				req.on("timeout", function(){ req.destroy(); resolve(); });
-				req.on("error", function(){ resolve(); });
-			} catch {
-				resolve();
-			}
+		const url: string = "https://iwannaplay.online/version.txt";
+		// node-portable is Node 10 with a 2018 root store: when the site's
+		// certificate chain stops validating there, ask over plain HTTP. The
+		// strict version pattern is what keeps that answer harmless.
+		return Utils.fetchText(url)
+			.catch(function(err: NodeJS.ErrnoException): Promise<string> {
+				if(/CERT|ISSUER|SIGNATURE|SELF_SIGNED|EPROTO/.test(err.code || ""))
+					return Utils.fetchText(url.replace(/^https:/, "http:"));
+				throw err;
+			})
+			.then(function(body: string): void {
+				const latest: string = body.trim();
+				const local: string = Utils.getVersion();
+				if(/^\d+\.\d+\.\d+(_[a-z]+_\d+)?$/i.test(latest) && latest !== local)
+					console.log(`A newer version is available: ${latest} (you have ${local}) - https://iwannaplay.online`);
+			})
+			.catch(function(): void {});
+	}
+	private static fetchText(url: string): Promise<string> {
+		return new Promise(function(resolve, reject): void {
+			const get = url.startsWith("https:") ? https.get : http.get;
+			const req = get(url, { timeout: 4000 }, function(res) {
+				if(res.statusCode !== 200){ res.resume(); reject(new Error(`HTTP ${res.statusCode}`)); return; }
+				let body: string = "";
+				res.setEncoding("utf8");
+				res.on("data", function(chunk: string){ body += chunk; });
+				res.on("end", function(){ resolve(body); });
+				res.on("error", reject);
+			});
+			req.on("timeout", function(){ req.abort(); reject(new Error("timeout")); });
+			req.on("error", reject);
 		});
 	}
 }
