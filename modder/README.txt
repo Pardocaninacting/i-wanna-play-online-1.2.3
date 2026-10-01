@@ -97,6 +97,10 @@ FAQ:
   Q: This sucks, the server keeps crashing or is way too slow!
   A: Well, sorry again. This is my first experience at creating online games, so I may have done some things wrong. If you have advices or recommendations about the way I should code the server, once again feel free to contact me.
 
+Feedback:
+  Report bugs and problems at https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3/issues
+  Include the game name, the IWPO version, and the converter output if the conversion failed.
+
 Thank you so much for downloading, I really hope you will have a lot of fun!
 
 

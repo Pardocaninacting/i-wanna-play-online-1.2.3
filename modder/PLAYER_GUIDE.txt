@@ -69,6 +69,7 @@ sync1_count = 8
 - Ping 队友看不到: 你们必须在同一个房间，而且对方的 Visual 不能是受限模式。
 - 改了配置没生效: 关闭游戏后编辑 __ONLINE_config.ini，再重新启动。
 - 想改服务器: 编辑 __ONLINE_config.ini 里的 `server=`；较旧的联机包也可能兼容 __ONLINE_server.txt。
+- 反馈问题: 到 https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3/issues 提交，写明游戏名、IWPO 版本和复现步骤。
 
 ====================
 I Wanna Play Online - Player Guide
@@ -141,3 +142,4 @@ sync1_count = 8
 - Teammates cannot see your ping: you must be in the same room, and their Visual mode must not be restricted.
 - Config changes do not apply: close the game, edit __ONLINE_config.ini, then launch again.
 - You want another server: edit `server=` in __ONLINE_config.ini. Older online packs may also honor __ONLINE_server.txt.
+- Reporting a problem: open an issue at https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3/issues with the game name, the IWPO version, and the steps to reproduce.
