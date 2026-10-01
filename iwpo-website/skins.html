@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>I wanna play online 1.2.3 — 皮肤库</title>
-  <meta name="description" content="IWPO 皮肤库：浏览、预览并下载社区制作的角色皮肤，上传入库后游戏内即可自动下载。">
+  <meta name="description" content="IWPO 皮肤库：浏览、预览并下载社区制作的角色皮肤，投稿经审核入库后游戏内即可自动下载。">
   <meta property="og:type" content="website">
   <meta property="og:title" content="皮肤库 — I wanna play online">
   <meta property="og:description" content="浏览、预览并下载社区制作的角色皮肤。">
@@ -195,9 +195,9 @@
             <label class="upload__files">皮肤文件
               <input id="upload-files" type="file" multiple accept=".png,.ini,.zip">
             </label>
-            <p class="upload__hint">两种方式任选：① 直接选择一个 .zip 皮肤包；② 多选包内全部文件（必须包含 idle.png 与 info.ini，可选 run / jump / fall / slide / bow / bullet 的 .png）。单文件不超过 1 MiB，总计不超过 4 MiB。</p>
+            <p class="upload__hint">两种方式任选：① 直接选择一个 .zip 皮肤包；② 多选包内全部文件（必须包含 idle.png 与 info.ini，可选 run / jump / fall / slide / bow / bullet 的 .png）。单文件不超过 1 MiB，总计不超过 4 MiB；每帧不超过 128×128 像素，每个动作最多 64 帧。提交后需人工审核，通过后才会出现在皮肤库中。</p>
             <div class="upload__actions">
-              <button class="btn btn--primary btn--sm" type="submit">提交入库</button>
+              <button class="btn btn--primary btn--sm" type="submit">提交审核</button>
               <span class="upload__msg" id="upload-msg" role="status"></span>
             </div>
           </form>
@@ -243,6 +243,6 @@
   </footer>
 
   <script src="assets/js/site.js"></script>
-  <script src="assets/js/skins.js"></script>
+  <script src="assets/js/skins.js?v=2"></script>
 </body>
 </html>

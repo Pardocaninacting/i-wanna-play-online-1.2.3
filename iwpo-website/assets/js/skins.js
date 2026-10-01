@@ -10,7 +10,7 @@
   
 
   const STATES = ["idle", "run", "jump", "fall", "slide", "bow", "bullet"];
-  const STATE_LABEL = { idle: "待机", run: "奔跑", jump: "跳跃", fall: "下落", slide: "滑铲", bow: "蝴蝶结", bullet: "子弹" };
+  const STATE_LABEL = { idle: "待机", run: "奔跑", jump: "跳跃", fall: "下落", slide: "滑藤", bow: "蝴蝶结", bullet: "子弹" };
   const MAX_SCALE = 3;    // sprite magnification
   const FRAME_MS = 90;    // per animation frame
 
@@ -277,9 +277,14 @@
       let data = null;
       try { data = await res.json(); } catch { /* non-json reply */ }
       if (res.ok && data && data.success) {
-        setMsg("入库完成，游戏内即可自动下载。", false);
-        uploadPanel.reset();
-        await load();
+        if (data.status === "live") {
+          setMsg("这个皮肤已经在库里了。", false);
+        } else if (data.status === "pending") {
+          setMsg("这个皮肤已在审核队列中，请耐心等待。", false);
+        } else {
+          setMsg("已提交，审核通过后会出现在皮肤库中。", false);
+          uploadPanel.reset();
+        }
       } else {
         setMsg("上传失败：" + ((data && data.error) || ("HTTP " + res.status)), true);
       }
