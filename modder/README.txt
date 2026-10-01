@@ -19,6 +19,7 @@ Special thanks:
   Nikaple
   hirtown
   Samiboule
+  TheBiob
   大部队
 
 How to use:
@@ -36,9 +37,10 @@ How to use:
 GM8 extension package selection:
   Some GM8 games have a non-vanilla runtime stub (UPX-packed, Antidec-patched, ...) where one or more
   IWPO extension packages fails to register, producing "Error defining an external function" at startup.
-  For those games, choose which package(s) to inject in iwpo-settings.ini:
+  For those games, choose which package(s) to inject in a per-game file games/<game>.ini
+  (named after the game's exe without .exe; iwpo-settings.ini does not accept this key):
 
-  [settings]
+  [iwpo]
   extension_packages=wd_only
 
   Values:
@@ -46,7 +48,7 @@ GM8 extension package selection:
    wd_only   Only gm_windows_dialog8 (Windows dialog boxes). Empirically the safest fallback.
    fw_only   Only ChineseChatSupport8 (Chinese rendering, GM8.0 only).
    gm_only   Only gaseous_marble8 (GM8.1+ only).
-   none      Skip all (same as no_extension_packages=1).
+   none      Skip all.
 
   Skipped packages fall back to vanilla GML stubs (e.g. wd_input_box -> get_string), so the rest
   of the injected world GML still compiles. Functionality is reduced but the game runs.
@@ -162,7 +164,7 @@ CHANGE LOGS:
  - Fixed text encoding issues (thanks to Samiboule)
 
 1.1.6:
- - Use the new server (isocodes.org => 212.64.24.80)
+ - Use the new server (isocodes.org => dappermink.com)
 
 1.1.5:
  - Fixed the heap out of memory crash for heavy GM8 games

@@ -50,12 +50,14 @@ sync1_count = 8
 
 ## GM8 Extension Package Selection
 
-Some GM8 games ship with non-vanilla runtime stubs (UPX-packed, Antidec-patched, etc.) where one or more of the IWPO extension packages fails to register, producing `Error defining an external function` at game start. For those games, choose which package(s) to inject in `iwpo-settings.ini`:
+Some GM8 games ship with non-vanilla runtime stubs (UPX-packed, Antidec-patched, etc.) where one or more of the IWPO extension packages fails to register, producing `Error defining an external function` at game start. For those games, choose which package(s) to inject in a per-game file `games/<game>.ini`, named after the game's exe without `.exe`:
 
 ```ini
-[settings]
+[iwpo]
 extension_packages=wd_only
 ```
+
+`iwpo-settings.ini` does not accept this key: a global value would silently change every converted game.
 
 Allowed values:
 
@@ -63,7 +65,7 @@ Allowed values:
 - `wd_only`: only `gm_windows_dialog8` (Windows dialog boxes). Empirically the safest fallback — works on UPX/Antidec games where `ChineseChatSupport8` fails.
 - `fw_only`: only `ChineseChatSupport8` (Chinese text rendering via FoxWriting). GM8.0 only.
 - `gm_only`: only `gaseous_marble8`. GM8.1+ only.
-- `none`: skip all packages (equivalent to `no_extension_packages=1`).
+- `none`: skip all packages.
 
 When a package is skipped, the converter injects vanilla-GML stub scripts (`wd_input_box` → `get_string`, `fw_draw_text_ext` → `draw_text_ext`, etc.) so the rest of the injected world GML still compiles. Functionality is reduced (no Windows dialogs / no Chinese rendering) but the game runs.
 
@@ -98,6 +100,18 @@ If you want to edit these files to contribute, first there are 3 things you shou
     ```
 
 ## Changelog
+
+### 1.2.3 beta 6
+
+- **New settings menu**: six tabs (Settings / Saves / Rating / Keys / Sync / Skins) with a detail pane, scrolling, and full mouse + keyboard control.
+- **UI localization**: Simplified Chinese by default, English one row away (Settings → Language); drop-in `lang/<code>.ini` files add more languages.
+- **Player skins**: installable skin packages (`iwposkins/`), per-state animation preview, auto-download of missing skins over the game connection.
+- **Notes system**: ping wheel, polyline arrows, freehand strokes, text notes, canvas view.
+- **PVP**: bullet sharing with team/FFA modes and kill detection.
+- **Multiple player objects**: games with more than one player object can pick which one to drive.
+- **Engine coverage**: GM8.2-native Draw GUI HUD, early-GMS1 (bytecode 15) support, GM8.1/GMS2.3 compatibility hardening.
+- **Deployment**: the converter ships `lang/`, `iwposkins/` and (for GMS games) `DBGHELP.dll` next to the game; GM8.0 renders Chinese with the built-in bitmap atlas by default.
+- **Configuration**: `iwpo-settings.ini` no longer accepts the extension-package switches; they moved to per-game `games/<game>.ini`.
 
 ### 1.2.3 beta 5
 
