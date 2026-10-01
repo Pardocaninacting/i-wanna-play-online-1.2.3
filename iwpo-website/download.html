@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>下载 — I wanna play online</title>
+  <meta name="description" content="下载 I wanna play online 转换器：把单机 I wanna 同人游戏转换成在线联机版本。支持 GameMaker 8.0 / 8.1 / 8.2 与 GameMaker Studio 1.x / 2.x。">
+  <link rel="icon" href="assets/img/icon-src.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    /* download 页专属样式：颜色只取 style.css 变量，蓝主红点缀 */
+    .dl-page { padding-top: 56px; }
+    .dl-gap { margin-top: 56px; }
+    .dl__intro { margin-top: 0; color: var(--ink-2); }
+    .dl__actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 22px 0 0; }
+    .dl__side-label { font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+    .dl__side-text { font-size: 12.5px; }
+    .dl__ver { color: var(--blue); }
+    .dl__list-label { margin-top: 24px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+    .dl__list-label + .dl__list { margin-top: 4px; }
+    .dl__item:first-child .dl__note { color: var(--blue); }
+    .stepnum { color: var(--blue); font-family: var(--mono); font-size: 0.85em; }
+    .err { color: var(--red); font-weight: 600; }
+    .foot-right { margin-left: auto; }
+    .note {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      margin-top: 20px;
+      padding: 12px 16px;
+      border: 1px solid var(--line-2);
+      border-left: 3px solid var(--blue);
+      border-radius: var(--radius);
+      background: var(--surface);
+      font-size: 13.5px;
+      color: var(--ink-2);
+    }
+    .note b { flex: 0 0 auto; color: var(--blue); font-weight: 650; }
+  </style>
+</head>
+<body>
+  <div class="bg-veil" aria-hidden="true"></div>
+
+  <header class="site-head">
+    <div class="wrap site-head__inner">
+      <a class="wordmark" href="index.html"><b>I wanna play online</b><span>1.2.3</span></a>
+            <nav class="nav" aria-label="主导航">
+        <a href="index.html">大厅</a>
+        <a href="download.html" aria-current="page">下载</a>
+        <a href="skins.html">皮肤</a>
+        <a href="ratings.html">评分</a>
+        <a href="about.html">关于</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+    </div>
+
+    <section class="section section--tight dl-page">
+      <div class="wrap">
+        <div class="section__head reveal">
+          <span class="eyebrow">DOWNLOAD</span>
+          <h2>I wanna play online 1.2.3</h2>
+        </div>
+        
+        <div class="panel reveal">
+          <div class="dl">
+            <div class="dl__main">
+              <p class="dl__intro">
+                把游戏 exe 拖到 <span class="mono">iwpo.exe</span> 上即可转换，输出 <span class="mono">_online</span> 版本。
+              </p>
+              <p class="dl__actions">
+                <a class="btn btn--primary" id="dl-button" href="#archive">下载最新版</a>
+                <a class="btn btn--ghost" href="about.html">使用说明</a>
+              </p>
+              <div class="dl__list-label">历史版本</div>
+              <div class="dl__list" id="archive">
+                <div class="loading">读取版本…</div>
+              </div>
+            </div>
+            <div class="dl__side">
+              <div class="dl__side-label">最新版本</div>
+              <div class="dl__ver" id="dl-version">v—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__grid">
+      <div>
+        <h4>I wanna play online</h4>
+        <p>把单机同人游戏变成联机游戏的转换器。</p>
+      </div>
+      <div>
+        <h4>入口</h4>
+        <p><a href="download.html">下载</a></p>
+        <p><a href="skins.html">皮肤库</a></p>
+        <p><a href="ratings.html">游戏评分</a></p>
+      </div>
+      <div>
+        <h4>项目</h4>
+        <p><a href="https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3" target="_blank" rel="noopener">GitHub</a></p>
+        <p><a href="https://gitlab.com/i-wanna-play-online" target="_blank" rel="noopener">GitLab（原版）</a></p>
+      </div>
+    </div>
+    <div class="wrap site-foot__end">
+      <span>I wanna play online 1.2.3</span>
+    </div>
+  </footer>
+
+  <script src="assets/js/site.js" defer></script>
+  <script src="assets/js/download.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>评分 — IWPO</title>
+  <meta name="description" content="浏览玩家在游戏内提交的 I wanna 同人游戏评分。">
+  <meta name="theme-color" content="#07090c">
+  <link rel="icon" href="assets/img/icon-src.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    /* ratings page only */
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; margin-top: 0; margin-bottom: 22px; }
+    .rt__row--game { cursor: pointer; }
+    .rt__row--game:hover .rt__name { color: var(--blue); }
+    .rt__dist { display: flex; gap: 1px; height: 3px; margin-top: 5px; width: 96px; border-radius: 2px; overflow: hidden; }
+    .rt__dist i { background: var(--amber); display: block; }
+    .view-tabs {
+      display: inline-flex;
+      gap: 4px;
+      margin-left: auto;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface);
+    }
+    .view-tab {
+      padding: 6px 14px;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--ink-2);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    .view-tab:hover { color: var(--ink); }
+    .view-tab[aria-pressed="true"] {
+      background: var(--surface-2);
+      color: var(--ink);
+      box-shadow: inset 0 0 0 1px var(--blue);
+    }
+    .th-sort {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: inherit;
+      font: inherit;
+      letter-spacing: inherit;
+      text-transform: inherit;
+      cursor: pointer;
+    }
+    .th-sort:hover { color: var(--ink); }
+    .th-sort__arrow { min-width: 10px; font-size: 11px; color: var(--blue); }
+    .rt__num {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--ink-2);
+      font-variant-numeric: tabular-nums;
+    }
+    .rt__avg { margin-left: 8px; }
+  </style>
+</head>
+<body>
+  <div class="bg-veil" aria-hidden="true"></div>
+
+  <header class="site-head">
+    <div class="wrap site-head__inner">
+      <a class="wordmark" href="index.html"><b>I wanna play online</b><span>1.2.3</span></a>
+            <nav class="nav" aria-label="主导航">
+        <a href="index.html">大厅</a>
+        <a href="download.html">下载</a>
+        <a href="skins.html">皮肤</a>
+        <a href="ratings.html" aria-current="page">评分</a>
+        <a href="about.html">关于</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+    </div>
+
+    <section class="section section--tight" style="padding-top:56px;">
+      <div class="wrap">
+        <div class="section__head reveal">
+          <span class="eyebrow">社区</span>
+          <h2>游戏评分</h2>
+        </div>
+
+        <div class="stats reveal" aria-label="评分汇总">
+          <div class="stat"><div class="stat__label">收录游戏</div><div class="stat__value" id="st-games">—</div></div>
+          <div class="stat"><div class="stat__label">总评分</div><div class="stat__value" id="st-total">—</div></div>
+          <div class="stat"><div class="stat__label">平均星级</div><div class="stat__value" id="st-avg">—</div></div>
+          <div class="stat"><div class="stat__label">通关标记</div><div class="stat__value" id="st-cleared">—</div></div>
+        </div>
+
+        <div class="panel reveal">
+          <div class="panel__head">
+            <span class="panel__title">评分浏览</span>
+            <div class="view-tabs" role="group" aria-label="评分视图切换">
+              <button class="view-tab" type="button" data-view="games" aria-pressed="true">按游戏</button>
+              <button class="view-tab" type="button" data-view="records" aria-pressed="false">逐条记录</button>
+            </div>
+          </div>
+          <div class="toolbar">
+            <label class="sr" for="f-search">搜索游戏或玩家</label>
+            <input class="field" type="search" id="f-search" placeholder="搜索游戏名 / 玩家名…">
+            <label class="sr" for="f-stars">最低星级</label>
+            <select class="field" id="f-stars">
+              <option value="0">全部星级</option>
+              <option value="5">5 星</option>
+              <option value="4">4 星及以上</option>
+              <option value="3">3 星及以上</option>
+              <option value="2">2 星及以上</option>
+            </select>
+            <label class="sr" for="f-cleared">通关状态</label>
+            <select class="field" id="f-cleared">
+              <option value="">全部记录</option>
+              <option value="1">仅已通关</option>
+              <option value="0">仅未通关</option>
+            </select>
+            <button class="btn btn--sm" id="btn-reset" type="button">重置</button>
+          </div>
+
+          <div class="rt" id="rt-body" role="table" aria-live="polite">
+            <div class="loading">读取评分数据…</div>
+          </div>
+          <div class="panel__foot" style="display:flex;gap:12px;align-items:center;padding:12px 20px;border-top:1px solid var(--line);font-size:12.5px;color:var(--ink-3);">
+            <span>评分由玩家在游戏内提交</span>
+            <span id="rt-shown" style="margin-left:auto"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__grid">
+      <div>
+        <h4>I wanna play online</h4>
+        <p>把单机同人游戏变成联机游戏的转换器。</p>
+      </div>
+      <div>
+        <h4>入口</h4>
+        <p><a href="download.html">下载</a></p>
+        <p><a href="skins.html">皮肤库</a></p>
+        <p><a href="ratings.html">游戏评分</a></p>
+      </div>
+      <div>
+        <h4>项目</h4>
+        <p><a href="https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3" target="_blank" rel="noopener">GitHub</a></p>
+        <p><a href="https://gitlab.com/i-wanna-play-online" target="_blank" rel="noopener">GitLab（原版）</a></p>
+      </div>
+    </div>
+    <div class="wrap site-foot__end">
+      <span>I wanna play online 1.2.3</span>
+    </div>
+  </footer>
+
+  <script src="assets/js/site.js" defer></script>
+  <script src="assets/js/ratings.js" defer></script>
+</body>
+</html>

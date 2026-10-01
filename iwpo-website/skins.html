@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>I wanna play online 1.2.3 — 皮肤库</title>
+  <meta name="description" content="IWPO 皮肤库：浏览、预览并下载社区制作的角色皮肤，上传入库后游戏内即可自动下载。">
+  <link rel="icon" href="assets/img/icon-src.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    /* skins page only — palette strictly from style.css variables */
+    .skins-hero { padding: 72px 0 0; }
+    .skins-hero h1 { margin-bottom: 12px; }
+    .skins-hero p { max-width: 640px; margin: 0; color: var(--ink-2); font-size: 16px; }
+
+    .skins-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+      gap: 14px;
+      padding: 20px;
+      min-height: 150px;
+    }
+    .skins-grid .empty, .skins-grid .loading { grid-column: 1 / -1; }
+
+    .skin-card {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.2s ease;
+    }
+    .skin-card:hover, .skin-card:focus-visible {
+      transform: translateY(-3px);
+      border-color: var(--blue);
+      box-shadow: var(--shadow-sm);
+    }
+    .skin-card__preview {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      height: 104px;
+      margin-bottom: 8px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: repeating-conic-gradient(var(--surface-2) 0% 25%, transparent 0% 50%);
+      background-size: 16px 16px;
+      overflow: hidden;
+    }
+    .skin-card__name { margin: 0; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skin-card__maker { margin: 0; font-size: 13px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skin-card__foot { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+    .skin-card__source { font-size: 12px; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .skin-card__foot .btn { margin-left: auto; flex: 0 0 auto; }
+
+    /* sprite frame view: first frame or stepped css animation of the strip */
+    .skin-frame { flex: 0 0 auto; image-rendering: pixelated; background-repeat: no-repeat; }
+    .skin-frame.is-missing { display: none; }
+    @keyframes skin-frames {
+      from { background-position: 0 0; }
+      to { background-position: var(--skin-strip-end, 0) 0; }
+    }
+
+    /* upload form */
+    .upload { display: grid; gap: 14px; padding: 18px 20px; border-bottom: 1px solid var(--line); }
+    .upload[hidden] { display: none; }
+    .upload__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    .upload__field { display: grid; gap: 6px; font-size: 13px; color: var(--ink-3); }
+    .upload__field .field { width: 100%; min-width: 0; border-radius: var(--radius-sm); }
+    .upload__files { display: grid; gap: 6px; font-size: 13px; color: var(--ink-3); }
+    .upload__files input { color: var(--ink-2); font-size: 13.5px; }
+    .upload__hint { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+    .upload__actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .upload__msg { font-size: 13.5px; color: var(--ink-2); }
+    .upload__msg.is-ok { color: var(--green); }
+    .upload__msg.is-error { color: var(--red); }
+
+    /* detail modal */
+    .skin-modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 20px; }
+    .skin-modal[hidden] { display: none; }
+    .skin-modal__backdrop { position: absolute; inset: 0; background: rgba(4, 7, 12, 0.72); backdrop-filter: blur(4px); }
+    .skin-modal__panel {
+      position: relative;
+      width: min(780px, 100%);
+      max-height: 86vh;
+      overflow: auto;
+      border: 1px solid var(--line-2);
+      border-radius: var(--radius-lg);
+      background: var(--bg-2);
+      box-shadow: var(--shadow);
+      padding: 28px;
+    }
+    .skin-modal__close {
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line-2);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--ink-2);
+      font-size: 17px;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .skin-modal__close:hover { border-color: var(--red); color: var(--red); }
+    .skin-modal__name { margin-bottom: 6px; padding-right: 44px; }
+    .skin-modal__meta { margin: 0 0 4px; font-size: 13.5px; color: var(--ink-2); }
+    .skin-modal__hash { margin: 0; color: var(--ink-3); word-break: break-all; }
+    .skin-modal__frames { margin: 18px 0; font-size: 13px; color: var(--ink-3); }
+    .skin-anims { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-top: 18px; }
+    .skin-anim { margin: 0; }
+    .skin-anim__box {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      height: 116px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      background: repeating-conic-gradient(var(--surface-2) 0% 25%, transparent 0% 50%);
+      background-size: 16px 16px;
+      overflow: hidden;
+    }
+    .skin-anim figcaption { margin-top: 8px; text-align: center; font-size: 12.5px; color: var(--ink-3); }
+
+    @media (max-width: 640px) {
+      .skins-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); padding: 14px; }
+      .skin-modal__panel { padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-veil" aria-hidden="true"></div>
+
+  <header class="site-head">
+    <div class="wrap site-head__inner">
+      <a class="wordmark" href="index.html"><b>I wanna play online</b><span>1.2.3</span></a>
+            <nav class="nav" aria-label="主导航">
+        <a href="index.html">大厅</a>
+        <a href="download.html">下载</a>
+        <a href="skins.html" aria-current="page">皮肤</a>
+        <a href="ratings.html">评分</a>
+        <a href="about.html">关于</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+    </div>
+
+    <section class="skins-hero">
+      <div class="wrap">
+        <span class="eyebrow">Skin Library</span>
+        <h1>皮肤库</h1>
+      </div>
+    </section>
+
+    <section class="section section--tight">
+      <div class="wrap">
+        <div class="panel">
+          <div class="toolbar">
+            <input class="field" id="skins-search" type="search" placeholder="搜索名称 / 作者 / 来源…" aria-label="搜索皮肤">
+            <select class="field" id="skins-sort" aria-label="排序方式">
+              <option value="new-desc" selected>最新入库</option>
+              <option value="new-asc">最早入库</option>
+              <option value="name-asc">名称 A → Z</option>
+              <option value="name-desc">名称 Z → A</option>
+            </select>
+            <span class="panel__meta" id="skins-count"></span>
+            <button class="btn btn--primary btn--sm" id="upload-open" type="button" aria-expanded="false" style="margin-left:auto;">上传皮肤</button>
+          </div>
+
+          <form class="upload" id="upload-panel" hidden>
+            <div class="upload__grid">
+              <label class="upload__field">名称
+                <input class="field" id="up-name" type="text" maxlength="100" placeholder="留空沿用 info.ini">
+              </label>
+              <label class="upload__field">作者
+                <input class="field" id="up-maker" type="text" maxlength="100" placeholder="留空沿用 info.ini">
+              </label>
+              <label class="upload__field">来源
+                <input class="field" id="up-source" type="text" maxlength="100" placeholder="留空沿用 info.ini">
+              </label>
+            </div>
+            <label class="upload__files">皮肤文件
+              <input id="upload-files" type="file" multiple accept=".png,.ini,.zip">
+            </label>
+            <p class="upload__hint">两种方式任选：① 直接选择一个 .zip 皮肤包；② 多选包内全部文件（必须包含 idle.png 与 info.ini，可选 run / jump / fall / slide / bow / bullet 的 .png）。单文件不超过 1 MiB，总计不超过 4 MiB。</p>
+            <div class="upload__actions">
+              <button class="btn btn--primary btn--sm" type="submit">提交入库</button>
+              <span class="upload__msg" id="upload-msg" role="status"></span>
+            </div>
+          </form>
+
+          <div class="skins-grid" id="skins-grid" aria-live="polite">
+            <div class="loading">正在加载皮肤库…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="skin-modal" id="skin-modal" hidden>
+    <div class="skin-modal__backdrop" data-close></div>
+    <div class="skin-modal__panel" role="dialog" aria-modal="true" aria-labelledby="skin-modal-name">
+      <button class="skin-modal__close" type="button" data-close aria-label="关闭">×</button>
+      <div id="skin-modal-body"></div>
+    </div>
+  </div>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__grid">
+      <div>
+        <h4>I wanna play online</h4>
+        <p>把单机同人游戏变成联机游戏的转换器。</p>
+      </div>
+      <div>
+        <h4>入口</h4>
+        <p><a href="download.html">下载</a></p>
+        <p><a href="skins.html">皮肤库</a></p>
+        <p><a href="ratings.html">游戏评分</a></p>
+      </div>
+      <div>
+        <h4>项目</h4>
+        <p><a href="https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3" target="_blank" rel="noopener">GitHub</a></p>
+        <p><a href="https://gitlab.com/i-wanna-play-online" target="_blank" rel="noopener">GitLab（原版）</a></p>
+      </div>
+    </div>
+    <div class="wrap site-foot__end">
+      <span>I wanna play online 1.2.3</span>
+    </div>
+  </footer>
+
+  <script src="assets/js/site.js"></script>
+  <script src="assets/js/skins.js"></script>
+</body>
+</html>

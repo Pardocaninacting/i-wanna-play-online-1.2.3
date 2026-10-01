@@ -13,6 +13,8 @@
 !converter-gms/**
 !server/
 !server/**
+!iwpo-website/
+!iwpo-website/**
 
 # UndertaleModTool (git submodule)
 !.gitmodules

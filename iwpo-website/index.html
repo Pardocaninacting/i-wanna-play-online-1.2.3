@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>I wanna play online 1.2.3 — 在线大厅</title>
+  <meta name="description" content="I wanna play online (IWPO)：把 I wanna 同人游戏转换成在线联机版本的工具。当前在线情况、下载、皮肤库与评分。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="I wanna play online 1.2.3">
+  <meta property="og:description" content="把 I wanna 同人游戏变成在线联机版本。">
+  <meta property="og:image" content="https://iwannaplay.online/assets/img/icon-src.png">
+  <meta property="og:site_name" content="I wanna play online">
+  <link rel="icon" href="assets/img/icon-src.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body class="has-fluid">
+  <canvas id="bg-fluid" class="bg-fluid" aria-hidden="true"></canvas>
+  <div class="bg-veil" aria-hidden="true"></div>
+
+  <header class="site-head">
+    <div class="wrap site-head__inner">
+      <a class="wordmark" href="index.html"><b>I wanna play online</b><span>1.2.3</span></a>
+            <nav class="nav" aria-label="主导航">
+        <a href="index.html" aria-current="page">大厅</a>
+        <a href="download.html">下载</a>
+        <a href="skins.html">皮肤</a>
+        <a href="ratings.html">评分</a>
+        <a href="about.html">关于</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero">
+      <!-- the globe: hub = the server, jumping lights on the orbits = players online,
+           beams off the hub = rooms in progress (assets/js/globe.js) -->
+      <canvas class="globe" id="globe-stage" aria-hidden="true"></canvas>
+      <div class="globe-fallback" id="globe-fallback" hidden></div>
+      <div class="wrap hero__content">
+        <h1>I wanna play <span class="accent">online</span> <span class="hero__ver">1.2.3</span></h1>
+        <p class="hero__lead">把 I wanna 同人游戏变成在线联机版本。</p>
+        <div class="hero__cta">
+          <a class="btn btn--primary" href="download.html">下载</a>
+          <a class="btn btn--ghost" href="about.html">了解更多</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section--tight" id="live">
+      <div class="wrap">
+        <div class="panel reveal">
+          <div class="panel__head">
+            <span class="panel__title">在线房间</span>
+            <span class="panel__meta" id="rooms-count">—</span>
+            <button class="btn btn--sm" id="rooms-refresh" type="button" style="margin-left:12px;">刷新</button>
+          </div>
+          <div class="table" id="rooms-body" role="table" aria-live="polite">
+            <div class="trow trow--head" role="row">
+              <span role="columnheader">房间 / 游戏</span>
+              <span role="columnheader">玩家</span>
+              <span role="columnheader">状态</span>
+            </div>
+            <div class="loading">正在连接联机服务器…</div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__grid">
+      <div>
+        <h4>I wanna play online</h4>
+        <p>把单机同人游戏变成联机游戏的转换器。</p>
+      </div>
+      <div>
+        <h4>入口</h4>
+        <p><a href="download.html">下载</a></p>
+        <p><a href="skins.html">皮肤库</a></p>
+        <p><a href="ratings.html">游戏评分</a></p>
+      </div>
+      <div>
+        <h4>项目</h4>
+        <p><a href="https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3" target="_blank" rel="noopener">GitHub</a></p>
+        <p><a href="https://gitlab.com/i-wanna-play-online" target="_blank" rel="noopener">GitLab（原版）</a></p>
+      </div>
+    </div>
+    <div class="wrap site-foot__end">
+      <span>I wanna play online 1.2.3</span>
+    </div>
+  </footer>
+
+  <script src="assets/vendor/fluid.js" defer></script>
+  <script type="module" src="assets/js/globe.js"></script>
+  <script src="assets/js/site.js"></script>
+  <script src="assets/js/home.js"></script>
+</body>
+</html>

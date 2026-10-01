@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>介绍与关于 — I wanna play online 1.2.3</title>
+  <meta name="description" content="I wanna play online：把 GameMaker 系 I wanna 同人游戏转换成在线联机版的工具——使用方法、功能、兼容性、常见问题，以及项目历史与鸣谢。">
+  <link rel="icon" href="assets/img/icon-src.png">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <style>
+    /* 文章排版（本页专用） */
+    .article { max-width: 760px; margin: 0 auto; padding: 76px 0 92px; }
+    .article__head { margin-bottom: 30px; }
+    .article__head h1 { font-size: clamp(30px, 4.5vw, 44px); margin-bottom: 16px; }
+    .article__lead { margin: 0; font-size: 16.5px; line-height: 1.85; color: var(--ink-2); }
+    .article h2 {
+      margin: 56px 0 18px;
+      padding-top: 30px;
+      border-top: 1px solid var(--line);
+      font-size: 22px;
+    }
+    .article h3 { margin: 26px 0 8px; font-size: 16px; }
+    .article p { margin: 0 0 14px; font-size: 15px; line-height: 1.9; }
+    .article ul, .article ol { margin: 0 0 14px; padding-left: 22px; }
+    .article li { margin-bottom: 7px; font-size: 15px; line-height: 1.85; }
+    .article b, .article strong { color: var(--ink); font-weight: 600; }
+    /* buttons and cards are links too: keep their own colours */
+    .article a:not(.btn):not(.card) { color: var(--blue); border-bottom: 1px solid var(--line-2); }
+    .article a:not(.btn):not(.card):hover { color: var(--ink); }
+    .article kbd {
+      padding: 1px 7px;
+      border: 1px solid var(--line-2);
+      border-bottom-width: 2px;
+      border-radius: 6px;
+      background: var(--surface-2);
+      color: var(--ink);
+      font-family: var(--mono);
+      font-size: 12.5px;
+      white-space: nowrap;
+    }
+    .article-note {
+      margin: 22px 0;
+      padding: 14px 18px;
+      border: 1px solid var(--line-2);
+      border-left: 3px solid var(--blue);
+      border-radius: var(--radius-sm);
+      background: var(--surface);
+    }
+    .article-note p { margin: 0; }
+    .article-note p + p { margin-top: 10px; }
+    .err { color: var(--red); font-family: var(--mono); font-size: 13px; }
+    .article .cards { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+    .article-cta { margin-top: 64px; padding-top: 34px; border-top: 1px solid var(--line); }
+    .article-cta p { font-size: 16px; color: var(--ink-2); }
+    .article-cta__btns { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 18px; }
+
+    /* 项目历史时间线 */
+    .timeline { list-style: none; margin: 0 0 4px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(9, 12, 17, 0.5); }
+    .timeline li {
+      display: grid;
+      grid-template-columns: 132px minmax(0, 1fr);
+      gap: 4px 18px;
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+    }
+    .timeline li:last-child { border-bottom: 0; }
+    .timeline__when { font-family: var(--mono); font-size: 13px; color: var(--blue); padding-top: 2px; white-space: nowrap; }
+    .timeline__what b { color: var(--ink); font-weight: 600; }
+    .timeline__what p { margin: 4px 0 0; font-size: 14px; color: var(--ink-2); }
+    .article p.history-src { margin: 12px 0 0; font-size: 12.5px; line-height: 1.7; color: var(--ink-3); }
+
+    /* 版本轴：三条开发线上的每一次发布 */
+    .relaxis { margin: 6px 0 22px; }
+    .relaxis__scroll { overflow-x: auto; padding: 14px 16px 8px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(9, 12, 17, 0.5); }
+    .relaxis svg { display: block; width: 100%; min-width: 600px; height: auto; }
+    .relaxis .ax-grid { stroke: rgba(255, 255, 255, 0.05); }
+    .relaxis .ax-year { fill: var(--ink-3); font: 10px var(--mono); }
+    .relaxis .ax-lane { fill: var(--ink-2); font-size: 11.5px; }
+    .relaxis .ax-track { stroke: var(--line-2); stroke-width: 1.5; }
+    .relaxis .ax-start { fill: var(--bg); stroke: var(--blue); stroke-width: 1.2; }
+    .relaxis .ax-dot { fill: var(--blue); }
+    .relaxis .ax-now { fill: var(--ink); }
+    .relaxis .ax-ring { fill: none; stroke: var(--blue); stroke-width: 1.2; }
+    .relaxis .ax-tag { fill: var(--ink-2); font: 10px var(--mono); }
+    .relaxis figcaption { margin-top: 8px; font-size: 12.5px; color: var(--ink-3); }
+
+    @media (max-width: 760px) {
+      .article { padding: 52px 0 64px; }
+      .article h2 { margin-top: 44px; }
+      .article-cta__btns .btn { flex: 1 1 auto; justify-content: center; }
+      .timeline li { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-veil" aria-hidden="true"></div>
+
+  <header class="site-head">
+    <div class="wrap site-head__inner">
+      <a class="wordmark" href="index.html"><b>I wanna play online</b><span>1.2.3</span></a>
+            <nav class="nav" aria-label="主导航">
+        <a href="index.html">大厅</a>
+        <a href="download.html">下载</a>
+        <a href="skins.html">皮肤</a>
+        <a href="ratings.html">评分</a>
+        <a href="about.html" aria-current="page">关于</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    <div class="wrap">
+      <article class="article">
+        <header class="article__head">
+          <span class="eyebrow">关于</span>
+          <h1>它是什么</h1>
+          <p class="article__lead">
+            I wanna play online（简称 iwpo 或 po）本身不是一个游戏，而是一个<b>转换器</b>：
+            它把用 GameMaker 制作的 I wanna 同人游戏改写成可以多人在线同时游玩的版本。
+          </p>
+        </header>
+
+        <p>
+          转换后的游戏里，同一个房间的玩家能看到彼此的位置、共享存档、聊天、互相在屏幕上标记路线。
+          下面按「转换 → 进入游戏 → 功能 → 限制 → 项目背景」的顺序把它讲清楚。
+        </p>
+
+        <h2>使用方法：把游戏转换成联机版</h2>
+        <ol>
+          <li>从<a href="download.html">下载页</a>取得 iwpo 并解压。</li>
+          <li>找到你想转换的游戏的 exe 文件——<b>只拖 exe，不是整个文件夹</b>；转换期间请确保该游戏没有在运行。</li>
+          <li>把这个 exe 拖到 iwpo.exe 上，等待一段时间。窗口里出现 <b>Success</b> 后按回车结束。</li>
+          <li>在原游戏所在的目录里得到转换结果：GameMaker 8 的游戏是带 <span class="mono">_online</span> 后缀的 exe；GameMaker Studio 的游戏如果只有一个 exe，会得到带 <span class="mono">_online</span> 后缀的文件夹；如果游戏目录里已有 <span class="mono">data.win</span>，则直接改写它，原文件备份为 <span class="mono">data_backup.win</span>。</li>
+        </ol>
+        <p>如果没有出现 Success，而是报错或闪退，说明这个游戏目前转不了，详见后面的「注意事项」。</p>
+
+        <h2>进入游戏</h2>
+        <p>第一次启动转换后的游戏，会询问两样东西（各最长 20 个字符）：</p>
+        <ul>
+          <li><b>名字</b>：给其他玩家看的名字，留空则显示为 Anonymous。</li>
+          <li><b>密码</b>：相当于房间号。使用同一个联机包、同一个服务器、同一个密码的玩家会进入同一个房间；<b>留空</b>则进入对所有人开放的公共房间。</li>
+        </ul>
+        <p>
+          这两样只需输入一次，之后会被永久记住，不用每次启动都重输；想换名字或换房间，在游戏内菜单里改即可。
+          之后像平常一样选存档、选难度进入游戏，就能看到同房间其他玩家的位置和动向了。
+        </p>
+
+        <h2>特色功能</h2>
+        <p>转换后的游戏会在原游戏之上多出以下功能（提到的按键均为默认值，全部可以改绑）：</p>
+        <ul>
+          <li><b>共享存档与存档历史</b>：同一房间共享最新存档，一人通过、其他人都能跟上；历史存档可以收藏、用数字键快速读取、随时回滚到之前的状态。</li>
+          <li><b>游戏内聊天</b>：按 <kbd>空格</kbd> 输入，回车发送。界面、聊天与输入完整支持中文。</li>
+          <li><b>标记系统</b>：长按 <kbd>H</kbd> 打开轮盘，可放置图标、画折线箭头、手绘或写文本；画布模式适合直接在屏幕上讲解路线。</li>
+          <li><b>皮肤系统</b>：在菜单里给自己换装，别人没下载过的皮肤会自动下载；皮肤库见<a href="skins.html">皮肤页</a>。</li>
+          <li><b>队伍系统</b>：按队伍区分玩家颜色，方便分组合作或对抗。</li>
+          <li><b>PVP 子弹共享</b>：在支持的游戏里子弹互通，可以互相伤害。</li>
+          <li><b>旁观模式</b>：长按 <kbd>Y</kbd> 约 1 秒进入或退出，观察其他玩家进行游戏。</li>
+          <li><b>游戏评分</b>：给玩过的游戏打分，评分汇总在本站<a href="ratings.html">评分页</a>。</li>
+          <li><b>键位全自定义</b>：上面所有按键都能在游戏内设置里改绑。</li>
+        </ul>
+
+        <h2>注意事项</h2>
+        <p>
+          iwpo 支持用 <b>GameMaker 8.0 / 8.1 / 8.2</b> 和 <b>GameMaker Studio 1.x / 2.x</b>（含 x64）制作的游戏，
+          这覆盖了绝大多数 iw 同人游戏；其他引擎制作的游戏不在支持范围内。
+        </p>
+        <div class="article-note">
+          <p><b>不是每个游戏都能转换。</b>转换失败时程序会明确报错并说明原因；一些加壳、混淆等保护性较强的游戏，目前仍可能转换失败。</p>
+        </div>
+        <p>
+          联机体验受你的网络质量和服务器状态影响，延迟和掉线都可能发生。
+          本站<a href="index.html">大厅页</a>能看到当前在线的房间和人数。
+        </p>
+
+        <h2>常见问题</h2>
+        <h3>断线了怎么办？</h3>
+        <p>
+          断线后游戏会自动重连（最多 10 次）。仍然失败时会提示「离线 - 打开菜单可重连」，
+          按 <kbd>O</kbd> 打开设置面板点「立即重连」即可，不必退出游戏。
+          也可以在设置里选择连接失败时的行为：留在游戏里离线继续玩，或者直接退出。
+        </p>
+        <h3>名字或密码想改？</h3>
+        <p>游戏内菜单里随时可以改，不需要重新转换。</p>
+        <h3>转换时报错、没有 Success？</h3>
+        <p>说明这个游戏目前无法转换，报错信息会给出原因。</p>
+
+        <h2>技术说明</h2>
+        <p>
+          转换器读取游戏文件本身的资源结构，找到人物对象、存档脚本与事件代码，再把联机模块注入进去：
+          GM8 系直接改写 exe 资源块，GMS 系改写 <span class="mono">data.win</span>（x86 与 x64）。
+          本站是纯静态页面，大厅与评分等实时数据来自同机容器中的 API 服务；
+          联机服务器使用 TCP 8002（游戏数据与聊天）与 UDP 8003（实时位置同步）两个端口。
+        </p>
+
+        <h2>项目历史</h2>
+        <p>
+          I wanna play online 先后有三条开发线：DapperMink 的原版（2019 – 2022）、TheBiob 在原版基础上延续的
+          1.1.10 测试版分支（2023 – 2026），以及本站发布的 1.2.3（2026 年起，以 1.1.9 为基础重写）。
+        </p>
+        <figure class="relaxis" id="release-axis" hidden>
+          <div class="relaxis__scroll"></div>
+          <figcaption>每个点是一次发布。1.1.10 各测试版按其 README 首次记载的日期标注（b1 – b4 早于 2023-09，未单独记日期）。</figcaption>
+        </figure>
+        <ul class="timeline">
+          <li>
+            <span class="timeline__when">2019-12-22</span>
+            <div class="timeline__what">
+              <b>项目创建</b>
+              <p>DapperMink（QuentinJanuel）在 GitLab 建立 <span class="mono">i-wanna-play-online/modder</span>，2020-01-01 首次提交，01-11 写出 GM8 转换器的第一版。随后建立联机服务端与网站（01-13）、基于 krzys-h 的 UndertaleModTool 的 GameMaker Studio 转换器 <span class="mono">modder-gms</span>（01-18），并于 01-19 加入 UDP 位置同步。</p>
+            </div>
+          </li>
+          <li>
+            <span class="timeline__when">2020-01-24</span>
+            <div class="timeline__what">
+              <b>1.0.0 发布</b>
+              <p>首个公开版本。次日连发 1.1.0 – 1.1.3：加入房间密码，并集中修复首发暴露的问题。联机服务器最初托管在 isocodes.org。</p>
+            </div>
+          </li>
+          <li>
+            <span class="timeline__when">2020-02</span>
+            <div class="timeline__what">
+              <b>1.1.4 – 1.1.5 · 首批社区贡献</b>
+              <p>hirtown 贡献自定义端口（01-27 合入）；Nikaple 贡献 Nikaple 引擎支持、存档共享与移动连续性改进（1.1.4，02-01）。1.1.5 加入心跳与竞速模式（Race mod），修复大型 GM8 游戏的内存溢出，带密码的房间不再显示在网站上。</p>
+            </div>
+          </li>
+          <li>
+            <span class="timeline__when">2021-06-02</span>
+            <div class="timeline__what">
+              <b>1.1.6 · 更换服务器</b>
+              <p>联机服务器由 isocodes.org 迁至 dappermink.com。</p>
+            </div>
+          </li>
+          <li>
+            <span class="timeline__when">2022-01 → 02</span>
+            <div class="timeline__what">
+              <b>1.1.7 – 1.1.9 · 原版的最后一轮更新</b>
+              <p>Samiboule 修复文本编码（1.1.7），加入 GM8.2 支持与 Renex 引擎兼容（1.1.8）；Nikaple 加入 GM8.0 聊天的中文（Unicode）支持（1.1.9，2022-02-27）。1.1.9 是原版仓库的最后一个版本；2024-02 原作者为服务端与网站加上了 Docker 部署，此后原版没有再更新。</p>
+            </div>
+          </li>
+          <li>
+            <span class="timeline__when">2023 → 2026</span>
+            <div class="timeline__what">
+              <b>TheBiob 分支 · 1.1.10 b1 – b23</b>
+              <p>TheBiob（2020 年起为原版提交修复）在 <span class="mono">gitlab.com/TheBiob/modder</span> 延续原版代码，陆续发布 23 个测试版：命令行参数与 INI 配置、mod 框架（b13，2024-03）、断线自动重连（b18，2024-12）、自动更新工具（b23，2026-06-20）等；gaphodil 为它的 mod 框架编写了 mod 集合 iwpo-mods（2026）。</p>
+            </div>
+          </li>
+          <li>
+            <span class="timeline__when">2026-04-14</span>
+            <div class="timeline__what">
+              <b>1.2.3 beta 1 – 5 · 本项目</b>
+              <p>以 1.1.9 为基础重写：beta 1 – 3（04-14 – 04-17）带来队伍、存档历史、观战、聊天记录、评分、键位自定义与中文显示；beta 4（05-03）加入共享进度同步、标记轮盘与五页设置面板；beta 5（05-28）加入快速读档并加固兼容性。</p>
+            </div>
+          </li>
+          <li>
+            <span class="timeline__when">2026-07 → 09</span>
+            <div class="timeline__what">
+              <b>1.2.3 beta 6</b>
+              <p>六页设置菜单、界面多语言（默认简体中文）、皮肤系统与服务器皮肤库、标记系统、PVP 子弹与多玩家对象；开发中参考了 TheBiob 分支的部分做法，例如独立的联机 world 对象与读档流程。</p>
+            </div>
+          </li>
+        </ul>
+        <p class="history-src">资料来源：GitLab <span class="mono">i-wanna-play-online</span> 各仓库的提交与版本标签、<span class="mono">TheBiob/modder</span> 的提交与 README、本项目的 git 历史。</p>
+
+        <h2>开源与社区</h2>
+        <p>转换器与联机服务端以 MIT 许可开源：你可以搭建自己的服务器，也可以参与开发。</p>
+        <div class="cards">
+          <a class="card" href="https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3" target="_blank" rel="noopener">
+            <h3>GitHub · 1.2.3</h3>
+            <p>本项目：转换器、GMS 转换器与联机服务端。</p>
+          </a>
+          <a class="card" href="https://gitlab.com/i-wanna-play-online" target="_blank" rel="noopener">
+            <h3>GitLab · 原版</h3>
+            <p>DapperMink 的原始项目：modder、modder-gms、server、website 与 launcher。</p>
+          </a>
+        </div>
+
+        <h2>鸣谢</h2>
+        <p>制作（Maker）：Engel；前任制作（Former Maker）：DapperMink（QuentinJanuel）。</p>
+        <p>特别感谢：Adam、viri、Maarten Baert、krzys-h、Nikaple、hirtown、Samiboule、TheBiob、大部队。</p>
+
+        <div class="article-cta">
+          <p>准备好开始了吗？</p>
+          <div class="article-cta__btns">
+            <a class="btn btn--primary" href="download.html">下载转换器</a>
+            <a class="btn btn--ghost" href="index.html">查看在线房间</a>
+          </div>
+        </div>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-foot">
+    <div class="wrap site-foot__grid">
+      <div>
+        <h4>I wanna play online</h4>
+        <p>把单机同人游戏变成联机游戏的转换器。</p>
+      </div>
+      <div>
+        <h4>入口</h4>
+        <p><a href="download.html">下载</a></p>
+        <p><a href="skins.html">皮肤库</a></p>
+        <p><a href="ratings.html">游戏评分</a></p>
+      </div>
+      <div>
+        <h4>项目</h4>
+        <p><a href="https://github.com/Pardocaninacting/i-wanna-play-online-1.2.3" target="_blank" rel="noopener">GitHub</a></p>
+        <p><a href="https://gitlab.com/i-wanna-play-online" target="_blank" rel="noopener">GitLab（原版）</a></p>
+      </div>
+    </div>
+    <div class="wrap site-foot__end">
+      <span>I wanna play online 1.2.3</span>
+    </div>
+  </footer>
+
+  <script src="assets/js/site.js" defer></script>
+  <script src="assets/js/history.js" defer></script>
+</body>
+</html>
