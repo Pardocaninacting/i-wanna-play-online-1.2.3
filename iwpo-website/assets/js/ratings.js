@@ -55,7 +55,8 @@
           去掉后缀再分组。
        2) gameID 前缀为 d41d8cd98f00b204e9800998ecf8427e（= MD5 空串）时，
           说明客户端没能算出游戏标识，这类评分全部落进同一个桶（实测 18 条里
-          混了 14 个不同游戏）→ 单独标为「未知游戏」，不参与排行榜。 */
+          混了 14 个不同游戏）→ 按上报的游戏名归组；该游戏已有真实 ID 的评分时并入其中，
+          连名字也没有的才标为「未知游戏」、不参与排行榜。 */
   const EMPTY_HASH = "d41d8cd98f00b204e9800998ecf8427e";
   const canonId = (id) => {
     const s = String(id == null ? "" : id);
@@ -65,11 +66,25 @@
     const id = canonId(r.gameID);
     return !!id && id.startsWith(EMPTY_HASH);
   };
+  const nameOf = (r) => String(r.gameName || "").trim().toLowerCase();
+
+  // lowercased game name -> group key of a record that carries a real ID
+  let nameToKey = new Map();
+  function indexNames(all) {
+    nameToKey = new Map();
+    all.forEach((r) => {
+      const id = canonId(r.gameID);
+      const name = nameOf(r);
+      if (id && !isUnknownGame(r) && name && !nameToKey.has(name)) nameToKey.set(name, "id:" + id);
+    });
+  }
 
   const gameKey = (r) => {
     const id = canonId(r.gameID);
-    if (!id) return "name:" + String(r.gameName || "");
-    return isUnknownGame(r) ? "unknown:" + id : "id:" + id;
+    if (id && !isUnknownGame(r)) return "id:" + id;
+    const name = nameOf(r);
+    if (!name) return id ? "unknown:" + id : "name:";
+    return nameToKey.get(name) || "name:" + name;
   };
 
   function filtered() {
@@ -141,7 +156,7 @@
 
   function renderStats() {
     const all = state.all;
-    const games = new Set(all.filter((r) => !isUnknownGame(r)).map(gameKey));
+    const games = new Set(all.map(gameKey).filter((k) => !k.startsWith("unknown:")));
     const avg = all.length
       ? (all.reduce((t, r) => t + (Number(r.stars) || 0), 0) / all.length).toFixed(2)
       : "—";
@@ -257,6 +272,7 @@
     try {
       const data = await getJSON("/ratings/api");
       state.all = Array.isArray(data.ratings) ? data.ratings : [];
+      indexNames(state.all);
       renderStats();
       render();
     } catch (err) {
