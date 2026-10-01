@@ -125,7 +125,7 @@ function supportsNotes(player: TcpPlayer): boolean {
 
 interface SkinFileEntry { name: string; size: number; }
 
-const skinManifestCache = new Map<string, SkinFileEntry[] | null>();
+const skinManifestCache = new Map<string, SkinFileEntry[]>();
 // Manifests mirror the client-side package hash scope: regular files directly
 // inside the package dir (subdirectories are not part of the hash).
 const SKIN_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,63}$/;
@@ -133,7 +133,8 @@ const SKIN_NAME_RE = /^[A-Za-z0-9_][A-Za-z0-9_.\-]{0,63}$/;
 if (!existsSync(SKIN_DATA_DIR)) mkdirSync(SKIN_DATA_DIR, { recursive: true });
 
 function skinManifest(hex: string): SkinFileEntry[] | null {
-    if (skinManifestCache.has(hex)) return skinManifestCache.get(hex)!;
+    const cached = skinManifestCache.get(hex);
+    if (cached) return cached;
     let manifest: SkinFileEntry[] | null = null;
     if (/^[0-9a-f]{32}$/.test(hex)) {
         try {
@@ -154,7 +155,9 @@ function skinManifest(hex: string): SkinFileEntry[] | null {
             }
         } catch {}
     }
-    skinManifestCache.set(hex, manifest);
+    // misses are not cached: a package approved later must become visible
+    // without a restart (lookups are already rate-limited per player)
+    if (manifest) skinManifestCache.set(hex, manifest);
     return manifest;
 }
 
