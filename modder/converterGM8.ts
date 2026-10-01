@@ -1444,6 +1444,7 @@ export const ConverterGM8 = async function(input: string, gameName: string, serv
 		// backend with useUtf8=false, so these wrappers are never needed there.
 		if (useUtf8) {
 			fns.push({ name: "ansi_to_utf8", dllName: "ansi_to_utf8", ret: "ty_string", args: ["ty_string"] });
+			fns.push({ name: "utf8_to_ansi", dllName: "utf8_to_ansi", ret: "ty_string", args: ["ty_string"] });
 			fns.push({ name: "set_utf8_mode", dllName: "set_utf8_mode", ret: "ty_real", args: ["ty_real"] });
 		}
 		// Generate init script

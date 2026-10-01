@@ -2053,39 +2053,34 @@ if(@chatHistCount > @chatHistMax){
 return 0;
 
 ///// script @dlg_input_box
-// Modal text input, one call form for every engine. The wd dialog's DLL is
-// ANSI-only and mangles the tail of CJK prompt text on GM8.0 (measured on
-// fish: it trims trailing ASCII whitespace, strips a trailing fullwidth colon
-// and eats a glyph, and longer prompts lose MORE than any padding absorbs).
-// CJK prompts therefore fall back to the engine's own get_string, which
-// displays GBK fully. GM8.1+ strings are UTF-8 while the DLL is ANSI, so a
-// non-ASCII title or prompt there falls back the same way.
-// Returns the input in the engine's native string form (GBK bytes on GM8.0,
-// UTF-8 elsewhere) - the GM8.1+ wd path converts inside, so callers must NOT
-// wrap this in __ONLINE_ansi_to_utf8.
+// Modal text input, one call form for every engine. The wd input box mangles
+// GBK prompt labels (it trims trailing whitespace, strips a trailing fullwidth
+// colon and eats a glyph - and longer prompts lose more), but the window TITLE
+// is drawn by Windows itself and renders fine. So on GM8.x a non-ASCII prompt
+// goes into the title and the in-box prompt stays empty.
+// On GM8.1+ strings are UTF-8 bytes all the way to the DLL, so the CJK title
+// and default are converted to the system codepage first (utf8_to_ansi), and
+// the ANSI result is converted back (ansi_to_utf8). STUDIO keeps its
+// native get_string.
 // args: title, prompt, default -> text
 #if STUDIO
 return get_string(argument1, argument2);
 #endif
 #if not STUDIO
 #if GM80
-// The wd DLL mangles CJK prompts, and not by a fixed rule: measured on fish it
-// trims trailing ASCII whitespace, strips a trailing fullwidth colon and eats a
-// glyph - and longer prompts lose MORE than any padding absorbs (the 8-glyph
-// account prompts still came out truncated after a 2-glyph pad). CJK prompts
-// therefore use the engine's own get_string, which displays GBK fully.
-if(!@stg_is_ascii(argument0) || !@stg_is_ascii(argument1)) return get_string(argument1, argument2);
+if(!@stg_is_ascii(argument0) || !@stg_is_ascii(argument1)) return wd_input_box(argument1, "", argument2);
 return wd_input_box(argument0, argument1, argument2);
 #endif
 #if not GM80
-if(!@stg_is_ascii(argument0) || !@stg_is_ascii(argument1)) return get_string(argument1, argument2);
+if(!@stg_is_ascii(argument0) || !@stg_is_ascii(argument1)) return __ONLINE_ansi_to_utf8(wd_input_box(__ONLINE_utf8_to_ansi(argument1), "", __ONLINE_utf8_to_ansi(argument2)));
 return __ONLINE_ansi_to_utf8(wd_input_box(argument0, argument1, argument2));
 #endif
 #endif
 
 ///// script @dlg_message
-// Modal message box, same CJK rule as @dlg_input_box (GM8.0: two trailing
-// spaces absorb the DLL's tail-glyph loss; GM8.1+: get_string for non-ASCII).
+// Modal message box. Non-ASCII text goes through the native show_message,
+// which renders GBK/UTF-8 correctly on every engine; ASCII takes the (prettier)
+// wd message box.
 // args: text -> 0
 #if STUDIO
 show_message(argument0);

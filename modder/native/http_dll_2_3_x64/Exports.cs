@@ -136,9 +136,48 @@ internal static class NativeStrings
 
         // Always decode as system codepage (e.g. GBK) then re-encode as UTF-8.
         // wd_input_box returns system ANSI bytes regardless of GM version or UseAnsi mode.
-        var utf8Bytes = Encoding.UTF8.GetBytes(AnsiEncoding.GetString(bytes));
+        return WriteRaw(Encoding.UTF8.GetBytes(AnsiEncoding.GetString(bytes)));
+    }
 
-        var required = utf8Bytes.Length + 1;
+    /// <summary>
+    /// Convert a string from UTF-8 bytes to the system ANSI codepage (e.g. GBK).
+    /// Mirror of ConvertAnsiToUtf8, for the opposite direction: on GM8.1+ the
+    /// runner hands DLLs the raw UTF-8 bytes of a string, and ANSI-era DLLs such
+    /// as gm_windows_dialogs render those bytes as GBK (mojibake). Converting to
+    /// the system codepage first lets them display CJK correctly. Characters the
+    /// codepage cannot hold become '?'.
+    /// </summary>
+    internal static IntPtr ConvertUtf8ToAnsi(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero)
+            return Write(string.Empty);
+
+        var length = 0;
+        while (Marshal.ReadByte(ptr, length) != 0)
+            length++;
+
+        if (length == 0)
+            return Write(string.Empty);
+
+        var bytes = new byte[length];
+        Marshal.Copy(ptr, bytes, 0, length);
+
+        string text;
+        try
+        {
+            text = Utf8Strict.GetString(bytes);
+        }
+        catch
+        {
+            text = AnsiEncoding.GetString(bytes);
+        }
+        return WriteRaw(AnsiEncoding.GetBytes(text));
+    }
+
+    /// <summary>Write pre-encoded bytes to the return buffer, bypassing UseAnsi.</summary>
+    private static IntPtr WriteRaw(byte[] bytes)
+    {
+        var required = bytes.Length + 1;
         if (required > capacity)
         {
             if (buffer != IntPtr.Zero)
@@ -146,8 +185,8 @@ internal static class NativeStrings
             capacity = Math.Max(required, 256);
             buffer = Marshal.AllocHGlobal(capacity);
         }
-        Marshal.Copy(utf8Bytes, 0, buffer, utf8Bytes.Length);
-        Marshal.WriteByte(buffer, utf8Bytes.Length, 0);
+        Marshal.Copy(bytes, 0, buffer, bytes.Length);
+        Marshal.WriteByte(buffer, bytes.Length, 0);
         return buffer;
     }
 }
@@ -1531,6 +1570,12 @@ public static class Exports
     public static IntPtr AnsiToUtf8(IntPtr value)
     {
         return NativeStrings.ConvertAnsiToUtf8(value);
+    }
+
+    [UnmanagedCallersOnly(EntryPoint = "utf8_to_ansi", CallConvs = new[] { typeof(CallConvCdecl) })]
+    public static IntPtr Utf8ToAnsi(IntPtr value)
+    {
+        return NativeStrings.ConvertUtf8ToAnsi(value);
     }
 
     // P2: native package hash. Byte-identical to the pure-GML @skin_hash_dir
