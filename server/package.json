@@ -1,6 +1,6 @@
 {
   "name": "iwpo-server",
-  "version": "1.2.3_beta_5",
+  "version": "1.2.3_beta_6",
   "main": "dist/index.js",
   "license": "MIT",
   "type": "module",
